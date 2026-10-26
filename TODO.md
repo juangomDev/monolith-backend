@@ -13,7 +13,8 @@
 | **Fase 1** | Conexión con PostgreSQL en Dokploy y Portero Mínimo | ✅ Completado |
 | **Fase 2** | Módulo de Imágenes (Subida a disco, registro y URL corta) | ✅ Completado |
 | **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ✅ Completado |
-| **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ⏳ Siguiente Paso |
+| **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ✅ Completado |
+| **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | 📝 En Planificación |
 
 ---
 
@@ -78,6 +79,43 @@
 ---
 
 ## 🚢 Fase 4: Despliegue en Dokploy
-- [ ] **4.1** Asegurar que el `Dockerfile` ejecute `npx prisma migrate deploy && node dist/main.js`.
-- [ ] **4.2** Verificar permisos del usuario `node` sobre el volumen montado en `/app/storage`.
-- [ ] **4.3** Probar flujo completo de subida y lectura en el entorno local antes de subir a Dokploy.
+- [x] **4.1** Asegurar que el `Dockerfile` ejecute `npx prisma migrate deploy && node dist/main.js`.
+- [x] **4.2** Verificar permisos del usuario `node` sobre el volumen montado en `/app/storage`.
+- [x] **4.3** Probar flujo completo de subida y lectura en el entorno local antes de subir a Dokploy.
+
+---
+
+## 🔒 Fase 5: Seguridad, Usuarios y Control de Acceso (Opción B: JWT + Roles con Username)
+- [ ] **5.1** Automatización de Esquema Prisma en Dokploy (`package.json`):
+  - Ajustar script `"start": "npx prisma db push && node dist/main.js"` para sincronizar automáticamente cualquier cambio en `schema.prisma` al reiniciar el contenedor en Dokploy.
+  - Asegurar que `prisma` esté en `dependencies` para que `prisma db push` esté disponible en producción.
+- [ ] **5.2** Modelo de Datos para Usuarios (`prisma/schema.prisma`):
+  - Crear modelo `User`:
+    - `id` (UUID)
+    - `username` (único, alfanumérico sin espacios)
+    - `passwordHash` (scrypt / Argon2 seguro mediante Node `crypto`)
+    - `role` (`ADMIN` | `USER`)
+    - `isActive` (boolean, default: true)
+    - `createdAt` (timestamp)
+  - Sembrar cuenta inicial del **único Admin** en `prisma/seed.ts` leyendo `ADMIN_USERNAME` y `ADMIN_PASSWORD` de `.env` (fallback dev: `admin` / `AdminPass123!`).
+- [ ] **5.3** Módulo de Usuarios y Autenticación (`src/modules/users/`):
+  - Ubicación de archivos:
+    - `src/modules/users/users.repository.ts`: Consultas Prisma para `User`.
+    - `src/modules/users/users.service.ts`: Lógica de autenticación, hash de contraseñas y validación de único Admin.
+    - `src/modules/users/users.routes.ts`: Endpoints `POST /api/v1/auth/login` y `POST /api/v1/users`.
+  - Configuración de `@fastify/jwt` con variable secreta `JWT_SECRET`.
+  - `POST /api/v1/auth/login`: Recibe `{ username, password }` y devuelve `{ token, user: { id, username, role } }`.
+- [ ] **5.4** Gestión de Usuarios por el Admin (`src/modules/users/users.routes.ts`):
+  - `POST /api/v1/users`:
+    - Solo accesible con token de rol `ADMIN`.
+    - Permite crear nuevos usuarios normales (`USER`) con su `username` y `password` inicial.
+    - Bloquea cualquier intento de crear otro `ADMIN` (solo puede haber uno).
+- [ ] **5.5** Blindaje de Subida de Archivos con Middleware de Autorización (`src/gateway/`):
+  - En `src/gateway/auth.ts`: Hook `authenticateUser` y verificador `requireRole(['ADMIN', 'USER'])`.
+  - Proteger `POST /api/v1/images` y `POST /api/v1/tables` para que solo personas logueadas con rol válido puedan subir.
+  - Responder `401 UNAUTHORIZED` si no envían token o es inválido, y `403 FORBIDDEN` si el rol no tiene permiso.
+- [ ] **5.6** Pruebas Unitarias e Integradas Obligatorias (Frozen Test Contracts):
+  - `tests/modules/users/users.service.test.ts`: Login con username, verificación de password, bloqueo de segundo Admin.
+  - `tests/modules/users/users.routes.test.ts`: Pruebas de rutas HTTP para login y creación de usuarios.
+  - Pruebas de subida en imágenes y tablas validando el acceso exclusivo con JWT de usuario autorizado.
+

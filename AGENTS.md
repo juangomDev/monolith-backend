@@ -29,10 +29,25 @@ Este repositorio contiene las reglas fundamentales e inviolables para el desarro
 
 ## 🏛️ ARQUITECTURA Y FILOSOFÍA DE DESARROLLO
 
-- **Cero sobreingeniería:** Mantener el código simple, directo, modular y fácil de mantener (Rutas -> Servicios -> Repositorios).
-- **Manejo de Errores RFC 7807:** Todas las excepciones controladas deben usar `AppError` con status HTTP, código legible y detalle descriptivo.
-- **Validación estricta:** Validar entradas con Zod o validadores directos; jamás confiar en datos crudos del cliente.
-- **Tipado estricto:** TypeScript nativo ESM (`NodeNext`). No usar `any` injustificado.
+### 1. Patrón Canónico de Capas (Rutas -> Servicios -> Repositorios)
+Todo nuevo módulo (ej. `src/modules/users/`) DEBE seguir estrictamente esta división de responsabilidades:
+- `*.repository.ts`: Capa de datos pura con Prisma Client. No debe contener lógica HTTP ni validaciones de negocio complejas.
+- `*.service.ts`: Lógica de negocio, validaciones, procesamiento de archivos, hashing de contraseñas, llamadas a repositorios y lanzamiento de `AppError`.
+- `*.routes.ts`: Enrutador Fastify, definición de esquemas de entrada, hooks `preHandler` de autenticación/autorización y despacho de respuestas HTTP.
+- `tests/modules/[modulo]/`: Pruebas unitarias e integradas obligatorias (`*.service.test.ts`, `*.routes.test.ts`).
+
+### 2. Estándares Técnicos Invariables
+- **ESM Nativo (`NodeNext`):** Es **estrictamente obligatorio** incluir la extensión `.js` en todos los imports relativos de TypeScript (ej. `import { db } from './db.js'`).
+- **Manejo de Errores RFC 7807:** Todas las excepciones controladas deben lanzar `AppError(status, mensaje, codigo)`. Fastify las captura automáticamente y responde con `ProblemDetails`.
+- **Validación Estricta:** Validar entradas con esquemas Zod o comprobaciones explícitas antes de procesar cualquier dato del cliente.
+- **Cero sobreingeniería:** Mantener el código directo y legible. Evitar abstracciones innecesarias, patrones Enterprise vacíos o código muerto.
+
+### 3. Modelo de Seguridad y Visibilidad de Recursos
+- **Ingesta y Mutación Privadas:** La carga (`POST`) y eliminación (`DELETE`) son siempre privadas y requieren autenticación válida mediante Bearer token JWT (`ADMIN` o `USER`).
+- **Entrega Pública por Diseño (`GET /i/:short_code` y `GET /t/:short_code`):**
+  - La visualización es pública para permitir incrustar imágenes directamente en etiquetas HTML `<img src="...">`, correos o aplicaciones sin lidiar con cabeceras Bearer.
+  - La seguridad se garantiza por **opacidad criptográfica (Capability URLs)**: se generan shortcodes de 10 caracteres Base58 (nanoid, >43 billones de combinaciones) no enumerables ni adivinables por fuerza bruta.
+  - Se acompaña de cabeceras de caché inmutable (`Cache-Control: public, max-age=31536000, immutable`).
 
 ---
 
