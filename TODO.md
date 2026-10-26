@@ -10,9 +10,9 @@
 | Fase | Enfoque | Estado |
 | :--- | :--- | :---: |
 | **Fase 0** | Cimientos, Dependencias y Tipado | ✅ Completado |
-| **Fase 1** | Conexión con PostgreSQL en Dokploy y Portero Mínimo | ⏳ Siguiente Paso |
-| **Fase 2** | Módulo de Imágenes (Subida a disco, registro y URL corta) | ⏳ Pendiente |
-| **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ⏳ Pendiente |
+| **Fase 1** | Conexión con PostgreSQL en Dokploy y Portero Mínimo | ✅ Completado |
+| **Fase 2** | Módulo de Imágenes (Subida a disco, registro y URL corta) | ✅ Completado |
+| **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ⏳ Siguiente Paso |
 | **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ⏳ Pendiente |
 
 ---
@@ -27,8 +27,8 @@
 
 ## 🛡️ Fase 1: Conexión con PostgreSQL (Dokploy) y Portero Mínimo
 - [x] **1.1** Ajustar `prisma/schema.prisma` a los 3 modelos esenciales (`ApiClient`, `ImageRegistry`, `TableRegistry`) y regenerar cliente.
-- [ ] **1.2** Configurar `DATABASE_URL` en `.env` con la cadena de conexión de Dokploy.
-- [ ] **1.3** Ejecutar migración inicial contra Dokploy con `npx prisma migrate dev --name init`.
+- [x] **1.2** Configurar `DATABASE_URL` en `.env` con la cadena de conexión de Dokploy.
+- [x] **1.3** Ejecutar migración inicial contra Dokploy con `npx prisma migrate dev --name init`.
 - [x] **1.4** Crear script simple de siembra (`prisma/seed.ts`) para generar una API Key de prueba (`mk_live_dev_test_api_key_12345`).
 - [x] **1.5** Implementar `src/gateway/auth.ts`: Middleware/Hook simple para validar la cabecera `X-API-Key`.
 - [x] **1.6** Implementar `src/gateway/health.ts`: Endpoint `GET /health` que verifique conexión a Postgres y escritura en `./storage`.
@@ -36,16 +36,16 @@
 ---
 
 ## 🖼️ Fase 2: Módulo de Imágenes
-- [ ] **2.1** Configurar `POST /api/v1/images`:
+- [x] **2.1** Configurar `POST /api/v1/images`:
   - Recibir `multipart/form-data`.
   - Generar `shortCode` (10 caracteres con `nanoid`).
   - Guardar archivo directamente en `./storage/images/[shortCode].[ext]`.
   - Insertar registro en `ImageRegistry` (nombre original, mime, tamaño, ruta).
   - Responder `{ shortCode, url }`.
-- [ ] **2.2** Configurar `GET /i/:short_code`:
+- [x] **2.2** Configurar `GET /i/:short_code`:
   - Buscar registro en base de datos.
   - Servir imagen desde disco con cabeceras `Content-Type` y caché inmutable.
-- [ ] **2.3** Configurar `DELETE /api/v1/images/:id`:
+- [x] **2.3** Configurar `DELETE /api/v1/images/:id`:
   - Eliminar registro de PostgreSQL y borrar archivo físico de `./storage/images/`.
 
 ---

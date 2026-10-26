@@ -1,27 +1,35 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { imagesService } from './images.service.js';
+import { authenticateApiKey } from '../../gateway/auth.js';
+import { AppError } from '../../shared/errors.js';
 
 export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /i/:short_code (Entrega pública con cache agresiva)
+  // GET /i/:short_code (Entrega pública con cache agresiva e inmutable)
   fastify.get('/i/:short_code', async (request, reply) => {
     const { short_code } = request.params as { short_code: string };
-    const image = await imagesService.getImageByShortCode(short_code);
+    const { record, fileStream } = await imagesService.getImageFileByShortCode(short_code);
 
-    reply.header('Content-Type', image.mimeType);
+    reply.header('Content-Type', record.mimeType);
     reply.header('Cache-Control', 'public, max-age=31536000, immutable');
-    return reply.send({ id: image.id, shortCode: image.shortCode });
+    return reply.send(fileStream);
   });
 
-  // POST /api/v1/images (Subida protegida con scope)
-  fastify.post('/api/v1/images', async (_request, reply) => {
-    // Esqueleto para Fase 2
-    return reply.status(501).send({ message: 'Endpoint pendiente de implementación en Fase 2' });
+  // POST /api/v1/images (Subida protegida con X-API-Key)
+  fastify.post('/api/v1/images', { preHandler: [authenticateApiKey] }, async (request, reply) => {
+    const file = await request.file();
+    if (!file) {
+      throw new AppError(400, 'Debe adjuntar un archivo de imagen en el campo multipart', 'BAD_REQUEST');
+    }
+
+    const result = await imagesService.saveImage(file);
+    return reply.status(201).send(result);
   });
 
-  // DELETE /api/v1/images/:id
-  fastify.delete('/api/v1/images/:id', async (request, reply) => {
+  // DELETE /api/v1/images/:id (Eliminación protegida con X-API-Key)
+  fastify.delete('/api/v1/images/:id', { preHandler: [authenticateApiKey] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await imagesService.deleteImage(id);
     return reply.status(204).send();
   });
 };
+
