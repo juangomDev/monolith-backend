@@ -12,8 +12,8 @@
 | **Fase 0** | Cimientos, Dependencias y Tipado | ✅ Completado |
 | **Fase 1** | Conexión con PostgreSQL en Dokploy y Portero Mínimo | ✅ Completado |
 | **Fase 2** | Módulo de Imágenes (Subida a disco, registro y URL corta) | ✅ Completado |
-| **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ⏳ Siguiente Paso |
-| **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ⏳ Pendiente |
+| **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ✅ Completado |
+| **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ⏳ Siguiente Paso |
 
 ---
 
@@ -50,18 +50,29 @@
 
 ---
 
+## 🧪 Blindaje de Calidad: Pruebas Unitarias Inmutables (Frozen Test Contracts)
+- [x] **T.1** Definición de reglas inviolables en `AGENTS.md` y `.agents/rules/testing-rules.md`.
+- [x] **T.2** Configuración del runner nativo Node 22 (`tsx --env-file=.env --test`) en `package.json`.
+- [x] **T.3** Pruebas de utilidades: `shortcode.test.ts` (7 tests) y `errors.test.ts` (4 tests).
+- [x] **T.4** Pruebas de portero y seguridad: `auth.test.ts` (6 tests) y `health.test.ts` (3 tests).
+- [x] **T.5** Pruebas de imágenes: `images.service.test.ts` (8 tests) y `images.routes.test.ts` (7 tests).
+- [x] **T.6** Pruebas de tablas: `tables.parser.test.ts` (6 tests), `tables.service.test.ts` (8 tests), `tables.routes.test.ts` (8 tests).
+- [x] **T.7** Verificación global: 57/57 tests pasando con 0 fallos y `npm run build` con código 0.
+
+---
+
 ## 📊 Fase 3: Módulo de Tablas (CSV / Excel)
-- [ ] **3.1** Configurar `POST /api/v1/tables`:
+- [x] **3.1** Configurar `POST /api/v1/tables`:
   - Recibir archivo `.csv` o `.xlsx`.
   - Generar `shortCode`.
   - Guardar archivo físico en `./storage/tables/[shortCode].[ext]`.
   - Extraer metadatos básicos (nombres de columnas y conteo de filas).
   - Insertar registro en `TableRegistry`.
   - Responder `{ shortCode, url, rowCount }`.
-- [ ] **3.2** Configurar `GET /t/:short_code`:
+- [x] **3.2** Configurar `GET /t/:short_code`:
   - Si incluye `?download=true`, descargar archivo original.
   - Si es consulta normal, devolver datos paginados (ej. primeras 100 filas).
-- [ ] **3.3** Configurar `DELETE /api/v1/tables/:id`:
+- [x] **3.3** Configurar `DELETE /api/v1/tables/:id`:
   - Eliminar registro de PostgreSQL y borrar archivo de `./storage/tables/`.
 
 ---

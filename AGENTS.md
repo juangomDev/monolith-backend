@@ -4,8 +4,9 @@ Este repositorio contiene las reglas fundamentales e inviolables para el desarro
 
 ---
 
-## 🛑 REGLA DE ORO: INMUTABILIDAD DE LAS PRUEBAS (FROZEN TEST CONTRACTS)
+## 🛑 REGLAS DE ORO: INMUTABILIDAD Y COBERTURA DE PRUEBAS
 
+### 1. Inmutabilidad de las Pruebas (Frozen Test Contracts)
 1. **Las pruebas son la especificación de verdad:** Una vez que una prueba unitaria o de integración es creada y aprobada, queda **CONGELADA E INMUTABLE**.
 2. **Prohibición estricta de modificación:** Está **ESTRICTAMENTE PROHIBIDO**:
    - Modificar las aserciones (`assert`, `expect`) para que un test pase.
@@ -17,6 +18,12 @@ Este repositorio contiene las reglas fundamentales e inviolables para el desarro
    - El agente debe investigar, depurar y refactorizar el código de la aplicación hasta que todas las pruebas pasen al 100%.
 4. **Única excepción:**
    - La única situación en la que un test puede ser modificado es si el usuario humano **ordena explícitamente y por escrito un cambio de requerimiento de negocio**. Sin esa orden directa, los tests son intocables.
+
+### 2. Cobertura Obligatoria por Cada Nueva Función (No Feature Without Tests)
+1. **Pruebas obligatorias por funcionalidad:** Para cada nueva función, servicio, utilidad o ruta/endpoint que se implemente, **es estrictamente obligatorio agregar simultáneamente sus respectivas pruebas unitarias e integradas**.
+2. **Cobertura de éxito y error:** Las pruebas de cada nueva función deben verificar tanto el flujo exitoso como los casos límite y manejo de errores (ej. 400, 401, 404, 413, etc.).
+3. **Criterio de finalización (Definition of Done):** Ninguna tarea o fase se considera terminada ni aprobada si carece de sus correspondientes pruebas en `tests/`.
+4. **Congelación inmediata:** En cuanto las pruebas de la nueva función sean implementadas y aprobadas, pasan inmediatamente a estar congeladas e inmutables bajo la Regla 1.
 
 ---
 

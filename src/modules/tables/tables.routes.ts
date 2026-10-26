@@ -1,28 +1,50 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { tablesService } from './tables.service.js';
+import { authenticateApiKey } from '../../gateway/auth.js';
+import { AppError } from '../../shared/errors.js';
 
 export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /t/:short_code (Consulta paginada o descarga directa)
   fastify.get('/t/:short_code', async (request, reply) => {
     const { short_code } = request.params as { short_code: string };
-    const table = await tablesService.getTableByShortCode(short_code);
+    const query = request.query as { download?: string; page?: string; limit?: string };
 
-    return reply.send({
-      id: table.id,
-      shortCode: table.shortCode,
-      tableName: table.tableName,
-      rowCount: table.rowCount,
-      columns: table.columnsSchema,
-    });
+    if (query?.download === 'true') {
+      const { record, fileStream } = await tablesService.getTableDownloadStream(short_code);
+      const isCsv = record.storagePath.toLowerCase().endsWith('.csv');
+      const contentType = isCsv
+        ? 'text/csv'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      reply.header('Content-Type', contentType);
+      reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(record.tableName)}"`);
+      return reply.send(fileStream);
+    }
+
+    const page = Math.max(1, parseInt(query?.page || '1', 10) || 1);
+    const limit = Math.min(500, Math.max(1, parseInt(query?.limit || '100', 10) || 100));
+
+    const result = await tablesService.getTableDataPaginated(short_code, page, limit);
+    return reply.send(result);
   });
 
-  // POST /api/v1/tables
-  fastify.post('/api/v1/tables', async (_request, reply) => {
-    return reply.status(501).send({ message: 'Endpoint pendiente de implementación en Fase 3' });
+  // POST /api/v1/tables (Subida protegida con X-API-Key)
+  fastify.post('/api/v1/tables', { preHandler: [authenticateApiKey] }, async (request, reply) => {
+    if (!request.isMultipart()) {
+      throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
+    }
+
+    const file = await request.file();
+    if (!file) {
+      throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
+    }
+
+    const result = await tablesService.saveTable(file);
+    return reply.status(201).send(result);
   });
 
-  // DELETE /api/v1/tables/:id
-  fastify.delete('/api/v1/tables/:id', async (request, reply) => {
+  // DELETE /api/v1/tables/:id (Eliminación protegida con X-API-Key)
+  fastify.delete('/api/v1/tables/:id', { preHandler: [authenticateApiKey] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await tablesService.deleteTable(id);
     return reply.status(204).send();

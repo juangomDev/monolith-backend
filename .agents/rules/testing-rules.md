@@ -11,3 +11,6 @@ Esta regla aplica a todo el código bajo el directorio `tests/` y a cualquier pr
    - Ante cualquier fallo de test, la solución siempre es corregir o completar la lógica en `src/`.
 3. **Excepción Exclusiva:**
    - Solo se modificará un test existente si el usuario humano solicita de forma inequívoca un cambio en la especificación o comportamiento esperado del endpoint/servicio.
+4. **Obligatoriedad de Pruebas para Cada Nueva Función:**
+   - Cada nueva función, servicio, utilidad o endpoint debe acompañarse de sus pruebas unitarias o de integración correspondientes antes de darse por completada la tarea.
+   - Tan pronto como se creen y aprueben, quedan sujetas a la regla de inmutabilidad absoluta.

@@ -16,6 +16,10 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /api/v1/images (Subida protegida con X-API-Key)
   fastify.post('/api/v1/images', { preHandler: [authenticateApiKey] }, async (request, reply) => {
+    if (!request.isMultipart()) {
+      throw new AppError(400, 'Debe adjuntar un archivo de imagen en el campo multipart', 'BAD_REQUEST');
+    }
+
     const file = await request.file();
     if (!file) {
       throw new AppError(400, 'Debe adjuntar un archivo de imagen en el campo multipart', 'BAD_REQUEST');
