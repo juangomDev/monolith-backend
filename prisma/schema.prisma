@@ -1,0 +1,51 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Clientes con acceso a la API
+model ApiClient {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  keyPrefix String   @map("key_prefix") @db.VarChar(16)
+  keyHash   String   @unique @map("key_hash") // HMAC-SHA256
+  rateLimit Int      @default(100) @map("rate_limit")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([keyHash])
+  @@map("api_clients")
+}
+
+// 2. Registro de imágenes
+model ImageRegistry {
+  id           String   @id @default(uuid()) @db.Uuid
+  shortCode    String   @unique @map("short_code") @db.VarChar(12)
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  storagePath  String   @map("storage_path")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([shortCode])
+  @@map("images_registry")
+}
+
+// 3. Registro de tablas (CSV / Excel)
+model TableRegistry {
+  id            String   @id @default(uuid()) @db.Uuid
+  shortCode     String   @unique @map("short_code") @db.VarChar(12)
+  tableName     String   @map("table_name")
+  rowCount      Int      @default(0) @map("row_count")
+  columnsSchema Json?    @map("columns_schema") @db.JsonB
+  sizeBytes     Int      @map("size_bytes")
+  storagePath   String   @map("storage_path")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([shortCode])
+  @@map("tables_registry")
+}

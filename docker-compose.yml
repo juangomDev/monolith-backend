@@ -1,0 +1,85 @@
+services:
+  postgres_db:
+    image: postgres:16-bookworm
+    container_name: monolith_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_ADMIN_USER:-postgres_admin}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-monolith_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./scripts/init-app-user.sh:/docker-entrypoint-initdb.d/init-app-user.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER:-postgres_admin} -d ${DB_NAME:-monolith_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    networks:
+      - internal_net
+
+  # Job efímero: corre migraciones con el usuario Admin antes de levantar la app
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monolith_migrate
+    command: npx prisma migrate deploy
+    environment:
+      DATABASE_URL: postgresql://${DB_ADMIN_USER}:${DB_ADMIN_PASSWORD}@postgres_db:5432/${DB_NAME:-monolith_db}?schema=public
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - internal_net
+    restart: "no"
+
+  # El Monolito: corre con DB_APP_USER (solo permisos CRUD, sin DROP/ALTER)
+  backend-monolith:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monolith_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      DATABASE_URL: postgresql://${DB_APP_USER}:${DB_APP_PASSWORD}@postgres_db:5432/${DB_NAME:-monolith_db}?schema=public
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
+      STORAGE_DIR: /app/storage
+      MAX_STORAGE_GB: 50
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+    networks:
+      - internal_net
+
+volumes:
+  pg_data:
+
+networks:
+  internal_net:
+    driver: bridge

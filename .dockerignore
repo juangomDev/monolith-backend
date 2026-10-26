@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+storage/*
+!storage/images/.gitkeep
+!storage/tables/.gitkeep
+!storage/tmp/.gitkeep
+npm-debug.log
+Dockerfile*
+docker-compose*
+README.md
