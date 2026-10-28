@@ -14,7 +14,7 @@
 | **Fase 2** | Módulo de Imágenes (Subida a disco, registro y URL corta) | ✅ Completado |
 | **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ✅ Completado |
 | **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ✅ Completado |
-| **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | 📝 En Planificación |
+| **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | ✅ Completado |
 
 ---
 
@@ -58,7 +58,7 @@
 - [x] **T.4** Pruebas de portero y seguridad: `auth.test.ts` (6 tests) y `health.test.ts` (3 tests).
 - [x] **T.5** Pruebas de imágenes: `images.service.test.ts` (8 tests) y `images.routes.test.ts` (7 tests).
 - [x] **T.6** Pruebas de tablas: `tables.parser.test.ts` (6 tests), `tables.service.test.ts` (8 tests), `tables.routes.test.ts` (8 tests).
-- [x] **T.7** Verificación global: 57/57 tests pasando con 0 fallos y `npm run build` con código 0.
+- [x] **T.7** Verificación global: 85/85 tests pasando con 0 fallos y `npm run build` con código 0.
 
 ---
 
@@ -86,10 +86,10 @@
 ---
 
 ## 🔒 Fase 5: Seguridad, Usuarios y Control de Acceso (Opción B: JWT + Roles con Username)
-- [ ] **5.1** Automatización de Esquema Prisma en Dokploy (`package.json`):
+- [x] **5.1** Automatización de Esquema Prisma en Dokploy (`package.json`):
   - Ajustar script `"start": "npx prisma db push && node dist/main.js"` para sincronizar automáticamente cualquier cambio en `schema.prisma` al reiniciar el contenedor en Dokploy.
   - Asegurar que `prisma` esté en `dependencies` para que `prisma db push` esté disponible en producción.
-- [ ] **5.2** Modelo de Datos para Usuarios (`prisma/schema.prisma`):
+- [x] **5.2** Modelo de Datos para Usuarios (`prisma/schema.prisma`):
   - Crear modelo `User`:
     - `id` (UUID)
     - `username` (único, alfanumérico sin espacios)
@@ -98,24 +98,25 @@
     - `isActive` (boolean, default: true)
     - `createdAt` (timestamp)
   - Sembrar cuenta inicial del **único Admin** en `prisma/seed.ts` leyendo `ADMIN_USERNAME` y `ADMIN_PASSWORD` de `.env` (fallback dev: `admin` / `AdminPass123!`).
-- [ ] **5.3** Módulo de Usuarios y Autenticación (`src/modules/users/`):
+- [x] **5.3** Módulo de Usuarios y Autenticación (`src/modules/users/`):
   - Ubicación de archivos:
     - `src/modules/users/users.repository.ts`: Consultas Prisma para `User`.
     - `src/modules/users/users.service.ts`: Lógica de autenticación, hash de contraseñas y validación de único Admin.
     - `src/modules/users/users.routes.ts`: Endpoints `POST /api/v1/auth/login` y `POST /api/v1/users`.
   - Configuración de `@fastify/jwt` con variable secreta `JWT_SECRET`.
   - `POST /api/v1/auth/login`: Recibe `{ username, password }` y devuelve `{ token, user: { id, username, role } }`.
-- [ ] **5.4** Gestión de Usuarios por el Admin (`src/modules/users/users.routes.ts`):
+- [x] **5.4** Gestión de Usuarios por el Admin (`src/modules/users/users.routes.ts`):
   - `POST /api/v1/users`:
     - Solo accesible con token de rol `ADMIN`.
     - Permite crear nuevos usuarios normales (`USER`) con su `username` y `password` inicial.
     - Bloquea cualquier intento de crear otro `ADMIN` (solo puede haber uno).
-- [ ] **5.5** Blindaje de Subida de Archivos con Middleware de Autorización (`src/gateway/`):
+- [x] **5.5** Blindaje de Subida de Archivos con Middleware de Autorización (`src/gateway/`):
   - En `src/gateway/auth.ts`: Hook `authenticateUser` y verificador `requireRole(['ADMIN', 'USER'])`.
   - Proteger `POST /api/v1/images` y `POST /api/v1/tables` para que solo personas logueadas con rol válido puedan subir.
   - Responder `401 UNAUTHORIZED` si no envían token o es inválido, y `403 FORBIDDEN` si el rol no tiene permiso.
-- [ ] **5.6** Pruebas Unitarias e Integradas Obligatorias (Frozen Test Contracts):
+- [x] **5.6** Pruebas Unitarias e Integradas Obligatorias (Frozen Test Contracts):
   - `tests/modules/users/users.service.test.ts`: Login con username, verificación de password, bloqueo de segundo Admin.
   - `tests/modules/users/users.routes.test.ts`: Pruebas de rutas HTTP para login y creación de usuarios.
   - Pruebas de subida en imágenes y tablas validando el acceso exclusivo con JWT de usuario autorizado.
+
 

@@ -9,6 +9,9 @@ const envSchema = z.object({
   API_KEY_PEPPER: z.string().min(16, 'API_KEY_PEPPER must be at least 16 characters long'),
   STORAGE_DIR: z.string().default('./storage'),
   MAX_STORAGE_GB: z.coerce.number().default(50),
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters').default('development_jwt_secret_must_be_long_and_safe_32_chars'),
+  ADMIN_USERNAME: z.string().min(3).default('admin'),
+  ADMIN_PASSWORD: z.string().min(6).default('AdminPass123!'),
 });
 
 export type Env = z.infer<typeof envSchema>;

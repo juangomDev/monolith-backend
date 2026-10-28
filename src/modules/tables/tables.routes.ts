@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { tablesService } from './tables.service.js';
-import { authenticateApiKey } from '../../gateway/auth.js';
+import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 
 export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -28,8 +28,8 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(result);
   });
 
-  // POST /api/v1/tables (Subida protegida con X-API-Key)
-  fastify.post('/api/v1/tables', { preHandler: [authenticateApiKey] }, async (request, reply) => {
+  // POST /api/v1/tables (Subida protegida con Bearer JWT o X-API-Key)
+  fastify.post('/api/v1/tables', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
     if (!request.isMultipart()) {
       throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
     }
@@ -43,8 +43,8 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send(result);
   });
 
-  // DELETE /api/v1/tables/:id (Eliminación protegida con X-API-Key)
-  fastify.delete('/api/v1/tables/:id', { preHandler: [authenticateApiKey] }, async (request, reply) => {
+  // DELETE /api/v1/tables/:id (Eliminación protegida con Bearer JWT o X-API-Key)
+  fastify.delete('/api/v1/tables/:id', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await tablesService.deleteTable(id);
     return reply.status(204).send();

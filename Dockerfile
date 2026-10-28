@@ -36,4 +36,4 @@ COPY --from=build --chown=node:node /app/prisma ./prisma
 USER node
 EXPOSE 8080
 
-CMD ["node", "dist/main.js"]
+CMD ["npm", "start"]

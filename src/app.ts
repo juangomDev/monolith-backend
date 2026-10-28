@@ -2,6 +2,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
+import fastifyJwt from '@fastify/jwt';
+import { env } from './config/env.js';
 import { loggerConfig } from './shared/logger.js';
 import { registerGatewayRoutes } from './gateway/router.js';
 import { AppError } from './shared/errors.js';
@@ -12,6 +14,14 @@ export async function buildApp() {
     connectionTimeout: 10000, // 10s Anti-Slowloris
     requestTimeout: 30000,    // 30s
     requestIdHeader: 'x-request-id',
+  });
+
+  // Autenticación con JWT
+  await app.register(fastifyJwt, {
+    secret: env.JWT_SECRET,
+    sign: {
+      expiresIn: '7d',
+    },
   });
 
   // Plugins de utilidad del ecosistema Fastify
