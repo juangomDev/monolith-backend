@@ -29,6 +29,7 @@ export async function buildApp() {
   await app.register(cors, {
     origin: true,
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   // Streaming de subidas de archivos (límite 50MB)

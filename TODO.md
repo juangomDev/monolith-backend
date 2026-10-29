@@ -15,6 +15,7 @@
 | **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ✅ Completado |
 | **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ✅ Completado |
 | **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | ✅ Completado |
+| **Fase 6** | Sistema de Carpetas y Proyectos Compartidos en PostgreSQL | ⏸️ Planificado (Pendiente) |
 
 ---
 
@@ -129,5 +130,54 @@
   - `tests/modules/users/users.service.test.ts`: Login con username, verificación de password, bloqueo de segundo Admin.
   - `tests/modules/users/users.routes.test.ts`: Pruebas de rutas HTTP para login y creación de usuarios.
   - Pruebas de subida en imágenes y tablas validando el acceso exclusivo con JWT de usuario autorizado.
+
+---
+
+## 📁 Fase 6: Sistema de Carpetas y Proyectos Compartidos en PostgreSQL (Planificado)
+
+> **Objetivo:** Permitir que las carpetas y proyectos existan en PostgreSQL para que todos los usuarios y navegadores vean la misma estructura colaborativa en tiempo real.  
+> **Regla Inviolable:** No romper retrocompatibilidad ni modificar los 93 tests congelados existentes.
+
+- [ ] **6.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
+  - [ ] `6.1.1` Definir enum `FolderType`: `IMAGE`, `TABLE`.
+  - [ ] `6.1.2` Crear modelo `Folder`:
+    - `id` (UUID, primary key)
+    - `name` (String, max 60 caracteres)
+    - `type` (`FolderType`)
+    - `color` (String opcional hex, ej. `#3b82f6`)
+    - `createdAt` (DateTime @default(now()))
+    - Relaciones bidireccionales con `ImageRegistry` y `TableRegistry`.
+  - [ ] `6.1.3` Agregar columna opcional `folderId String? @map("folder_id") @db.Uuid` en `ImageRegistry` con `onDelete: SetNull`.
+  - [ ] `6.1.4` Agregar columna opcional `folderId String? @map("folder_id") @db.Uuid` en `TableRegistry` con `onDelete: SetNull`.
+  - [ ] `6.1.5` Ejecutar `npx prisma db push` y generar cliente Prisma sin afectar registros existentes.
+
+- [ ] **6.2 Repositorio de Datos (`src/modules/folders/folders.repository.ts`)**
+  - [ ] `6.2.1` `createFolder(data: { name, type, color? })`: Insertar nueva carpeta en la base de datos.
+  - [ ] `6.2.2` `findFolders(type?: FolderType)`: Listar carpetas con conteo de archivos asociados (`_count`).
+  - [ ] `6.2.3` `findFolderById(id: string)`: Buscar carpeta por UUID.
+  - [ ] `6.2.4` `deleteFolder(id: string)`: Eliminar carpeta poniendo los archivos asociados en `null` (raíz).
+  - [ ] `6.2.5` `moveImageToFolder(imageId: string, folderId: string | null)`: Actualizar `folder_id` en `ImageRegistry`.
+  - [ ] `6.2.6` `moveTableToFolder(tableId: string, folderId: string | null)`: Actualizar `folder_id` en `TableRegistry`.
+
+- [ ] **6.3 Servicio de Negocio (`src/modules/folders/folders.service.ts`)**
+  - [ ] `6.3.1` Validar nombres de carpeta (longitud entre 2 y 60 caracteres, caracteres válidos).
+  - [ ] `6.3.2` Manejar excepciones controladas con `AppError(404, 'Carpeta no encontrada', 'NOT_FOUND')`.
+  - [ ] `6.3.3` Validar consistencia al mover (ej. una imagen solo puede moverse a carpetas de tipo `IMAGE`).
+  - [ ] `6.3.4` Devolver metadatos formateados con conteo de elementos y fecha.
+
+- [ ] **6.4 Rutas HTTP Fastify (`src/modules/folders/folders.routes.ts`)**
+  - [ ] `6.4.1` `GET /api/v1/folders`: Listar carpetas filtradas opcionalmente por `?type=IMAGE|TABLE` (autenticado).
+  - [ ] `6.4.2` `POST /api/v1/folders`: Crear nueva carpeta `{ name, type, color }` (autenticado).
+  - [ ] `6.4.3` `DELETE /api/v1/folders/:id`: Eliminar carpeta (autenticado).
+  - [ ] `6.4.4` `PATCH /api/v1/images/:id/folder`: Reasignar imagen a carpeta `{ folderId: string | null }` (autenticado).
+  - [ ] `6.4.5` `PATCH /api/v1/tables/:id/folder`: Reasignar tabla a carpeta `{ folderId: string | null }` (autenticado).
+  - [ ] `6.4.6` Extender respuestas de `GET /api/v1/images` y `GET /api/v1/tables` para incluir el campo `folderId`.
+
+- [ ] **6.5 Blindaje con Pruebas Automatizadas (Frozen Test Contracts)**
+  - [ ] `6.5.1` Crear `tests/modules/folders/folders.service.test.ts`: Pruebas unitarias completas de validación, creación y movimiento.
+  - [ ] `6.5.2` Crear `tests/modules/folders/folders.routes.test.ts`: Pruebas de integración HTTP para los 5 endpoints.
+  - [ ] `6.5.3` Validar que los 93 tests existentes sigan pasando al 100% sin una sola regresión.
+  - [ ] `6.5.4` Congelar los nuevos tests como especificación inmutable.
+
 
 
