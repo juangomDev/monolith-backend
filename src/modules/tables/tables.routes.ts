@@ -28,6 +28,12 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(result);
   });
 
+  // GET /api/v1/tables (Listado protegido con Bearer JWT o X-API-Key)
+  fastify.get('/api/v1/tables', { preHandler: [authenticateUserOrApiKey] }, async (_request, reply) => {
+    const result = await tablesService.listTables();
+    return reply.send(result);
+  });
+
   // POST /api/v1/tables (Subida protegida con Bearer JWT o X-API-Key)
   fastify.post('/api/v1/tables', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
     if (!request.isMultipart()) {

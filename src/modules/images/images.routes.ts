@@ -14,6 +14,12 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(fileStream);
   });
 
+  // GET /api/v1/images (Listado protegido con Bearer JWT o X-API-Key)
+  fastify.get('/api/v1/images', { preHandler: [authenticateUserOrApiKey] }, async (_request, reply) => {
+    const result = await imagesService.listImages();
+    return reply.send(result);
+  });
+
   // POST /api/v1/images (Subida protegida con Bearer JWT o X-API-Key)
   fastify.post('/api/v1/images', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
     if (!request.isMultipart()) {

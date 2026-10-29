@@ -190,4 +190,40 @@ describe('Módulo Tablas: TablesService', () => {
     assert.strictEqual(dbDeleted, true);
     assert.strictEqual(deletedPath, '/mock/storage/tables/borrar.csv');
   });
+
+  it('listTables: debe retornar lista vacía si no hay tablas registradas', async () => {
+    mock.method(tablesRepository, 'findAll', async () => []);
+
+    const result = await tablesService.listTables();
+
+    assert.strictEqual(result.total, 0);
+    assert.deepStrictEqual(result.tables, []);
+  });
+
+  it('listTables: debe retornar lista formateada con URL pública, columnas y rowCount', async () => {
+    mock.method(tablesRepository, 'findAll', async () => [
+      {
+        id: validUuid,
+        shortCode: 'tabList123',
+        tableName: 'dataset.csv',
+        rowCount: 45,
+        columnsSchema: ['id', 'producto', 'precio'],
+        sizeBytes: 1500,
+        storagePath: '/storage/tables/tabList123.csv',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+
+    const result = await tablesService.listTables();
+
+    assert.strictEqual(result.total, 1);
+    assert.strictEqual(result.tables.length, 1);
+    assert.strictEqual(result.tables[0].id, validUuid);
+    assert.strictEqual(result.tables[0].shortCode, 'tabList123');
+    assert.ok(result.tables[0].url.includes('/t/tabList123'));
+    assert.strictEqual(result.tables[0].tableName, 'dataset.csv');
+    assert.strictEqual(result.tables[0].rowCount, 45);
+    assert.deepStrictEqual(result.tables[0].columns, ['id', 'producto', 'precio']);
+    assert.strictEqual(result.tables[0].sizeBytes, 1500);
+  });
 });

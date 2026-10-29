@@ -6,6 +6,12 @@ export class ImagesRepository {
     return prisma.imageRegistry.create({ data });
   }
 
+  async findAll() {
+    return prisma.imageRegistry.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findByShortCode(shortCode: string) {
     return prisma.imageRegistry.findUnique({ where: { shortCode } });
   }

@@ -48,6 +48,11 @@
   - Servir imagen desde disco con cabeceras `Content-Type` y caché inmutable.
 - [x] **2.3** Configurar `DELETE /api/v1/images/:id`:
   - Eliminar registro de PostgreSQL y borrar archivo físico de `./storage/images/`.
+- [x] **2.4** Configurar `GET /api/v1/images` (Listado de imágenes guardadas):
+  - [x] **2.4.1** En `images.repository.ts`: Método `findAll()` para listar registros ordenados descendentemente por `createdAt`.
+  - [x] **2.4.2** En `images.service.ts`: Método `listImages()` con formato de respuesta `{ images: [...] }` incluyendo URL corta pública.
+  - [x] **2.4.3** En `images.routes.ts`: Endpoint `GET /api/v1/images` protegido con `authenticateUserOrApiKey`.
+  - [x] **2.4.4** En `images.service.test.ts` e `images.routes.test.ts`: Pruebas obligatorias unitarias y de integración para listado y control de acceso.
 
 ---
 
@@ -58,7 +63,8 @@
 - [x] **T.4** Pruebas de portero y seguridad: `auth.test.ts` (6 tests) y `health.test.ts` (3 tests).
 - [x] **T.5** Pruebas de imágenes: `images.service.test.ts` (8 tests) y `images.routes.test.ts` (7 tests).
 - [x] **T.6** Pruebas de tablas: `tables.parser.test.ts` (6 tests), `tables.service.test.ts` (8 tests), `tables.routes.test.ts` (8 tests).
-- [x] **T.7** Verificación global: 85/85 tests pasando con 0 fallos y `npm run build` con código 0.
+- [x] **T.7** Verificación global base: 85/85 tests pasando con 0 fallos y `npm run build` con código 0.
+- [x] **T.8** Nuevas pruebas para listados de imágenes y tablas con 100% de éxito (93/93 tests) sin alterar los tests congelados existentes.
 
 ---
 
@@ -75,6 +81,11 @@
   - Si es consulta normal, devolver datos paginados (ej. primeras 100 filas).
 - [x] **3.3** Configurar `DELETE /api/v1/tables/:id`:
   - Eliminar registro de PostgreSQL y borrar archivo de `./storage/tables/`.
+- [x] **3.4** Configurar `GET /api/v1/tables` (Listado de datasets registrados):
+  - [x] **3.4.1** En `tables.repository.ts`: Método `findAll()` para listar registros ordenados descendentemente por `createdAt`.
+  - [x] **3.4.2** En `tables.service.ts`: Método `listTables()` con formato de respuesta `{ tables: [...] }` incluyendo URL pública, columnas y rowCount.
+  - [x] **3.4.3** En `tables.routes.ts`: Endpoint `GET /api/v1/tables` protegido con `authenticateUserOrApiKey`.
+  - [x] **3.4.4** En `tables.service.test.ts` y `tables.routes.test.ts`: Pruebas obligatorias unitarias y de integración para listado y control de acceso.
 
 ---
 

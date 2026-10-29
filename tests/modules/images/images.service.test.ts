@@ -186,4 +186,38 @@ describe('Módulo Imágenes: ImagesService', () => {
     assert.strictEqual(deletedFromDb, true);
     assert.strictEqual(unlinkedPath, '/mock/storage/images/codigo1234.jpg');
   });
+
+  it('listImages: debe retornar lista vacía si no hay imágenes registradas', async () => {
+    mock.method(imagesRepository, 'findAll', async () => []);
+
+    const result = await imagesService.listImages();
+
+    assert.strictEqual(result.total, 0);
+    assert.deepStrictEqual(result.images, []);
+  });
+
+  it('listImages: debe retornar lista formateada con URL pública generada', async () => {
+    mock.method(imagesRepository, 'findAll', async () => [
+      {
+        id: validUuid,
+        shortCode: 'imgList123',
+        originalName: 'banner.png',
+        mimeType: 'image/png',
+        sizeBytes: 2048,
+        storagePath: '/storage/images/imgList123.png',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+
+    const result = await imagesService.listImages();
+
+    assert.strictEqual(result.total, 1);
+    assert.strictEqual(result.images.length, 1);
+    assert.strictEqual(result.images[0].id, validUuid);
+    assert.strictEqual(result.images[0].shortCode, 'imgList123');
+    assert.ok(result.images[0].url.includes('/i/imgList123'));
+    assert.strictEqual(result.images[0].originalName, 'banner.png');
+    assert.strictEqual(result.images[0].mimeType, 'image/png');
+    assert.strictEqual(result.images[0].sizeBytes, 2048);
+  });
 });

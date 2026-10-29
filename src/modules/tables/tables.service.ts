@@ -79,6 +79,23 @@ export class TablesService {
     };
   }
 
+  async listTables() {
+    const records = await tablesRepository.findAll();
+    return {
+      tables: records.map((record) => ({
+        id: record.id,
+        shortCode: record.shortCode,
+        url: `${env.BASE_URL}/t/${record.shortCode}`,
+        tableName: record.tableName,
+        rowCount: record.rowCount,
+        columns: record.columnsSchema,
+        sizeBytes: record.sizeBytes,
+        createdAt: record.createdAt,
+      })),
+      total: records.length,
+    };
+  }
+
   async getTableByShortCode(shortCode: string) {
     const record = await tablesRepository.findByShortCode(shortCode);
     if (!record) {

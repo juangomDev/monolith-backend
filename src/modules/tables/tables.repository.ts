@@ -6,6 +6,12 @@ export class TablesRepository {
     return prisma.tableRegistry.create({ data });
   }
 
+  async findAll() {
+    return prisma.tableRegistry.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findByShortCode(shortCode: string) {
     return prisma.tableRegistry.findUnique({ where: { shortCode } });
   }

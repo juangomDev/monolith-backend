@@ -148,4 +148,49 @@ describe('Módulo Imágenes: Rutas HTTP', () => {
 
     assert.strictEqual(response.statusCode, 204);
   });
+
+  it('GET /api/v1/images: retorna 401 si no se envía cabecera de autenticación', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/images',
+    });
+
+    assert.strictEqual(response.statusCode, 401);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.code, 'UNAUTHORIZED');
+  });
+
+  it('GET /api/v1/images: retorna 200 y lista de imágenes cuando la autenticación es válida', async () => {
+    mockValidAuthClient();
+    mock.method(imagesService, 'listImages', async () => ({
+      images: [
+        {
+          id: validUuid,
+          shortCode: 'abc1234XYZ',
+          url: 'http://localhost:3000/i/abc1234XYZ',
+          originalName: 'foto.png',
+          mimeType: 'image/png',
+          sizeBytes: 22,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      total: 1,
+    }));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/images',
+      headers: {
+        'x-api-key': validKey,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.total, 1);
+    assert.strictEqual(body.images.length, 1);
+    assert.strictEqual(body.images[0].shortCode, 'abc1234XYZ');
+  });
 });

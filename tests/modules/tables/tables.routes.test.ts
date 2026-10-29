@@ -176,4 +176,51 @@ describe('Módulo Tablas: Rutas HTTP', () => {
 
     assert.strictEqual(response.statusCode, 204);
   });
+
+  it('GET /api/v1/tables: retorna 401 si no se envía cabecera de autenticación', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/tables',
+    });
+
+    assert.strictEqual(response.statusCode, 401);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.code, 'UNAUTHORIZED');
+  });
+
+  it('GET /api/v1/tables: retorna 200 y lista de tablas cuando la autenticación es válida', async () => {
+    mockValidAuthClient();
+    mock.method(tablesService, 'listTables', async () => ({
+      tables: [
+        {
+          id: validUuid,
+          shortCode: 'tab123XYZ',
+          url: 'http://localhost:3000/t/tab123XYZ',
+          tableName: 'ventas.csv',
+          rowCount: 100,
+          columns: ['id', 'total'],
+          sizeBytes: 450,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      total: 1,
+    }));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/tables',
+      headers: {
+        'x-api-key': validKey,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.total, 1);
+    assert.strictEqual(body.tables.length, 1);
+    assert.strictEqual(body.tables[0].shortCode, 'tab123XYZ');
+    assert.strictEqual(body.tables[0].rowCount, 100);
+  });
 });

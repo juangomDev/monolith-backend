@@ -62,6 +62,22 @@ export class ImagesService {
     };
   }
 
+  async listImages() {
+    const records = await imagesRepository.findAll();
+    return {
+      images: records.map((record) => ({
+        id: record.id,
+        shortCode: record.shortCode,
+        url: `${env.BASE_URL}/i/${record.shortCode}`,
+        originalName: record.originalName,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+        createdAt: record.createdAt,
+      })),
+      total: records.length,
+    };
+  }
+
   async getImageFileByShortCode(shortCode: string) {
     const record = await imagesRepository.findByShortCode(shortCode);
     if (!record) {
