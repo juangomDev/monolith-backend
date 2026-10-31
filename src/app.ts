@@ -5,6 +5,8 @@ import sensible from '@fastify/sensible';
 import fastifyJwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import fastifySwagger from '@fastify/swagger';
+import fastifyApiReference from '@scalar/fastify-api-reference';
 import { env } from './config/env.js';
 import { loggerConfig } from './shared/logger.js';
 import { registerGatewayRoutes } from './gateway/router.js';
@@ -116,7 +118,69 @@ export async function buildApp() {
     });
   });
 
-  // Registro de rutas (Health, Imágenes, Tablas, Usuarios)
+  // Generador de especificación OpenAPI 3.1
+  await app.register(fastifySwagger, {
+    openapi: {
+      openapi: '3.1.0',
+      info: {
+        title: 'Monolito Backend API - Gestor Multimedia',
+        description:
+          'API REST modular de alto rendimiento para almacenamiento, procesamiento y distribución de imágenes y tablas en PostgreSQL.',
+        version: '1.0.0',
+      },
+      servers: [
+        {
+          url: 'http://localhost:3000',
+          description: 'Servidor de Desarrollo Local',
+        },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Autenticación mediante JWT Bearer Token (Usuarios con rol ADMIN o USER)',
+          },
+          apiKeyAuth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-API-Key',
+            description: 'Autenticación mediante X-API-Key (Clientes máquina o integraciones)',
+          },
+        },
+      },
+      tags: [
+        { name: 'Auth', description: 'Autenticación, emisión y revocación de sesiones JWT y cookies HttpOnly' },
+        { name: 'Users', description: 'Administración de usuarios del sistema (solo ADMIN)' },
+        { name: 'Folders', description: 'Organización lógica de archivos, proyectos y privacidad' },
+        { name: 'Images', description: 'Ingesta multipart, validación magic bytes y entrega de imágenes' },
+        { name: 'Tables', description: 'Procesamiento de datasets CSV/XLSX, consulta paginada y descarga' },
+        { name: 'Health', description: 'Comprobación de salud del sistema, PostgreSQL y almacenamiento' },
+      ],
+    },
+  });
+
+  // Interfaz Interactiva de Documentación Scalar en /docs
+  await app.register(fastifyApiReference, {
+    routePrefix: '/docs',
+    configuration: {
+      title: 'Monolito Backend API Docs',
+      theme: 'purple',
+      layout: 'modern',
+    },
+  });
+
+  // Endpoints para descarga y consumo de la especificación OpenAPI en JSON
+  app.get('/docs/json', { schema: { hide: true } }, async (_request, reply) => {
+    return reply.status(200).send(app.swagger());
+  });
+
+  app.get('/openapi.json', { schema: { hide: true } }, async (_request, reply) => {
+    return reply.status(200).send(app.swagger());
+  });
+
+  // Registro de rutas (Health, Imágenes, Tablas, Usuarios, Carpetas)
   await registerGatewayRoutes(app);
 
   return app;

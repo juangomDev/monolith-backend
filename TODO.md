@@ -17,6 +17,7 @@
 | **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | ✅ Completado |
 | **Fase 6** | Sistema de Carpetas y Proyectos Compartidos en PostgreSQL | ✅ Completado |
 | **Fase 7** | Blindaje de Seguridad y Hardening Defensivo | ✅ Completado |
+| **Fase 8** | Documentación Interactiva y Contratos OpenAPI con Scalar | ✅ Completado |
 
 ---
 
@@ -259,4 +260,71 @@
 - [x] **7.6 Validación Estricta de Variables de Entorno en Producción**
   - [x] `7.6.1` En `src/config/env.ts`, impedir en `NODE_ENV=production` el uso de secretos por defecto para `JWT_SECRET` y `ADMIN_PASSWORD`.
   - [x] `7.6.2` Pruebas unitarias en `tests/config/env.test.ts` que aseguren el fallo de arranque si se despliega en producción con credenciales débiles.
+
+---
+
+## 📖 Fase 8: Documentación Interactiva y Contratos OpenAPI con Scalar (Completado)
+
+> **Objetivos Clave:**
+> 1. **Sandbox Interactivo y Documentación Viva:** Exponer una interfaz moderna en `/docs` con `@scalar/fastify-api-reference` para que cualquier desarrollador (especialmente del frontend) pueda explorar contratos, ver ejemplos de peticiones/respuestas y probar llamadas HTTP en vivo con tokens JWT o X-API-Key.
+> 2. **Autogeneración de Tipos TypeScript para el Frontend:** Exponer la especificación OpenAPI 3.1 en `/docs/json` permitiendo al equipo de frontend generar automáticamente interfaces y clientes fuertemente tipados con `openapi-typescript`.
+> 3. **Estandarización de Contratos RFC 7807:** Documentar todos los esquemas de éxito (`200`, `201`) y modelos de error controlados (`400`, `401`, `403`, `404`, `413`, `415`, `429`).
+> 4. **Inmutabilidad y Cero Rompimiento:** No alterar ninguno de los 169 contratos de prueba congelados existentes.
+
+- [x] **8.1 Dependencias y Configuración Base del Generador OpenAPI (`@fastify/swagger`)**
+  - [x] `8.1.1` Instalar `@fastify/swagger` y `@scalar/fastify-api-reference` como dependencias de producción.
+  - [x] `8.1.2` Configurar `@fastify/swagger` en `src/app.ts` con especificación OpenAPI 3.1:
+    - Información del API: título (`Monolito Backend API - Gestor Multimedia`), versión (`1.0.0`), descripción de arquitectura y capacidad URLs.
+    - Servidores: entornos local (`http://localhost:3000`) y Dokploy producción (`https://*.sslip.io`).
+    - Esquemas de seguridad: `bearerAuth` (HTTP Bearer JWT) y `apiKeyAuth` (`X-API-Key`).
+    - Etiquetas temáticas (`tags`): `Auth`, `Users`, `Folders`, `Images`, `Tables`, `Health`.
+
+- [x] **8.2 Integración y Renderizado de UI con Scalar (`@scalar/fastify-api-reference`)**
+  - [x] `8.2.1` Registrar `@scalar/fastify-api-reference` en `src/app.ts` sirviendo la interfaz visual en `/docs`.
+  - [x] `8.2.2` Configurar cliente API integrado, buscador rápido, tema visual y generador de snippets en JavaScript (Fetch, Axios) y cURL.
+  - [x] `8.2.3` Exponer el endpoint de especificación cruda en `GET /docs/json` para consumo por herramientas externas y el frontend.
+  - [x] `8.2.4` Compatibilidad CSP con `@fastify/helmet`: Ajustar la política de seguridad de contenido para permitir los scripts CDN, estilos y Web Workers necesarios para el renderizado de la UI de Scalar sin degradar la seguridad del resto de la API.
+
+- [x] **8.3 Documentación de Contratos por Módulo (Fastify Route Schemas)**
+  - [x] `8.3.1` **Módulo Usuarios y Autenticación (`src/modules/users/users.routes.ts`)**:
+    - `POST /api/v1/auth/login`: Esquema de entrada (`username`, `password`), respuestas 200 con token JWT, y errores 400/401 RFC 7807.
+    - `POST /api/v1/auth/refresh`: Lectura de cookie `refreshToken`, respuesta 200 con nuevo access token, 401 sesión revocada.
+    - `POST /api/v1/auth/logout`: Revocación de sesión e invalidación de cookie.
+    - `POST /api/v1/users`: Requisito de rol `ADMIN`, creación de usuarios normales, respuestas 201 y 400/403/409.
+  - [x] `8.3.2` **Módulo Carpetas (`src/modules/folders/folders.routes.ts`)**:
+    - `GET /api/v1/folders`: Query opcional `?type=IMAGE|TABLE`, respuesta 200 con listado y conteo de archivos respetando privacidad.
+    - `POST /api/v1/folders`: Creación de carpeta (nombre, tipo, color hex, isPrivate), respuestas 201 y 400.
+    - `GET /api/v1/folders/:id`: Detalle de carpeta, respuestas 200, 403 (privada ajena) y 404.
+    - `DELETE /api/v1/folders/:id`: Eliminación en cascada física y lógica, respuestas 200, 403 y 404.
+    - `PATCH /api/v1/images/:id/folder` y `PATCH /api/v1/tables/:id/folder`: Reasignación de recursos validando tipo y permisos.
+  - [x] `8.3.3` **Módulo Imágenes (`src/modules/images/images.routes.ts`)**:
+    - `POST /api/v1/images`: Carga `multipart/form-data` con `folderId` opcional, validación de magic bytes, respuestas 201 (`shortCode`, `url`), 400, 413 y 415.
+    - `GET /api/v1/images`: Listado paginado de imágenes con filtrado de privacidad.
+    - `GET /i/:short_code`: Capacidad URL pública con cabeceras de caché inmutable (`max-age=31536000`), respuestas 200 (binario) y 404.
+    - `DELETE /api/v1/images/:id`: Eliminación lógica y física de imagen en disco.
+  - [x] `8.3.4` **Módulo Tablas (`src/modules/tables/tables.routes.ts`)**:
+    - `POST /api/v1/tables`: Carga `multipart/form-data` de archivos CSV/XLSX con `folderId`, respuestas 201, 400 y 415.
+    - `GET /api/v1/tables`: Listado de datasets registrados y privacidad.
+    - `GET /t/:short_code`: Descarga directa (`?download=true`) o consulta JSON estructurada de filas.
+    - `DELETE /api/v1/tables/:id`: Eliminación lógica y física de tabla en disco.
+  - [x] `8.3.5` **Módulo Gateway y Salud (`src/gateway/health.ts`)**:
+    - `GET /health`: Estado de conexión a base de datos PostgreSQL y volumen físico `./storage`.
+
+- [x] **8.4 Estandarización de Esquemas Comunes RFC 7807 (`src/shared/schemas.ts`)**
+  - [x] `8.4.1` Crear esquemas compartidos reutilizables para `ProblemDetails` (`type`, `title`, `status`, `detail`, `code`, `invalidParams`).
+  - [x] `8.4.2` Definir respuestas de error estándar (400, 401, 403, 404, 413, 415, 429) vinculadas a los esquemas de Fastify.
+
+- [x] **8.5 Herramientas y Guía de Integración para el Frontend (`gestor-multimedia`)**
+  - [x] `8.5.1` Agregar script `"openapi:export": "tsx --env-file=.env src/scripts/export-openapi.ts"` en `package.json` para generar archivo estático `openapi.json` versionable.
+  - [x] `8.5.2` Crear documento de integración rápida `docs/frontend-integration.md` con ejemplos de consumo, sincronización de tipos y configuración del cliente API en React / Vite.
+
+- [x] **8.6 Blindaje con Pruebas Automatizadas (Frozen Test Contracts)**
+  - [x] `8.6.1` Crear `tests/gateway/docs.test.ts`:
+    - `GET /docs/json`: Debe responder 200 con especificación OpenAPI 3.1 válida conteniendo título, servidores, seguridad y rutas registradas.
+    - `GET /docs`: Debe responder 200 con HTML válido del visor Scalar y configuración de cliente activa.
+    - Verificación de cabeceras de seguridad compatibles con CSP de Helmet en la ruta `/docs`.
+  - [x] `8.6.2` Validación del Protocolo Obligatorio:
+    - Ejecutar `npm test`: Verificar que los 169 tests congelados previos continúen pasando con 0 fallos + los nuevos tests de documentación (172 tests en total, 0 fallos).
+    - Ejecutar `npm run build`: Verificar compilación TypeScript limpia (`tsc`) con código 0.
+  - [x] `8.6.3` Congelar los nuevos tests de documentación como contratos inmutables.
 

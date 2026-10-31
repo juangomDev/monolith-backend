@@ -4,6 +4,12 @@ import { Role } from '@prisma/client';
 import { usersService } from './users.service.js';
 import { authenticateJwt, requireRole } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
+import {
+  standardErrorResponses,
+  securityBearerAuth,
+} from '../../shared/schemas.js';
+
+const passValidator = () => () => true;
 
 const loginSchema = z.object({
   username: z.string().min(1, 'El nombre de usuario es requerido'),
@@ -21,6 +27,42 @@ export const usersRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/api/v1/auth/login',
     {
+      validatorCompiler: passValidator,
+      schema: {
+        tags: ['Auth'],
+        summary: 'Iniciar sesión y obtener tokens de acceso',
+        description:
+          'Autentica a un usuario mediante username y password. Devuelve un Access Token JWT de 7 días y emite una cookie segura HttpOnly con el refreshToken.',
+        body: {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: { type: 'string', minLength: 1, example: 'admin' },
+            password: { type: 'string', minLength: 1, example: 'AdminPass123!' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Sesión iniciada exitosamente',
+            type: 'object',
+            properties: {
+              token: { type: 'string', description: 'Access Token JWT' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  username: { type: 'string' },
+                  role: { type: 'string', enum: ['ADMIN', 'USER'] },
+                },
+              },
+            },
+            required: ['token', 'user'],
+          },
+          400: standardErrorResponses[400],
+          401: standardErrorResponses[401],
+          429: standardErrorResponses[429],
+        },
+      },
       config: {
         rateLimit: {
           max: 5,
@@ -94,104 +136,198 @@ export const usersRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/v1/auth/refresh (Emite un nuevo Access Token leyendo la cookie HttpOnly o header)
-  fastify.post('/api/v1/auth/refresh', async (request, reply) => {
-    const rawRefreshToken =
-      request.cookies?.refreshToken ||
-      (request.headers['x-refresh-token'] as string | undefined);
+  fastify.post(
+    '/api/v1/auth/refresh',
+    {
+      schema: {
+        tags: ['Auth'],
+        summary: 'Renovar Access Token mediante Refresh Token',
+        description:
+          'Lee el refreshToken desde la cookie segura HttpOnly o cabecera x-refresh-token y genera un nuevo Access Token si la sesión continúa activa y no ha sido revocada.',
+        response: {
+          200: {
+            description: 'Token renovado exitosamente',
+            type: 'object',
+            properties: {
+              token: { type: 'string', description: 'Nuevo Access Token JWT' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  username: { type: 'string' },
+                  role: { type: 'string', enum: ['ADMIN', 'USER'] },
+                },
+              },
+            },
+            required: ['token', 'user'],
+          },
+          401: standardErrorResponses[401],
+        },
+      },
+    },
+    async (request, reply) => {
+      const rawRefreshToken =
+        request.cookies?.refreshToken ||
+        (request.headers['x-refresh-token'] as string | undefined);
 
-    if (!rawRefreshToken) {
-      throw new AppError(401, 'Refresh token no proporcionado en cookies o cabeceras', 'UNAUTHORIZED');
-    }
+      if (!rawRefreshToken) {
+        throw new AppError(401, 'Refresh token no proporcionado en cookies o cabeceras', 'UNAUTHORIZED');
+      }
 
-    let decoded: { id: string; username: string; role: Role; tokenVersion?: number; type?: string };
-    try {
-      decoded = fastify.jwt.verify(rawRefreshToken);
-    } catch {
-      throw new AppError(401, 'Refresh token inválido, expirado o malformado', 'UNAUTHORIZED');
-    }
+      let decoded: { id: string; username: string; role: Role; tokenVersion?: number; type?: string };
+      try {
+        decoded = fastify.jwt.verify(rawRefreshToken);
+      } catch {
+        throw new AppError(401, 'Refresh token inválido, expirado o malformado', 'UNAUTHORIZED');
+      }
 
-    if (decoded.type !== 'refresh') {
-      throw new AppError(401, 'Tipo de token no válido para refresco', 'UNAUTHORIZED');
-    }
+      if (decoded.type !== 'refresh') {
+        throw new AppError(401, 'Tipo de token no válido para refresco', 'UNAUTHORIZED');
+      }
 
-    const user = await usersService.findById(decoded.id);
-    if (!user || !user.isActive) {
-      throw new AppError(401, 'Usuario no encontrado o inactivo', 'UNAUTHORIZED');
-    }
+      const user = await usersService.findById(decoded.id);
+      if (!user || !user.isActive) {
+        throw new AppError(401, 'Usuario no encontrado o inactivo', 'UNAUTHORIZED');
+      }
 
-    const userVersion = (user as { tokenVersion?: number }).tokenVersion ?? 0;
-    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== userVersion) {
-      throw new AppError(401, 'Sesión revocada o cerrada', 'SESSION_REVOKED');
-    }
+      const userVersion = (user as { tokenVersion?: number }).tokenVersion ?? 0;
+      if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== userVersion) {
+        throw new AppError(401, 'Sesión revocada o cerrada', 'SESSION_REVOKED');
+      }
 
-    // Emitir nuevo Access Token
-    const token = fastify.jwt.sign({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      tokenVersion: userVersion,
-    });
-
-    return reply.status(200).send({
-      token,
-      user: {
+      // Emitir nuevo Access Token
+      const token = fastify.jwt.sign({
         id: user.id,
         username: user.username,
         role: user.role,
-      },
-    });
-  });
+        tokenVersion: userVersion,
+      });
+
+      return reply.status(200).send({
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+        },
+      });
+    }
+  );
 
   // POST /api/v1/auth/logout (Invalida la sesión actual en DB y destruye la cookie)
-  fastify.post('/api/v1/auth/logout', async (request, reply) => {
-    let userId: string | undefined;
+  fastify.post(
+    '/api/v1/auth/logout',
+    {
+      schema: {
+        tags: ['Auth'],
+        summary: 'Cerrar sesión e invalidar tokens',
+        description:
+          'Invalida la sesión incrementando tokenVersion en PostgreSQL para revocar de inmediato todos los tokens emitidos anteriormente y limpia físicamente la cookie HttpOnly.',
+        security: securityBearerAuth,
+        response: {
+          200: {
+            description: 'Sesión finalizada y revocada exitosamente',
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: 'Sesión cerrada exitosamente' },
+            },
+            required: ['message'],
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      let userId: string | undefined;
 
-    // 1. Extraer usuario del Access Token si se envió Authorization Bearer
-    const authHeader = request.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      try {
-        await request.jwtVerify();
-        userId = request.user.id;
-      } catch {
-        // Token expirado o malformado; continuar intentando con refreshToken
-      }
-    }
-
-    // 2. Extraer usuario del Refresh Token si aún no se determinó
-    if (!userId) {
-      const refreshToken = request.cookies?.refreshToken;
-      if (refreshToken) {
+      // 1. Extraer usuario del Access Token si se envió Authorization Bearer
+      const authHeader = request.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
         try {
-          const decoded = fastify.jwt.verify<{ id: string }>(refreshToken);
-          userId = decoded.id;
+          await request.jwtVerify();
+          userId = request.user.id;
         } catch {
-          // Token de refresco inválido
+          // Token expirado o malformado; continuar intentando con refreshToken
         }
       }
+
+      // 2. Extraer usuario del Refresh Token si aún no se determinó
+      if (!userId) {
+        const refreshToken = request.cookies?.refreshToken;
+        if (refreshToken) {
+          try {
+            const decoded = fastify.jwt.verify<{ id: string }>(refreshToken);
+            userId = decoded.id;
+          } catch {
+            // Token de refresco inválido
+          }
+        }
+      }
+
+      if (userId) {
+        // Incrementar tokenVersion en PostgreSQL para revocar inmediatamente cualquier token previo
+        await usersService.logout(userId);
+      }
+
+      // Limpiar físicamente la cookie de refresco en el navegador
+      reply.clearCookie('refreshToken', {
+        path: '/api/v1/auth',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+      });
+
+      return reply.status(200).send({
+        message: 'Sesión cerrada exitosamente',
+      });
     }
-
-    if (userId) {
-      // Incrementar tokenVersion en PostgreSQL para revocar inmediatamente cualquier token previo
-      await usersService.logout(userId);
-    }
-
-    // Limpiar físicamente la cookie de refresco en el navegador
-    reply.clearCookie('refreshToken', {
-      path: '/api/v1/auth',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-    });
-
-    return reply.status(200).send({
-      message: 'Sesión cerrada exitosamente',
-    });
-  });
+  );
 
   // POST /api/v1/users (Protegido: Solo ADMIN puede crear nuevos usuarios USER)
   fastify.post(
     '/api/v1/users',
-    { preHandler: [authenticateJwt, requireRole([Role.ADMIN])] },
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateJwt, requireRole([Role.ADMIN])],
+      schema: {
+        tags: ['Users'],
+        summary: 'Crear nuevo usuario en el sistema',
+        description:
+          'Permite al ADMIN registrar un nuevo usuario con rol USER. Bloquea la creación de otro ADMIN para mantener el principio de único administrador.',
+        security: securityBearerAuth,
+        body: {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: { type: 'string', minLength: 3, maxLength: 50, example: 'juan_perez' },
+            password: { type: 'string', minLength: 6, example: 'ContrasenaSegura123' },
+            role: { type: 'string', enum: ['USER'], default: 'USER' },
+          },
+        },
+        response: {
+          201: {
+            description: 'Usuario creado exitosamente',
+            type: 'object',
+            properties: {
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  username: { type: 'string' },
+                  role: { type: 'string', enum: ['ADMIN', 'USER'] },
+                  isActive: { type: 'boolean' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+            required: ['user'],
+          },
+          400: standardErrorResponses[400],
+          401: standardErrorResponses[401],
+          403: standardErrorResponses[403],
+          409: standardErrorResponses[400],
+        },
+      },
+    },
     async (request, reply) => {
       const parseResult = createUserSchema.safeParse(request.body);
       if (!parseResult.success) {
