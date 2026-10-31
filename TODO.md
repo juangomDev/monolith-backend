@@ -328,3 +328,49 @@
     - Ejecutar `npm run build`: Verificar compilación TypeScript limpia (`tsc`) con código 0.
   - [x] `8.6.3` Congelar los nuevos tests de documentación como contratos inmutables.
 
+---
+
+## 🛡️ FASE 9: Endurecimiento de Seguridad Inmediato y Monitoreo de Riesgos a Futuro
+
+### 🎯 Objetivos de la Fase
+> 1. **Acción Inmediata:** Implementar las recomendaciones clave de seguridad identificadas en la auditoría sin incurrir en sobreingeniería.
+> 2. **Riesgos a Futuro:** Establecer la matriz de riesgos latentes, sus gatillos de activación y sus soluciones pragmáticas correspondientes.
+> 3. **Regla de Monitoreo Proactivo:** Crear una regla de cumplimiento que evalúe y alerte sobre estos vectores de riesgo tras cada gran actualización o lote de cambios importantes.
+
+- [x] **9.1 Recomendaciones Clave de Acción Inmediata (Sin Sobreingeniería)**
+  - [x] `9.1.1` **Rate Limiting Estricto en Login (`POST /api/v1/auth/login`)**:
+    - Configurar límite de 5 intentos por minuto por combinación de IP/usuario para neutralizar ataques de fuerza bruta en contraseñas.
+    - Agregar prueba automatizada que verifique la respuesta `429 Too Many Requests` (`RATE_LIMIT_EXCEEDED`) a partir del 6º intento.
+  - [x] `9.1.2` **Ajuste de Ciclo de Vida del Access Token (15 minutos)**:
+    - Reducir la expiración del `accessToken` de `7d` a `15m` en `fastifyJwt` (`src/app.ts`), delegando la persistencia de sesión prolongada exclusivamente al `refreshToken` rotativo en cookie `HttpOnly`.
+    - Actualizar documentación de esquemas y descripción de rutas con la nueva vigencia de 15 minutos.
+  - [x] `9.1.3` **Mitigación de Vulnerabilidades en Subdependencias (`exceljs`)**:
+    - Declarar `overrides` en `package.json` para las dependencias transitivas afectadas (`minimatch`, `uuid`).
+    - Ejecutar `npm install` y verificar reducción de vulnerabilidades en `npm audit` manteniendo 100% de tests pasando (0 vulnerabilidades).
+  - [x] `9.1.4` **Automatización de Sincronización de Tipos con el Frontend**:
+    - Configurar script de exportación y guía de sincronización de tipos para `gestor-multimedia` mediante `openapi-typescript`.
+    - Regenerar `openapi.json` actualizado.
+
+- [ ] **9.2 Matriz de Riesgos a Futuro (Gatillos Operativos y Solución Pragmática)**
+  - [ ] `9.2.1` **Riesgo 1: Saturación del Almacenamiento Local (`./storage`)**:
+    - *Gatillo:* Almacenamiento > 80% del disco o despliegue multi-contenedor con balanceo de carga.
+    - *Solución:* Migración a S3 compatible (Cloudflare R2 o MinIO local) mediante interfaz desacoplada de almacenamiento.
+  - [ ] `9.2.2` **Riesgo 2: Bloqueo del Event Loop por Datasets Masivos**:
+    - *Gatillo:* Ingesta frecuente de archivos CSV/Excel superiores a 30-50MB (>100.000 filas).
+    - *Solución:* Procesamiento por chunks en streaming o delegación a `worker_threads` nativos de Node.js.
+  - [ ] `9.2.3` **Riesgo 3: Sobrecarga de Base de Datos en Rutas Públicas (`/i/:short_code`, `/t/:short_code`)**:
+    - *Gatillo:* Tráfico masivo concurrente a recursos embebidos públicamente.
+    - *Solución:* Activación de CDN (Cloudflare / Nginx Reverse Proxy Cache) respaldado por la cabecera `Cache-Control: immutable` ya existente.
+  - [ ] `9.2.4` **Riesgo 4: Agotamiento de Conexiones a PostgreSQL (Pool Exhaustion)**:
+    - *Gatillo:* Errores `P2024` o `connection limit reached` bajo alta concurrencia.
+    - *Solución:* Ajuste de `connection_limit` en `DATABASE_URL` y/o despliegue de PgBouncer.
+  - [ ] `9.2.5` **Riesgo 5: Inyección de Fórmulas en CSV/Excel (CSV Formula Injection)**:
+    - *Gatillo:* Descargas de datasets creados por usuarios que puedan contener fórmulas dinámicas maliciosas (`=`, `+`, `-`, `@`).
+    - *Solución:* Sanitizado de caracteres de comando al generar la descarga binaria.
+
+- [x] **9.3 Regla de Monitoreo Proactivo de Seguridad y Arquitectura**
+  - [x] `9.3.1` Crear `.agents/rules/security-and-architecture-guard.md` con checklist de validación post-actualización.
+  - [x] `9.3.2` Integrar la directiva en `AGENTS.md` para obligar a todo agente a evaluar el semáforo de seguridad tras cada lote de cambios importantes.
+  - [x] `9.3.3` Validar `npm test` (0 fallos) y `npm run build` (código 0).
+
+

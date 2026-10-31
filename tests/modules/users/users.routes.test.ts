@@ -79,6 +79,34 @@ describe('Módulo Usuarios: Rutas HTTP (/api/v1/auth y /api/v1/users)', () => {
     assert.strictEqual(decoded.role, Role.ADMIN);
   });
 
+  it('POST /api/v1/auth/login: bloquea con 429 tras exceder el límite de 5 intentos por minuto', async () => {
+    mock.method(usersService, 'login', async () => {
+      throw new AppError(401, 'Credenciales inválidas', 'INVALID_CREDENTIALS');
+    });
+
+    const app = await buildApp();
+    const payload = { username: 'attacker_test', password: 'wrongPassword' };
+
+    for (let i = 0; i < 5; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload,
+      });
+      assert.strictEqual(res.statusCode, 401);
+    }
+
+    // El 6º intento debe ser bloqueado con 429
+    const blockedRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload,
+    });
+    assert.strictEqual(blockedRes.statusCode, 429);
+    const body = JSON.parse(blockedRes.body);
+    assert.strictEqual(body.code, 'RATE_LIMIT_EXCEEDED');
+  });
+
   it('POST /api/v1/users: retorna 401 si no se envía cabecera Authorization Bearer', async () => {
     const app = await buildApp();
     const response = await app.inject({

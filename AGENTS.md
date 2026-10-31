@@ -56,3 +56,23 @@ Todo nuevo módulo (ej. `src/modules/users/`) DEBE seguir estrictamente esta div
 Antes de dar por completada cualquier tarea o fase:
 1. `npm test`: Todos los tests unitarios e integrados deben pasar con 0 fallos.
 2. `npm run build`: La compilación con `tsc` debe finalizar con código de salida 0 y 0 errores de tipado.
+3. `npm audit`: Debe arrojar 0 vulnerabilidades.
+
+---
+
+## 🛡️ PROTOCOLO DE MONITOREO PROACTIVO DE SEGURIDAD Y ARQUITECTURA
+
+Tras cada gran actualización o lote de cambios importantes, el agente DEBE evaluar proactivamente:
+1. **Auditoría de Dependencias:** Ejecutar `npm audit`. Si surge una vulnerabilidad, alertar y mitigar vía `overrides` en `package.json`.
+2. **Ciclo de Vida de Tokens:** Confirmar que `accessToken` expire en 15 minutos (`15m`) y el `refreshToken` viva en cookie `HttpOnly` y `SameSite: Strict`.
+3. **Anti-Fuerza Bruta:** Confirmar que `/api/v1/auth/login` mantenga rate limiting estricto (5 intentos/min).
+4. **Ingesta Segura de Archivos:** Verificar validación de magic bytes con `file-type`, prevención absoluta de path traversal y eliminación de archivos en disco ante streams truncados.
+5. **Gatillos Operativos a Futuro:**
+   - Si `./storage` se satura o se planifica clúster, alertar sobre migración a S3 / Cloudflare R2 / MinIO.
+   - Si se procesan datasets >30MB, alertar sobre `worker_threads` o streaming por chunks para no congelar el event loop.
+   - Si se crean nuevas rutas públicas, verificar `Cache-Control: immutable`.
+   - Si hay saturación en PostgreSQL, advertir sobre el `connection_limit`.
+   - Si se descargan tablas de usuarios, neutralizar inyección de fórmulas (`=`, `+`, `-`, `@`).
+
+**Regla de Respuesta Proactiva:** Si cualquiera de estos puntos se degrada o se convierte en un problema tras una actualización, el agente DEBE detenerse y alertar al usuario en su respuesta explicando el riesgo y la solución mínima y directa (sin sobreingeniería).
+

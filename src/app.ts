@@ -41,11 +41,11 @@ export async function buildApp() {
     secret: env.JWT_SECRET,
   });
 
-  // Autenticación con JWT
+  // Autenticación con JWT (Access Token de corta duración: 15 minutos)
   await app.register(fastifyJwt, {
     secret: env.JWT_SECRET,
     sign: {
-      expiresIn: '7d',
+      expiresIn: '15m',
     },
   });
 

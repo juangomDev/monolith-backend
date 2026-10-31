@@ -1678,7 +1678,7 @@
         "tags": [
           "Auth"
         ],
-        "description": "Autentica a un usuario mediante username y password. Devuelve un Access Token JWT de 7 días y emite una cookie segura HttpOnly con el refreshToken.",
+        "description": "Autentica a un usuario mediante username y password. Devuelve un Access Token JWT de 15 minutos y emite una cookie segura HttpOnly con el refreshToken.",
         "requestBody": {
           "required": true,
           "content": {

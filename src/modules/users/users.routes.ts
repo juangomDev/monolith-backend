@@ -32,7 +32,7 @@ export const usersRoutes: FastifyPluginAsync = async (fastify) => {
         tags: ['Auth'],
         summary: 'Iniciar sesión y obtener tokens de acceso',
         description:
-          'Autentica a un usuario mediante username y password. Devuelve un Access Token JWT de 7 días y emite una cookie segura HttpOnly con el refreshToken.',
+          'Autentica a un usuario mediante username y password. Devuelve un Access Token JWT de 15 minutos y emite una cookie segura HttpOnly con el refreshToken.',
         body: {
           type: 'object',
           required: ['username', 'password'],
