@@ -29,8 +29,10 @@ const tableItemSchema = {
     sizeBytes: { type: 'integer', example: 51200 },
     folderId: { type: 'string', format: 'uuid', nullable: true },
     url: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567' },
+    urlWithVersion: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567?v=1740000000000' },
     downloadUrl: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567?download=true' },
     createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
   },
   required: ['id', 'shortCode', 'tableName', 'rowCount', 'sizeBytes'],
 };

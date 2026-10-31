@@ -463,7 +463,10 @@ Lista los datasets tabulares registrados en el sistema.
         "rowCount": 1500,
         "sizeBytes": 1048576,
         "folderId": "44444444-4444-4444-4444-444444444444",
-        "createdAt": "2026-10-31T04:20:00.000Z"
+        "url": "http://localhost:3000/t/tab1234567",
+        "urlWithVersion": "http://localhost:3000/t/tab1234567?v=1740000000000",
+        "createdAt": "2026-10-31T04:20:00.000Z",
+        "updatedAt": "2026-10-31T04:20:00.000Z"
       }
     ],
     "total": 1
@@ -485,7 +488,10 @@ Sube y procesa un dataset tabular estructurado (`.csv`, `.xlsx`, `.xls`). Parsea
     "tableName": "ventas_octubre.csv",
     "rowCount": 1500,
     "sizeBytes": 1048576,
-    "url": "http://localhost:3000/t/tab1234567"
+    "url": "http://localhost:3000/t/tab1234567",
+    "urlWithVersion": "http://localhost:3000/t/tab1234567?v=1740000000000",
+    "createdAt": "2026-10-31T04:20:00.000Z",
+    "updatedAt": "2026-10-31T04:20:00.000Z"
   }
   ```
 - **Errores:** `400 Bad Request` (archivo corrupto o formato no soportado), `413 Payload Too Large` (> 100MB).

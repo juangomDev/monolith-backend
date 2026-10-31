@@ -90,16 +90,19 @@ export class TablesService {
       folderId,
     });
 
+    const updatedAt = (record as any).updatedAt ?? record.createdAt;
     return {
       id: record.id,
       shortCode: record.shortCode,
       url: `${env.BASE_URL}/t/${record.shortCode}`,
+      urlWithVersion: `${env.BASE_URL}/t/${record.shortCode}?v=${new Date(updatedAt).getTime()}`,
       tableName: record.tableName,
       rowCount: record.rowCount,
       columns: record.columnsSchema,
       sizeBytes: record.sizeBytes,
       folderId: (record as any).folderId ?? null,
       createdAt: record.createdAt,
+      updatedAt,
     };
   }
 
@@ -110,17 +113,22 @@ export class TablesService {
       : records;
 
     return {
-      tables: filtered.map((record: any) => ({
-        id: record.id,
-        shortCode: record.shortCode,
-        url: `${env.BASE_URL}/t/${record.shortCode}`,
-        tableName: record.tableName,
-        rowCount: record.rowCount,
-        columns: record.columnsSchema,
-        sizeBytes: record.sizeBytes,
-        folderId: record.folderId ?? null,
-        createdAt: record.createdAt,
-      })),
+      tables: filtered.map((record: any) => {
+        const updatedAt = record.updatedAt ?? record.createdAt;
+        return {
+          id: record.id,
+          shortCode: record.shortCode,
+          url: `${env.BASE_URL}/t/${record.shortCode}`,
+          urlWithVersion: `${env.BASE_URL}/t/${record.shortCode}?v=${new Date(updatedAt).getTime()}`,
+          tableName: record.tableName,
+          rowCount: record.rowCount,
+          columns: record.columnsSchema,
+          sizeBytes: record.sizeBytes,
+          folderId: record.folderId ?? null,
+          createdAt: record.createdAt,
+          updatedAt,
+        };
+      }),
       total: filtered.length,
     };
   }
