@@ -7,11 +7,14 @@ import { imagesRepository } from './images.repository.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../shared/errors.js';
 import { generateShortCode } from '../../shared/shortcode.js';
+import { validateMagicBytes, ALLOWED_IMAGE_MIMES } from '../../gateway/file-guard.js';
+import { FolderType, Role } from '@prisma/client';
+import { foldersRepository } from '../folders/folders.repository.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class ImagesService {
-  async saveImage(part: MultipartFile) {
+  async saveImage(part: MultipartFile, folderId?: string, userId?: string) {
     if (!part.mimetype.startsWith('image/')) {
       throw new AppError(415, `Tipo de archivo '${part.mimetype}' no permitido. Solo se aceptan imágenes.`, 'UNSUPPORTED_MEDIA_TYPE');
     }
@@ -41,7 +44,26 @@ export class ImagesService {
       throw new AppError(413, 'La imagen supera el tamaño máximo permitido', 'PAYLOAD_TOO_LARGE');
     }
 
+    // Validación estricta de Magic Bytes reales
+    try {
+      const handle = await fs.open(targetPath, 'r');
+      const buffer = Buffer.alloc(4100);
+      const { bytesRead } = await handle.read(buffer, 0, 4100, 0);
+      await handle.close();
+      const chunk = buffer.subarray(0, bytesRead);
+
+      await validateMagicBytes(chunk, ALLOWED_IMAGE_MIMES);
+    } catch (valErr) {
+      await fs.unlink(targetPath).catch(() => {});
+      throw valErr;
+    }
+
     const stats = await fs.stat(targetPath);
+
+    if (!folderId && userId) {
+      const defaultFolder = await foldersRepository.findOrCreateDefaultFolder(userId, FolderType.IMAGE);
+      folderId = defaultFolder.id;
+    }
 
     const record = await imagesRepository.create({
       shortCode,
@@ -49,6 +71,7 @@ export class ImagesService {
       mimeType: part.mimetype,
       sizeBytes: stats.size,
       storagePath: targetPath,
+      folderId,
     });
 
     return {
@@ -58,23 +81,29 @@ export class ImagesService {
       originalName: record.originalName,
       mimeType: record.mimeType,
       sizeBytes: record.sizeBytes,
+      folderId: (record as any).folderId ?? null,
       createdAt: record.createdAt,
     };
   }
 
-  async listImages() {
+  async listImages(requester?: { id: string; role: Role }) {
     const records = await imagesRepository.findAll();
+    const filtered = requester && requester.role !== Role.ADMIN
+      ? records.filter((r: any) => !r.folder || !r.folder.isPrivate || r.folder.userId === requester.id)
+      : records;
+
     return {
-      images: records.map((record) => ({
+      images: filtered.map((record: any) => ({
         id: record.id,
         shortCode: record.shortCode,
         url: `${env.BASE_URL}/i/${record.shortCode}`,
         originalName: record.originalName,
         mimeType: record.mimeType,
         sizeBytes: record.sizeBytes,
+        folderId: record.folderId ?? null,
         createdAt: record.createdAt,
       })),
-      total: records.length,
+      total: filtered.length,
     };
   }
 

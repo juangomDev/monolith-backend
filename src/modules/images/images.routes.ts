@@ -15,8 +15,9 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/images (Listado protegido con Bearer JWT o X-API-Key)
-  fastify.get('/api/v1/images', { preHandler: [authenticateUserOrApiKey] }, async (_request, reply) => {
-    const result = await imagesService.listImages();
+  fastify.get('/api/v1/images', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
+    const requester = request.user ? { id: request.user.id, role: request.user.role } : undefined;
+    const result = await imagesService.listImages(requester);
     return reply.send(result);
   });
 
@@ -31,7 +32,11 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
       throw new AppError(400, 'Debe adjuntar un archivo de imagen en el campo multipart', 'BAD_REQUEST');
     }
 
-    const result = await imagesService.saveImage(file);
+    const userId = request.user?.id;
+    const folderIdField = file.fields?.folderId as { value?: string } | undefined;
+    const folderId = folderIdField?.value || (request.query as { folderId?: string })?.folderId;
+
+    const result = await imagesService.saveImage(file, folderId, userId);
     return reply.status(201).send(result);
   });
 

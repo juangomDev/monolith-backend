@@ -44,10 +44,20 @@ export class UsersRepository {
         id: true,
         username: true,
         role: true,
+        tokenVersion: true,
         isActive: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async incrementTokenVersion(id: string): Promise<User> {
+    return prisma.user.update({
+      where: { id },
+      data: {
+        tokenVersion: { increment: 1 },
+      },
     });
   }
 }

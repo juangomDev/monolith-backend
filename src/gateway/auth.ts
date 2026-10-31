@@ -11,11 +11,15 @@ declare module '@fastify/jwt' {
       id: string;
       username: string;
       role: Role;
+      tokenVersion?: number;
+      type?: string;
     };
     user: {
       id: string;
       username: string;
       role: Role;
+      tokenVersion?: number;
+      type?: string;
     };
   }
 }
@@ -75,6 +79,12 @@ export async function authenticateJwt(request: FastifyRequest, _reply: FastifyRe
 
   if (!user || !user.isActive) {
     throw new AppError(401, 'Usuario no encontrado o inactivo', 'UNAUTHORIZED');
+  }
+
+  // Verificar tokenVersion para revocación inmediata de sesión
+  const userVersion = (user as { tokenVersion?: number }).tokenVersion ?? 0;
+  if (request.user.tokenVersion !== undefined && request.user.tokenVersion !== userVersion) {
+    throw new AppError(401, 'Sesión revocada o cerrada', 'SESSION_REVOKED');
   }
 }
 

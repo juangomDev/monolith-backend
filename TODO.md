@@ -15,7 +15,8 @@
 | **Fase 3** | Módulo de Tablas (Subida CSV/XLSX, registro y descarga/consulta) | ✅ Completado |
 | **Fase 4** | Ajustes para Despliegue en Dokploy (Dockerfile, volumen y arranque) | ✅ Completado |
 | **Fase 5** | Seguridad y Control de Acceso (Solo personas autorizadas) | ✅ Completado |
-| **Fase 6** | Sistema de Carpetas y Proyectos Compartidos en PostgreSQL | ⏸️ Planificado (Pendiente) |
+| **Fase 6** | Sistema de Carpetas y Proyectos Compartidos en PostgreSQL | ✅ Completado |
+| **Fase 7** | Blindaje de Seguridad y Hardening Defensivo | ✅ Completado |
 
 ---
 
@@ -133,51 +134,129 @@
 
 ---
 
-## 📁 Fase 6: Sistema de Carpetas y Proyectos Compartidos en PostgreSQL (Planificado)
+## 📁 Fase 6: Sistema de Carpetas, Privacidad y Organización Lógica en PostgreSQL (Completado)
 
-> **Objetivo:** Permitir que las carpetas y proyectos existan en PostgreSQL para que todos los usuarios y navegadores vean la misma estructura colaborativa en tiempo real.  
-> **Regla Inviolable:** No romper retrocompatibilidad ni modificar los 93 tests congelados existentes.
+> **Objetivos de Negocio Validados:**
+> 1. **Cero Archivos Huérfanos:** Ningún archivo (imagen o tabla) puede existir fuera de una carpeta. Si no se especifica carpeta al subir, se asigna automáticamente a la carpeta por defecto (`'General'`) del usuario.
+> 2. **Carpetas Privadas vs Compartidas:** Una carpeta puede configurarse como privada (`isPrivate: true`). Solo su creador puede ver y gestionar sus carpetas privadas y archivos contenidos, mientras que el `ADMIN` mantiene visibilidad y control total de todo el sistema.
+> 3. **Eliminación en Cascada:** Al eliminar una carpeta, se eliminan en cascada sus registros en PostgreSQL y se borran físicamente todos sus archivos asociados en almacenamiento de disco.
+>
+> **Regla Inviolable:** No romper retrocompatibilidad ni modificar los 134 tests congelados existentes (Preservación estricta de Frozen Test Contracts).
 
-- [ ] **6.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
-  - [ ] `6.1.1` Definir enum `FolderType`: `IMAGE`, `TABLE`.
-  - [ ] `6.1.2` Crear modelo `Folder`:
+- [x] **6.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
+  - [x] `6.1.1` Definir enum `FolderType`: `IMAGE`, `TABLE`.
+  - [x] `6.1.2` Crear modelo `Folder`:
     - `id` (UUID, primary key)
     - `name` (String, max 60 caracteres)
     - `type` (`FolderType`)
     - `color` (String opcional hex, ej. `#3b82f6`)
-    - `createdAt` (DateTime @default(now()))
-    - Relaciones bidireccionales con `ImageRegistry` y `TableRegistry`.
-  - [ ] `6.1.3` Agregar columna opcional `folderId String? @map("folder_id") @db.Uuid` en `ImageRegistry` con `onDelete: SetNull`.
-  - [ ] `6.1.4` Agregar columna opcional `folderId String? @map("folder_id") @db.Uuid` en `TableRegistry` con `onDelete: SetNull`.
-  - [ ] `6.1.5` Ejecutar `npx prisma db push` y generar cliente Prisma sin afectar registros existentes.
+    - `isPrivate` (Boolean `@default(false)` `@map("is_private")`)
+    - `userId` (UUID `@map("user_id")`, FK con relación `user` a `User`, `onDelete: Cascade`)
+    - `createdAt` (DateTime `@default(now())`)
+    - Relaciones con `ImageRegistry[]` y `TableRegistry[]`.
+    - Índices: `@@index([type])`, `@@index([userId])`, `@@index([isPrivate])`.
+    - Mapeo a tabla física `folders` (`@@map("folders")`).
+  - [x] `6.1.3` Agregar columna de carpeta `folderId String? @map("folder_id") @db.Uuid` en `ImageRegistry` con relación `folder` y política `onDelete: Cascade`.
+  - [x] `6.1.4` Agregar columna de carpeta `folderId String? @map("folder_id") @db.Uuid` en `TableRegistry` con relación `folder` y política `onDelete: Cascade`.
+  - [x] `6.1.5` Ejecutar `npx prisma generate` para sincronizar los tipos tipados en `@prisma/client`.
 
-- [ ] **6.2 Repositorio de Datos (`src/modules/folders/folders.repository.ts`)**
-  - [ ] `6.2.1` `createFolder(data: { name, type, color? })`: Insertar nueva carpeta en la base de datos.
-  - [ ] `6.2.2` `findFolders(type?: FolderType)`: Listar carpetas con conteo de archivos asociados (`_count`).
-  - [ ] `6.2.3` `findFolderById(id: string)`: Buscar carpeta por UUID.
-  - [ ] `6.2.4` `deleteFolder(id: string)`: Eliminar carpeta poniendo los archivos asociados en `null` (raíz).
-  - [ ] `6.2.5` `moveImageToFolder(imageId: string, folderId: string | null)`: Actualizar `folder_id` en `ImageRegistry`.
-  - [ ] `6.2.6` `moveTableToFolder(tableId: string, folderId: string | null)`: Actualizar `folder_id` en `TableRegistry`.
+- [x] **6.2 Repositorio de Datos (`src/modules/folders/folders.repository.ts`)**
+  - [x] `6.2.1` `createFolder(data: { name, type, color?, isPrivate?, userId })`: Insertar nueva carpeta en PostgreSQL.
+  - [x] `6.2.2` `findFolders(filter: { type?, userId?, isAdmin: boolean })`: Listar carpetas aplicando el filtro de privacidad (`isPrivate = false OR userId = currentUserId`, o todas si es `ADMIN`) con conteo agregado `_count`.
+  - [x] `6.2.3` `findFolderById(id: string)`: Obtener detalles de una carpeta específica con su propietario.
+  - [x] `6.2.4` `findOrCreateDefaultFolder(userId: string, type: FolderType)`: Obtener o crear carpeta `'General'` para garantizar que ningún archivo quede huérfano.
+  - [x] `6.2.5` `deleteFolderWithFiles(id: string)`: Obtener rutas físicas de todos los archivos asociados y eliminar la carpeta en cascada en DB.
+  - [x] `6.2.6` `moveImageToFolder(imageId: string, folderId: string)`: Actualizar `folder_id` en `ImageRegistry`.
+  - [x] `6.2.7` `moveTableToFolder(tableId: string, folderId: string)`: Actualizar `folder_id` en `TableRegistry`.
 
-- [ ] **6.3 Servicio de Negocio (`src/modules/folders/folders.service.ts`)**
-  - [ ] `6.3.1` Validar nombres de carpeta (longitud entre 2 y 60 caracteres, caracteres válidos).
-  - [ ] `6.3.2` Manejar excepciones controladas con `AppError(404, 'Carpeta no encontrada', 'NOT_FOUND')`.
-  - [ ] `6.3.3` Validar consistencia al mover (ej. una imagen solo puede moverse a carpetas de tipo `IMAGE`).
-  - [ ] `6.3.4` Devolver metadatos formateados con conteo de elementos y fecha.
+- [x] **6.3 Servicio de Negocio y Reglas de Privacidad (`src/modules/folders/folders.service.ts`)**
+  - [x] `6.3.1` Validar esquemas con Zod:
+    - Nombre: string limpio de entre 2 y 60 caracteres.
+    - Tipo: `IMAGE` o `TABLE`.
+    - Color: hex opcional de 3 o 6 dígitos (ej. `^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`).
+    - `isPrivate`: booleano opcional (por defecto `false`).
+  - [x] `6.3.2` Control de permisos y excepciones RFC 7807 (`AppError`):
+    - `404 NOT_FOUND` si la carpeta o archivo no existe.
+    - `403 FORBIDDEN` si un usuario normal intenta acceder, modificar o eliminar una carpeta privada perteneciente a otro usuario.
+    - `400 INVALID_FOLDER_TYPE` si se intenta mover una imagen a una carpeta de tablas o una tabla a una carpeta de imágenes.
+    - `400 BAD_REQUEST` si se intenta desvincular un archivo sin carpeta (`folderId: null` rechazado para impedir archivos huérfanos).
+  - [x] `6.3.3` Eliminación en cascada física: Al borrar una carpeta, eliminar en disco todos los archivos de imágenes y tablas asociados con `fs.unlink`.
+  - [x] `6.3.4` Formateo de respuesta: Retornar carpetas con `itemCount` unificado y bandera `isPrivate`.
 
-- [ ] **6.4 Rutas HTTP Fastify (`src/modules/folders/folders.routes.ts`)**
-  - [ ] `6.4.1` `GET /api/v1/folders`: Listar carpetas filtradas opcionalmente por `?type=IMAGE|TABLE` (autenticado).
-  - [ ] `6.4.2` `POST /api/v1/folders`: Crear nueva carpeta `{ name, type, color }` (autenticado).
-  - [ ] `6.4.3` `DELETE /api/v1/folders/:id`: Eliminar carpeta (autenticado).
-  - [ ] `6.4.4` `PATCH /api/v1/images/:id/folder`: Reasignar imagen a carpeta `{ folderId: string | null }` (autenticado).
-  - [ ] `6.4.5` `PATCH /api/v1/tables/:id/folder`: Reasignar tabla a carpeta `{ folderId: string | null }` (autenticado).
-  - [ ] `6.4.6` Extender respuestas de `GET /api/v1/images` y `GET /api/v1/tables` para incluir el campo `folderId`.
+- [x] **6.4 Rutas HTTP Fastify (`src/modules/folders/folders.routes.ts`) y Gateway**
+  - [x] `6.4.1` Autenticación unificada: Proteger todos los endpoints con `authenticateUserOrApiKey`.
+  - [x] `6.4.2` `GET /api/v1/folders`: Listado de carpetas respetando privacidad según el rol (`ADMIN` ve todas, `USER` solo públicas y propias), con soporte de filtro `?type=IMAGE|TABLE`.
+  - [x] `6.4.3` `POST /api/v1/folders`: Crear nueva carpeta asignando `userId` y `isPrivate` del creador (`201 Created`).
+  - [x] `6.4.4` `DELETE /api/v1/folders/:id`: Eliminar carpeta en cascada (físico y lógico) verificando permisos de propietario o `ADMIN`.
+  - [x] `6.4.5` `PATCH /api/v1/images/:id/folder`: Reasignar imagen a otra carpeta `{ folderId: string }` validando compatibilidad y permisos.
+  - [x] `6.4.6` `PATCH /api/v1/tables/:id/folder`: Reasignar tabla a otra carpeta `{ folderId: string }` validando compatibilidad y permisos.
+  - [x] `6.4.7` Registrar `foldersRoutes` en `src/gateway/router.ts`.
+  - [x] `6.4.8` Subidas y Listados Retrocompatibles:
+    - En `images.service.ts` y `tables.service.ts`: auto-asignar a carpeta `'General'` si la subida no incluye `folderId`.
+    - En `listImages()` y `listTables()`: exponer `folderId` y filtrar archivos según la privacidad de su carpeta contenedora.
 
-- [ ] **6.5 Blindaje con Pruebas Automatizadas (Frozen Test Contracts)**
-  - [ ] `6.5.1` Crear `tests/modules/folders/folders.service.test.ts`: Pruebas unitarias completas de validación, creación y movimiento.
-  - [ ] `6.5.2` Crear `tests/modules/folders/folders.routes.test.ts`: Pruebas de integración HTTP para los 5 endpoints.
-  - [ ] `6.5.3` Validar que los 93 tests existentes sigan pasando al 100% sin una sola regresión.
-  - [ ] `6.5.4` Congelar los nuevos tests como especificación inmutable.
+- [x] **6.5 Blindaje con Pruebas Automatizadas (Frozen Test Contracts)**
+  - [x] `6.5.1` Crear `tests/modules/folders/folders.service.test.ts`:
+    - Validación de esquemas y nombres.
+    - Creación y listado de carpetas públicas y privadas.
+    - Verificación de que `ADMIN` ve carpetas privadas de terceros y que `USER` no.
+    - Rechazo de tipo cruzado (400 `INVALID_FOLDER_TYPE`).
+    - Eliminación en cascada borrando archivos físicos con `fs.unlink`.
+    - Auto-asignación a carpeta por defecto `'General'`.
+  - [x] `6.5.2` Crear `tests/modules/folders/folders.routes.test.ts`:
+    - Rechazo 401 si no hay autenticación.
+    - CRUD de carpetas públicas y privadas.
+    - Rechazo 403 al intentar borrar carpeta privada ajena.
+    - Acceso permitido total para `ADMIN`.
+    - Endpoints PATCH de reasignación.
+  - [x] `6.5.3` Validación del Protocolo Obligatorio:
+    - Ejecutar `npm test`: Verificar que los 134 tests congelados previos continúen pasando con 0 fallos junto a la nueva suite (169 tests en total, 0 fallos).
+    - Ejecutar `npm run build`: Verificar compilación TypeScript limpia (`tsc`) con código 0.
+  - [x] `6.5.4` Congelar los nuevos tests de carpetas como contratos inmutables.
 
+---
 
+## 🛡️ Fase 7: Blindaje de Seguridad y Hardening Defensivo (Completado)
+
+> **Objetivo:** Cerrar brechas de fuerza bruta, restringir CORS para Dokploy/pruebas, validar magic bytes reales y blindar credenciales contra XSS/CSRF elevando la suite a 134 pruebas congeladas.
+
+- [x] **7.1 Activación y Configuración de Rate Limiting (`@fastify/rate-limit`)**
+  - [x] `7.1.1` Registrar `rateLimitPlugin` en `src/app.ts` para protección global contra saturación y DDoS (100 req/min por IP o ApiClient).
+  - [x] `7.1.2` Implementar limitación estricta anti-fuerza bruta específica en la ruta `POST /api/v1/auth/login` (máximo 5 intentos por minuto por IP/usuario) respondiendo RFC 7807 `429 Too Many Requests`.
+  - [x] `7.1.3` Agregar pruebas unitarias e integradas para verificar el bloqueo de peticiones tras superar el umbral en `tests/gateway/rate-limit.test.ts`.
+
+- [x] **7.2 Hardening de CORS Dinámico para Dokploy (`.sslip.io`) y Desarrollo Local**
+  - [x] `7.2.1` Sustituir `origin: true` en `src/app.ts` por validador dinámico con RegEx que permita:
+    - Entornos locales: `http://localhost:*` y `http://127.0.0.1:*`.
+    - Dominios dinámicos de Dokploy: patrón `/^https?:\/\/([a-zA-Z0-9-]+\.)*sslip\.io(:\d+)?$/`.
+    - Dominios estables de producción definidos en variable de entorno `CORS_ALLOWED_ORIGINS`.
+    - Rechazar orígenes no autorizados sin reflejar cabeceras permisivas.
+  - [x] `7.2.2` Crear pruebas de integración en `tests/gateway/cors.test.ts` verificando aceptación de `.sslip.io` y rechazo de dominios arbitrarios.
+
+- [x] **7.3 Estrategia Defensiva Anti-XSS, Anti-CSRF y Revocación de Tokens (`tokenVersion`)**
+  - [x] `7.3.1` Instalar `@fastify/cookie` para gestión segura de cookies con firma criptográfica.
+  - [x] `7.3.2` Agregar columna `tokenVersion Int @default(0) @map("token_version")` al modelo `User` en `prisma/schema.prisma` para revocación instantánea en PostgreSQL.
+  - [x] `7.3.3` Incluir `tokenVersion` en el payload del JWT y verificar en `authenticateJwt` (`src/gateway/auth.ts`) que coincida con la base de datos, rechazando con `401 SESSION_REVOKED` si no coincide.
+  - [x] `7.3.4` Configurar endpoint `POST /api/v1/auth/refresh` que emita un nuevo Access Token de corta duración leyendo un Refresh Token persistido en cookie `HttpOnly; Secure; SameSite=Strict`.
+  - [x] `7.3.5` Implementar endpoint `POST /api/v1/auth/logout`:
+    - Incrementar `tokenVersion` en PostgreSQL para invalidar de inmediato todos los tokens emitidos anteriormente para ese usuario.
+    - Limpiar la cookie de refresco en el navegador (`Set-Cookie: refreshToken=; Max-Age=0`).
+  - [x] `7.3.6` Mantener retrocompatibilidad para que los clientes actuales puedan seguir usando `Authorization: Bearer <token>` sin romper los contratos existentes.
+  - [x] `7.3.7` Pruebas unitarias e integradas del ciclo login -> refresh -> logout -> verificación de token revocado en `tests/modules/users/auth-refresh.test.ts`.
+
+- [x] **7.4 Validación de Magic Bytes en Subidas de Archivos (`src/gateway/file-guard.ts`)**
+  - [x] `7.4.1` Conectar `validateMagicBytes` en `images.service.ts` antes de persistir la imagen en disco, analizando los primeros 4100 bytes del stream con `file-type` contra `['image/jpeg', 'image/png', 'image/webp']`.
+  - [x] `7.4.2` Conectar validación estructural o magic bytes en `tables.service.ts` para confirmar archivos `.csv` y `.xlsx` legítimos (evitando inyecciones de scripts disfrazados).
+  - [x] `7.4.3` Responder `415 UNSUPPORTED_MEDIA_TYPE` si el contenido binario no coincide con la extensión declarada.
+  - [x] `7.4.4` Pruebas automatizadas con archivos simulados válidos y binarios falsificados en `tests/gateway/file-guard.test.ts`.
+
+- [x] **7.5 Cabeceras de Seguridad HTTP con `@fastify/helmet`**
+  - [x] `7.5.1` Instalar y registrar `@fastify/helmet` en `src/app.ts`.
+  - [x] `7.5.2` Configurar `X-Content-Type-Options: nosniff` (crucial para entrega segura de imágenes en `/i/:short_code` y tablas en `/t/:short_code` impidiendo ejecución de scripts MIME-sniffed).
+  - [x] `7.5.3` Configurar `X-Frame-Options: DENY`, Referrer Policy y HSTS para transporte cifrado.
+  - [x] `7.5.4` Pruebas de verificación de cabeceras de respuesta en `tests/gateway/helmet.test.ts`.
+
+- [x] **7.6 Validación Estricta de Variables de Entorno en Producción**
+  - [x] `7.6.1` En `src/config/env.ts`, impedir en `NODE_ENV=production` el uso de secretos por defecto para `JWT_SECRET` y `ADMIN_PASSWORD`.
+  - [x] `7.6.2` Pruebas unitarias en `tests/config/env.test.ts` que aseguren el fallo de arranque si se despliega en producción con credenciales débiles.
 

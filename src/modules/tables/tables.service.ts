@@ -8,11 +8,14 @@ import { parseTableMetadata, readTableRows } from './tables.parser.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../shared/errors.js';
 import { generateShortCode } from '../../shared/shortcode.js';
+import { validateTableContent } from '../../gateway/file-guard.js';
+import { FolderType, Role } from '@prisma/client';
+import { foldersRepository } from '../folders/folders.repository.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class TablesService {
-  async saveTable(part: MultipartFile) {
+  async saveTable(part: MultipartFile, folderId?: string, userId?: string) {
     let ext = path.extname(part.filename).toLowerCase();
     const isCsvMime = part.mimetype === 'text/csv' || part.mimetype === 'application/csv';
     const isXlsxMime =
@@ -48,6 +51,20 @@ export class TablesService {
       throw new AppError(413, 'El archivo de tabla supera el tamaño máximo permitido', 'PAYLOAD_TOO_LARGE');
     }
 
+    // Validación estricta de estructura y contenido de tabla
+    try {
+      const handle = await fs.open(targetPath, 'r');
+      const buffer = Buffer.alloc(4100);
+      const { bytesRead } = await handle.read(buffer, 0, 4100, 0);
+      await handle.close();
+      const chunk = buffer.subarray(0, bytesRead);
+
+      await validateTableContent(chunk, ext);
+    } catch (valErr) {
+      await fs.unlink(targetPath).catch(() => {});
+      throw valErr;
+    }
+
     const stats = await fs.stat(targetPath);
 
     let metadata;
@@ -58,6 +75,11 @@ export class TablesService {
       throw parseErr;
     }
 
+    if (!folderId && userId) {
+      const defaultFolder = await foldersRepository.findOrCreateDefaultFolder(userId, FolderType.TABLE);
+      folderId = defaultFolder.id;
+    }
+
     const record = await tablesRepository.create({
       shortCode,
       tableName: part.filename || `table_${shortCode}${ext}`,
@@ -65,6 +87,7 @@ export class TablesService {
       columnsSchema: metadata.columns,
       sizeBytes: stats.size,
       storagePath: targetPath,
+      folderId,
     });
 
     return {
@@ -75,14 +98,19 @@ export class TablesService {
       rowCount: record.rowCount,
       columns: record.columnsSchema,
       sizeBytes: record.sizeBytes,
+      folderId: (record as any).folderId ?? null,
       createdAt: record.createdAt,
     };
   }
 
-  async listTables() {
+  async listTables(requester?: { id: string; role: Role }) {
     const records = await tablesRepository.findAll();
+    const filtered = requester && requester.role !== Role.ADMIN
+      ? records.filter((r: any) => !r.folder || !r.folder.isPrivate || r.folder.userId === requester.id)
+      : records;
+
     return {
-      tables: records.map((record) => ({
+      tables: filtered.map((record: any) => ({
         id: record.id,
         shortCode: record.shortCode,
         url: `${env.BASE_URL}/t/${record.shortCode}`,
@@ -90,9 +118,10 @@ export class TablesService {
         rowCount: record.rowCount,
         columns: record.columnsSchema,
         sizeBytes: record.sizeBytes,
+        folderId: record.folderId ?? null,
         createdAt: record.createdAt,
       })),
-      total: records.length,
+      total: filtered.length,
     };
   }
 

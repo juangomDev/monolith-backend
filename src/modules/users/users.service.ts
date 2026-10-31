@@ -26,10 +26,19 @@ export interface UserSessionPayload {
   id: string;
   username: string;
   role: Role;
+  tokenVersion?: number;
 }
 
 export class UsersService {
   constructor(private readonly repo: UsersRepository = usersRepository) {}
+
+  async findById(id: string): Promise<User | null> {
+    return this.repo.findById(id);
+  }
+
+  async logout(userId: string): Promise<void> {
+    await this.repo.incrementTokenVersion(userId);
+  }
 
   async login(credentials: { username?: string; password?: string }): Promise<UserSessionPayload> {
     const { username, password } = credentials;
@@ -56,6 +65,7 @@ export class UsersService {
       id: user.id,
       username: user.username,
       role: user.role,
+      tokenVersion: user.tokenVersion ?? 0,
     };
   }
 

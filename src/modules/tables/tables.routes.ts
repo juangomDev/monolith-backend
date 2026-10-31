@@ -29,8 +29,9 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/tables (Listado protegido con Bearer JWT o X-API-Key)
-  fastify.get('/api/v1/tables', { preHandler: [authenticateUserOrApiKey] }, async (_request, reply) => {
-    const result = await tablesService.listTables();
+  fastify.get('/api/v1/tables', { preHandler: [authenticateUserOrApiKey] }, async (request, reply) => {
+    const requester = request.user ? { id: request.user.id, role: request.user.role } : undefined;
+    const result = await tablesService.listTables(requester);
     return reply.send(result);
   });
 
@@ -45,7 +46,11 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
       throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
     }
 
-    const result = await tablesService.saveTable(file);
+    const userId = request.user?.id;
+    const folderIdField = file.fields?.folderId as { value?: string } | undefined;
+    const folderId = folderIdField?.value || (request.query as { folderId?: string })?.folderId;
+
+    const result = await tablesService.saveTable(file, folderId, userId);
     return reply.status(201).send(result);
   });
 
