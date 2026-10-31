@@ -110,8 +110,22 @@
         "tags": [
           "Images"
         ],
-        "description": "Sirve la imagen binaria directamente desde disco con cabeceras de caché inmutable (Cache-Control: public, max-age=31536000, immutable) optimizadas para etiquetas <img src=\"...\"> y correos.",
+        "description": "Sirve la imagen binaria directamente desde disco con cabeceras de caché inmutable (Cache-Control: public, max-age=31536000, immutable). Admite query ?variant=thumb para recibir una miniatura WebP ultraligera de 320px.",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "thumb",
+                "original"
+              ],
+              "default": "original"
+            },
+            "in": "query",
+            "name": "variant",
+            "required": false,
+            "description": "Variante de imagen a servir: thumb (miniatura WebP 320px) u original"
+          },
           {
             "schema": {
               "type": "string",
@@ -127,7 +141,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Archivo binario de imagen",
+            "description": "Archivo binario de imagen (original o miniatura WebP)",
             "content": {
               "image/*": {
                 "schema": {
@@ -208,7 +222,40 @@
         "tags": [
           "Images"
         ],
-        "description": "Retorna el listado de imágenes registradas respetando las reglas de privacidad de las carpetas donde están alojadas.",
+        "description": "Retorna el listado paginado de imágenes respetando las reglas de privacidad de las carpetas. Permite filtrar por carpeta con ?folderId=.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "description": "Número de página a consultar"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "Cantidad de registros por página"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "description": "UUID de carpeta para filtrar"
+          }
+        ],
         "security": [
           {
             "bearerAuth": []
@@ -253,6 +300,20 @@
                             "type": "integer",
                             "example": 204850
                           },
+                          "width": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "example": 1920
+                          },
+                          "height": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "example": 1080
+                          },
                           "folderId": {
                             "type": [
                               "string",
@@ -265,7 +326,16 @@
                             "format": "uri",
                             "example": "http://localhost:3000/i/abc1234567"
                           },
+                          "urlWithVersion": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "http://localhost:3000/i/abc1234567?v=1730335800000"
+                          },
                           "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
                             "type": "string",
                             "format": "date-time"
                           }
@@ -283,6 +353,27 @@
                     "total": {
                       "type": "integer",
                       "example": 1
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "totalPages": {
+                          "type": "integer"
+                        },
+                        "hasNext": {
+                          "type": "boolean"
+                        }
+                      }
                     }
                   },
                   "required": [
@@ -362,7 +453,7 @@
         "tags": [
           "Images"
         ],
-        "description": "Ingesta de imagen multipart/form-data. Valida magic bytes (JPEG, PNG, WebP) e inspecta límites de 50MB. Asigna a carpeta General si folderId no es provisto.",
+        "description": "Ingesta de imagen multipart/form-data. Valida magic bytes (JPEG, PNG, WebP y SVG) e inspecta límites de 50MB. Extrae dimensiones y genera miniatura WebP automática.",
         "security": [
           {
             "bearerAuth": []
@@ -389,14 +480,9 @@
                       "type": "string",
                       "example": "abc1234567"
                     },
-                    "url": {
-                      "type": "string",
-                      "format": "uri",
-                      "example": "http://localhost:3000/i/abc1234567"
-                    },
                     "originalName": {
                       "type": "string",
-                      "example": "foto.png"
+                      "example": "foto_paisaje.png"
                     },
                     "mimeType": {
                       "type": "string",
@@ -404,7 +490,21 @@
                     },
                     "sizeBytes": {
                       "type": "integer",
-                      "example": 1048576
+                      "example": 204850
+                    },
+                    "width": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1920
+                    },
+                    "height": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1080
                     },
                     "folderId": {
                       "type": [
@@ -412,6 +512,24 @@
                         "null"
                       ],
                       "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567?v=1730335800000"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
                     }
                   },
                   "required": [
@@ -678,12 +796,871 @@
       }
     },
     "/api/v1/images/{id}": {
+      "patch": {
+        "summary": "Renombrar imagen",
+        "tags": [
+          "Images"
+        ],
+        "description": "Actualiza el nombre original visible de la imagen sin alterar el archivo físico en disco ni el shortCode.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "originalName"
+                ],
+                "properties": {
+                  "originalName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "example": "nuevo_nombre.png"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "UUID de la imagen a renombrar"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Imagen renombrada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Imagen renombrada exitosamente",
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "abc1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "foto_paisaje.png"
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "example": "image/png"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 204850
+                    },
+                    "width": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1920
+                    },
+                    "height": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1080
+                    },
+                    "folderId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567?v=1730335800000"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "shortCode",
+                    "originalName",
+                    "mimeType",
+                    "sizeBytes"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Reemplazar archivo binario de imagen (Hot-Swap)",
+        "tags": [
+          "Images"
+        ],
+        "description": "Sobrescribe el archivo binario físico en disco manteniendo el mismo shortCode y URL pública. Regenera la miniatura WebP y actualiza dimensiones en PostgreSQL.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "UUID de la imagen a actualizar"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archivo de imagen reemplazado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Archivo de imagen reemplazado exitosamente",
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "abc1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "foto_paisaje.png"
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "example": "image/png"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 204850
+                    },
+                    "width": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1920
+                    },
+                    "height": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "example": 1080
+                    },
+                    "folderId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "http://localhost:3000/i/abc1234567?v=1730335800000"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "shortCode",
+                    "originalName",
+                    "mimeType",
+                    "sizeBytes"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Carga útil excede el tamaño límite permitido (50MB)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Carga útil excede el tamaño límite permitido (50MB)",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/413"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 413
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "PAYLOAD_TOO_LARGE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Tipo de medio no soportado o magic bytes falsificados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Tipo de medio no soportado o magic bytes falsificados",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/415"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 415
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNSUPPORTED_MEDIA_TYPE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "summary": "Eliminar imagen física y lógicamente",
         "tags": [
           "Images"
         ],
-        "description": "Elimina el registro de la imagen en base de datos PostgreSQL y destruye su archivo binario en disco.",
+        "description": "Elimina el registro de la imagen en base de datos PostgreSQL y destruye su archivo binario y miniatura en disco. Requiere ser propietario o ADMIN.",
         "parameters": [
           {
             "schema": {
@@ -735,6 +1712,68 @@
                     "code": {
                       "type": "string",
                       "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
                     },
                     "instance": {
                       "type": "string",

@@ -14,3 +14,6 @@ Esta regla aplica a todo el código bajo el directorio `tests/` y a cualquier pr
 4. **Obligatoriedad de Pruebas para Cada Nueva Función:**
    - Cada nueva función, servicio, utilidad o endpoint debe acompañarse de sus pruebas unitarias o de integración correspondientes antes de darse por completada la tarea.
    - Tan pronto como se creen y aprueben, quedan sujetas a la regla de inmutabilidad absoluta.
+5. **Documentación Obligatoria al Mismo Nivel:**
+   - Es obligatorio documentar en OpenAPI, `openapi.json`, `ENDPOINTS.md` y `RUTAS.md` simultáneamente con el desarrollo de cada función y prueba.
+

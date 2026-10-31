@@ -21,18 +21,20 @@
 | **9** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `USER` | Crea una carpeta (tipo `IMAGE` o `TABLE`, pública o privada). |
 | **10** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `USER`* | Detalle de carpeta (evalúa propiedad si es privada). |
 | **11** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `USER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
-| **12** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Listado de imágenes accesibles según permisos de carpeta. |
-| **13** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Carga multipart de imagen (valida magic bytes, máx 50MB). |
-| **14** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Destrucción física y lógica de imagen y miniaturas. |
-| **15** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
-| **16** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL y `Cache-Control: immutable`. |
-| **17** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Listado de datasets tabulares registrados. |
-| **18** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Carga multipart de dataset (CSV o Excel, máx 100MB). |
-| **19** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `USER`* | Destrucción física y lógica del dataset y archivo origen. |
-| **20** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
-| **21** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
+| **12** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
+| **13** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Carga multipart de imagen (JPEG, PNG, WebP, SVG máx 50MB). |
+| **14** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Renombra `originalName` validando propiedad anti-IDOR. |
+| **15** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
+| **16** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Destrucción física y lógica de imagen y su miniatura WebP. |
+| **17** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
+| **18** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
+| **19** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Listado de datasets tabulares registrados. |
+| **20** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Carga multipart de dataset (CSV o Excel, máx 100MB). |
+| **21** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `USER`* | Destrucción física y lógica del dataset y archivo origen. |
+| **22** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
+| **23** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
 
-*\*Nota: Los endpoints marcados con `USER*` verifican propiedad: un usuario común solo puede operar sobre recursos propios o en carpetas públicas; un `ADMIN` tiene acceso irrestricto.*
+*\*Nota: Los endpoints marcados con `USER*` verifican propiedad: un usuario común solo puede operar sobre recursos propios o en carpetas de su propiedad; un `ADMIN` tiene acceso irrestricto.*
 
 ---
 
@@ -302,8 +304,12 @@ Mueve un dataset tabular a otra carpeta existente de tipo `TABLE`.
 ### 3.5. Módulo de Imágenes (`/api/v1/images` e `/i/:short_code`)
 
 #### `GET /api/v1/images`
-Lista imágenes registradas en el sistema accesibles para el solicitante.
+Lista imágenes registradas en el sistema accesibles para el solicitante, con soporte de paginación y filtrado por carpeta.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Query Parameters:**
+  - `page` (opcional, entero, defecto 1): Número de página.
+  - `limit` (opcional, entero, defecto 50, máx 100): Cantidad por página.
+  - `folderId` (opcional, string UUID): Filtra imágenes contenidas en una carpeta específica.
 - **Respuesta 200 OK:**
   ```json
   {
@@ -312,59 +318,131 @@ Lista imágenes registradas en el sistema accesibles para el solicitante.
         "id": "55555555-5555-5555-5555-555555555555",
         "shortCode": "img1234567",
         "url": "http://localhost:3000/i/img1234567",
+        "urlWithVersion": "http://localhost:3000/i/img1234567?v=1730347200000",
         "originalName": "banner.jpg",
         "mimeType": "image/jpeg",
         "sizeBytes": 524288,
         "width": 1920,
         "height": 1080,
         "folderId": "33333333-3333-3333-3333-333333333333",
-        "createdAt": "2026-10-31T04:20:00.000Z"
+        "createdAt": "2026-10-31T04:20:00.000Z",
+        "updatedAt": "2026-10-31T04:20:00.000Z"
       }
     ],
-    "total": 1
+    "total": 1,
+    "page": 1,
+    "limit": 50,
+    "totalPages": 1,
+    "meta": {
+      "page": 1,
+      "limit": 50,
+      "total": 1,
+      "totalPages": 1,
+      "hasNext": false
+    }
   }
   ```
 
 #### `POST /api/v1/images`
-Sube y procesa una imagen mediante `multipart/form-data`. Valida magic bytes (JPEG, PNG, WebP) y genera miniaturas automáticas.
+Sube y procesa una imagen mediante `multipart/form-data`. Valida magic bytes (`image/jpeg`, `image/png`, `image/webp`, `image/svg+xml`), extrae dimensiones (`width`, `height`) y autogenera miniaturas WebP (`320px`). En archivos `.svg`, ejecuta validación anti-XSS estricta bloqueando tags `<script>` y handlers de eventos.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Content-Type:** `multipart/form-data`
 - **Campos del Formulario:**
   - `file`: Archivo binario (Obligatorio, máx. 50MB).
-  - `folderId`: UUID de la carpeta destino (Opcional; si se omite, se asigna a `General`).
+  - `folderId`: UUID de la carpeta destino (Opcional; si se omite, se asigna a la carpeta predeterminada del usuario).
 - **Respuesta 201 Created:**
   ```json
   {
     "id": "55555555-5555-5555-5555-555555555555",
     "shortCode": "img1234567",
     "url": "http://localhost:3000/i/img1234567",
+    "urlWithVersion": "http://localhost:3000/i/img1234567?v=1730347200000",
     "originalName": "banner.jpg",
     "mimeType": "image/jpeg",
     "sizeBytes": 524288,
-    "folderId": "33333333-3333-3333-3333-333333333333"
+    "width": 1920,
+    "height": 1080,
+    "folderId": "33333333-3333-3333-3333-333333333333",
+    "createdAt": "2026-10-31T04:20:00.000Z",
+    "updatedAt": "2026-10-31T04:20:00.000Z"
   }
   ```
-- **Errores:** `400 Bad Request` (formato inválido o corrupto), `413 Payload Too Large` (> 50MB).
+- **Errores:** `400 Bad Request` (archivo corrupto o SVG malicioso), `413 Payload Too Large` (> 50MB), `415 Unsupported Media Type`.
 
-#### `DELETE /api/v1/images/:id`
-Elimina físicamente el archivo del disco y su registro en la base de datos.
+#### `PATCH /api/v1/images/:id`
+Renombra el nombre original (`originalName`) de una imagen sin alterar el archivo físico, su `shortCode` ni su URL pública.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
-- **Parámetros URL:** `id` (UUID de la imagen).
+- **Control de Acceso Anti-IDOR:** Solo el propietario de la carpeta o un `ADMIN` pueden renombrar la imagen.
+- **Body JSON:**
+  ```json
+  {
+    "originalName": "nuevo-logo-oficial.png"
+  }
+  ```
 - **Respuesta 200 OK:**
   ```json
   {
-    "message": "Imagen eliminada exitosamente"
+    "id": "55555555-5555-5555-5555-555555555555",
+    "shortCode": "img1234567",
+    "url": "http://localhost:3000/i/img1234567",
+    "urlWithVersion": "http://localhost:3000/i/img1234567?v=1730347250000",
+    "originalName": "nuevo-logo-oficial.png",
+    "mimeType": "image/png",
+    "sizeBytes": 524288,
+    "width": 1920,
+    "height": 1080,
+    "folderId": "33333333-3333-3333-3333-333333333333",
+    "createdAt": "2026-10-31T04:20:00.000Z",
+    "updatedAt": "2026-10-31T04:25:00.000Z"
   }
   ```
-- **Errores:** `403 Forbidden`, `404 Not Found`.
+- **Errores:** `400 Bad Request` (nombre vacío o >255 caracteres), `403 Forbidden` (no propietario), `404 Not Found`.
+
+#### `PUT /api/v1/images/:id`
+**Reemplazo en caliente de imagen (Hot-Swap)**: Sustituye físicamente el binario en disco por uno nuevo (JPEG, PNG, WebP, SVG) preservando el **mismo** `id`, `shortCode` y URL pública. Regenera automáticamente la miniatura WebP asociada y actualiza metadatos (`sizeBytes`, `mimeType`, `width`, `height`, `updatedAt`).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Control de Acceso Anti-IDOR:** Solo el propietario de la carpeta o un `ADMIN` pueden reemplazar la imagen.
+- **Content-Type:** `multipart/form-data`
+- **Campos del Formulario:**
+  - `file`: Archivo binario de reemplazo (Obligatorio, máx. 50MB).
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "id": "55555555-5555-5555-5555-555555555555",
+    "shortCode": "img1234567",
+    "url": "http://localhost:3000/i/img1234567",
+    "urlWithVersion": "http://localhost:3000/i/img1234567?v=1730347300000",
+    "originalName": "nuevo-banner.webp",
+    "mimeType": "image/webp",
+    "sizeBytes": 104850,
+    "width": 1920,
+    "height": 1080,
+    "folderId": "33333333-3333-3333-3333-333333333333",
+    "createdAt": "2026-10-31T04:20:00.000Z",
+    "updatedAt": "2026-10-31T04:30:00.000Z"
+  }
+  ```
+- **Errores:** `400 Bad Request`, `403 Forbidden` (no propietario), `404 Not Found`, `413 Payload Too Large`, `415 Unsupported Media Type`.
+
+#### `DELETE /api/v1/images/:id`
+Elimina físicamente el archivo original del disco, su miniatura generada y su registro en la base de datos.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Control de Acceso Anti-IDOR:** Solo el propietario de la carpeta o un `ADMIN` pueden eliminar la imagen.
+- **Parámetros URL:** `id` (UUID de la imagen).
+- **Respuesta 204 No Content:** Eliminación exitosa sin cuerpo.
+- **Errores:** `400 Bad Request` (UUID inválido), `403 Forbidden`, `404 Not Found`.
 
 #### `GET /i/:short_code` (Pública por Diseño)
-Entrega binaria de la imagen mediante capability URL opaca no enumerable. Apta para `<img src="...">`.
+Entrega binaria de la imagen mediante capability URL opaca no enumerable. Apta para `<img src="...">`. Admite variantes y cache-busting.
 - **Autenticación:** Ninguna (Pública).
+- **Query Parameters:**
+  - `variant` (opcional): `'thumb'` (sirve miniatura WebP optimizada de 320px) u `'original'` (por defecto).
+  - `v` (opcional): Timestamp de versión para invalidación instantánea de caché en CDNs o navegadores tras un reemplazo en caliente.
 - **Headers de Respuesta:**
-  - `Content-Type: image/jpeg` (o el MIME respectivo).
+  - `Content-Type: image/jpeg` (o `image/webp` para miniaturas, o el MIME correspondiente).
   - `Cache-Control: public, max-age=31536000, immutable`.
-- **Errores:** `404 Not Found` (código inexistente).
+  - `Content-Security-Policy: default-src 'none'` (si se sirve un archivo SVG, aislando scripts).
+- **Errores:** `404 Not Found` (código inexistente o archivo físico ausente).
 
 ---
 

@@ -28,10 +28,13 @@ model ImageRegistry {
   originalName String   @map("original_name")
   mimeType     String   @map("mime_type")
   sizeBytes    Int      @map("size_bytes")
+  width        Int?     @map("width")
+  height       Int?     @map("height")
   storagePath  String   @map("storage_path")
   folderId     String?  @map("folder_id") @db.Uuid
   folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([shortCode])
   @@index([folderId])

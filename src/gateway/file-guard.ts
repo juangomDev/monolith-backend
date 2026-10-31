@@ -6,6 +6,7 @@ export const ALLOWED_IMAGE_MIMES = [
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/svg+xml',
 ];
 
 export const ALLOWED_TABLE_MIMES = [
@@ -23,6 +24,52 @@ export async function validateMagicBytes(
   // Compatibilidad con streams de pruebas unitarias existentes
   if (chunk.toString().includes('fake-png')) {
     return { mime: 'image/png', ext: 'png' };
+  }
+
+  // Verificación para archivos SVG (formato XML de texto)
+  const preview = chunk.subarray(0, 1024);
+  const textPreview = preview.toString('utf8').trim();
+  const isSvg =
+    textPreview.includes('<svg') &&
+    (textPreview.startsWith('<?xml') ||
+      textPreview.startsWith('<svg') ||
+      textPreview.includes('xmlns="http://www.w3.org/2000/svg"'));
+
+  if (isSvg) {
+    if (!allowedMimes.includes('image/svg+xml')) {
+      throw new AppError(
+        415,
+        `Tipo de archivo no permitido: SVG`,
+        'UNSUPPORTED_MEDIA_TYPE'
+      );
+    }
+
+    // Verificar que no contenga bytes nulos (indicativo de binario malformado)
+    if (preview.includes(0x00)) {
+      throw new AppError(
+        415,
+        'El archivo SVG contiene datos binarios no permitidos',
+        'UNSUPPORTED_MEDIA_TYPE'
+      );
+    }
+
+    // Desinfección anti-XSS: Bloquear scripts incrustados
+    const lowerText = textPreview.toLowerCase();
+    if (
+      lowerText.includes('<script') ||
+      lowerText.includes('javascript:') ||
+      lowerText.includes('onload=') ||
+      lowerText.includes('onerror=') ||
+      lowerText.includes('onclick=')
+    ) {
+      throw new AppError(
+        400,
+        'El archivo SVG contiene scripts o eventos ejecutables no permitidos',
+        'MALICIOUS_PAYLOAD'
+      );
+    }
+
+    return { mime: 'image/svg+xml', ext: 'svg' };
   }
 
   const type = await fileTypeFromBuffer(chunk);

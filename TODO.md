@@ -373,4 +373,130 @@
   - [x] `9.3.2` Integrar la directiva en `AGENTS.md` para obligar a todo agente a evaluar el semáforo de seguridad tras cada lote de cambios importantes.
   - [x] `9.3.3` Validar `npm test` (0 fallos) y `npm run build` (código 0).
 
+---
+
+## 🖼️ FASE 10: Evolución Integral del Módulo de Imágenes (Completado)
+
+### 🎯 Objetivos de la Fase
+> 1. **Regla de Documentación Obligatoria:** Establecer contractualmente que ninguna funcionalidad se aprueba sin su documentación y esquemas OpenAPI sincronizados simultáneamente.
+> 2. **Procesamiento y Rendimiento Multimedia (`sharp`):** Extraer dimensiones (`width`, `height`), autogenerar miniaturas WebP (`320px`) y servir variantes ligeras en `/i/:short_code?variant=thumb`.
+> 3. **Mutación Completa y Reemplazo en Caliente:** Permitir renombrar el `originalName` (`PATCH /api/v1/images/:id`) y reemplazar el archivo binario físico (`PUT /api/v1/images/:id`) preservando intactos el `shortCode` y la URL pública para actualizar logos o recursos en vivo.
+> 4. **Seguridad y Control de Acceso (Anti-IDOR):** Garantizar que solo el propietario o `ADMIN` puedan modificar, renombrar, reemplazar o eliminar una imagen.
+> 5. **Paginación y Filtrado SQL:** Trasladar la paginación y filtros de carpetas a nivel de PostgreSQL con Prisma.
+
+- [x] **10.1 Regla de Documentación y Modelo de Datos**
+  - [x] `10.1.1` **Regla 3 en `AGENTS.md`**: Formalizar la documentación y OpenAPI al mismo nivel de obligatoriedad e inmutabilidad que las pruebas.
+  - [x] `10.1.2` **Modelo Prisma**: Agregar `width Int?`, `height Int?` y `updatedAt DateTime @updatedAt` en `ImageRegistry` en `prisma/schema.prisma`.
+  - [x] `10.1.3` Ejecutar `npx prisma generate` y sincronizar esquema en PostgreSQL.
+
+- [x] **10.2 Procesamiento Multimedia con Sharp (Miniaturas, Metadatos y Soporte .svg)**
+  - [x] `10.2.1` **Soporte SVG y Validación Anti-XSS**:
+    - Agregar `image/svg+xml` y extensión `.svg` en `file-guard.ts` y `images.service.ts`.
+    - Validación segura de SVG: verificar estructura XML/SVG, ausencia de bytes nulos y bloqueo de scripts incrustados (`<script`, `javascript:`, `onload=`, `onerror=`).
+    - Configurar cabeceras de entrega segura para SVG en `/i/:short_code` (`Content-Security-Policy: default-src 'none'`).
+  - [x] `10.2.2` Integrar `sharp` en `images.service.ts` para extraer dimensiones (`width`, `height`) de forma automática en la subida (JPEG, PNG, WebP y SVG).
+  - [x] `10.2.3` Crear pipeline para autogenerar miniatura WebP optimizada (320px de ancho) en `./storage/images/thumbs/${shortCode}.webp` (incluyendo renderizado de SVG a WebP).
+  - [x] `10.2.4` Soporte de variantes en la Capability URL: `GET /i/:short_code?variant=thumb` (entrega rápida de miniatura con caché inmutable) y `GET /i/:short_code?variant=original`.
+  - [x] `10.2.5` Limpieza física del archivo de miniatura en disco al eliminar o reemplazar la imagen.
+
+- [x] **10.3 Mutación y Reemplazo en Caliente (Hot-Swap)**
+  - [x] `10.3.1` **Renombrar Imagen (`PATCH /api/v1/images/:id`)**:
+    - Validar entrada con esquema Zod `{ originalName: string }` (1-255 caracteres, sanitización).
+    - Verificar propiedad (solo dueño de carpeta o `ADMIN`).
+    - Actualizar registro y responder 200 con el modelo actualizado.
+  - [x] `10.3.2` **Reemplazo en Caliente del Archivo (`PUT /api/v1/images/:id`)**:
+    - Aceptar nuevo archivo vía `multipart/form-data` (JPEG, PNG, WebP o SVG).
+    - Validar magic bytes / sanitización SVG y límite de 50MB.
+    - Conservar el **mismo** `shortCode`, `id` y `folderId`.
+    - Sobrescribir de forma segura el archivo en disco (`./storage/images/${shortCode}${ext}`).
+    - Regenerar la miniatura WebP asociada.
+    - Actualizar `sizeBytes`, `mimeType`, `width`, `height` y `updatedAt` en PostgreSQL.
+    - Soporte de cache-busting opcional (`?v=...`) en URLs para clientes que requieran invalidación inmediata de CDN.
+
+- [x] **10.4 Seguridad de Acceso y Filtrado SQL**
+  - [x] `10.4.1` **Blindaje Anti-IDOR en Eliminación y Modificación**:
+    - Modificar `DELETE /api/v1/images/:id`, `PATCH /api/v1/images/:id` y `PUT /api/v1/images/:id` para comprobar `image.folder.userId === requester.id` o rol `ADMIN` (403 Forbidden si no corresponde).
+  - [x] `10.4.2` **Paginación y Filtrado SQL**:
+    - Añadir en `imagesRepository.findAll`: parámetros `page`, `limit`, `folderId` y filtro de privacidad directamente en la cláusula `WHERE` de Prisma.
+    - Responder con metadatos `{ images: [...], meta: { page, limit, total, totalPages, hasNext }, total }`.
+
+- [x] **10.5 Documentación Simultánea de Contratos (Regla 3)**
+  - [x] `10.5.1` Actualizar esquemas OpenAPI de Fastify en `images.routes.ts` con las nuevas rutas (`PATCH`, `PUT`), parámetros query (`page`, `limit`, `folderId`, `variant`) y respuestas 200/403.
+  - [x] `10.5.2` Actualizar `ENDPOINTS.md` y `RUTAS.md` con las nuevas operaciones de imágenes.
+  - [x] `10.5.3` Regenerar `openapi.json` con `npm run openapi:export`.
+  - [x] `10.5.4` Documentar ejemplos de reemplazo de imagen y renombrado en `docs/frontend-integration.md`.
+
+- [x] **10.6 Cobertura de Pruebas Automatizadas y Congelación**
+  - [x] `10.6.1` Pruebas unitarias en `images.service.test.ts`:
+    - Extracción de dimensiones con `sharp` y creación de miniatura WebP.
+    - Renombrado exitoso y validación de nombres vacíos.
+    - Reemplazo en caliente de binario preservando `shortCode`.
+    - Rechazo con 403 al intentar modificar o eliminar imágenes ajenas.
+  - [x] `10.6.2` Pruebas de integración en `images.routes.test.ts`:
+    - `PATCH /api/v1/images/:id`: 200 con nuevo nombre, 403 usuario ajeno, 404.
+    - `PUT /api/v1/images/:id`: 200 con archivo reemplazado conservando shortCode.
+    - `GET /i/:short_code?variant=thumb`: 200 sirviendo miniatura WebP.
+    - `DELETE /api/v1/images/:id`: 403 si el usuario no es propietario.
+  - [x] `10.6.3` Protocolo Obligatorio: `npm test` (100% pasando), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 🧹 FASE 11: Modularización Arquitectónica y Desacoplamiento de Esquemas (Carpetas, Usuarios y Tablas)
+
+### 🎯 Objetivos de la Fase
+> 1. **Principio de Responsabilidad Única (SRP):** Desacoplar las definiciones extensas de esquemas OpenAPI 3.1 y esquemas Zod de los enrutadores Fastify, trasladándolos a archivos dedicados `*.schemas.ts`.
+> 2. **Archivos Cómodos y Legibles:** Reducir la extensión de los archivos de rutas de >300 líneas a menos de 120-150 líneas por archivo.
+> 3. **Inmutabilidad Absoluta de Contratos (Regla 1):** Preservar el 100% de los endpoints, códigos de estado, parámetros y tipos de respuesta sin alterar ninguna aserción en los 197 tests existentes.
+> 4. **Compilación y OpenAPI Limpios:** Garantizar compilación perfecta (`tsc`) y exportación estática de `openapi.json` sin discrepancias de contrato.
+
+- [ ] **11.1 Módulo Carpetas (`src/modules/folders/`)**
+  - [ ] `11.1.1` **Crear `src/modules/folders/folders.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 y Zod para `POST /api/v1/folders`, `GET /api/v1/folders`, `GET /api/v1/folders/:id`, `DELETE /api/v1/folders/:id`, `PATCH /api/v1/images/:id/folder`, `PATCH /api/v1/tables/:id/folder`.
+  - [ ] `11.1.2` **Refactorizar `src/modules/folders/folders.routes.ts`**: Limpiar el controlador reduciendo el archivo de 342 a ~110 líneas mediante importación de esquemas.
+  - [ ] `11.1.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/folders/*.test.ts` asegurando 100% éxito.
+
+- [ ] **11.2 Módulo Usuarios y Autenticación (`src/modules/users/`)**
+  - [ ] `11.2.1` **Crear `src/modules/users/users.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 y Zod para `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, y `POST /api/v1/users`.
+  - [ ] `11.2.2` **Refactorizar `src/modules/users/users.routes.ts`**: Limpiar el controlador reduciendo el archivo de 326 a ~110 líneas mediante importación de esquemas.
+  - [ ] `11.2.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/users/*.test.ts` asegurando 100% éxito.
+
+- [ ] **11.3 Módulo Tablas y Datasets (`src/modules/tables/`)**
+  - [ ] `11.3.1` **Crear `src/modules/tables/tables.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 para `POST /api/v1/tables`, `GET /api/v1/tables`, `GET /t/:short_code`, `DELETE /api/v1/tables/:id`.
+  - [ ] `11.3.2` **Refactorizar `src/modules/tables/tables.routes.ts`**: Limpiar el controlador reduciendo el archivo de 238 a ~90 líneas mediante importación de esquemas.
+  - [ ] `11.3.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/tables/*.test.ts` asegurando 100% éxito.
+
+- [ ] **11.4 Módulo Imágenes (`src/modules/images/`) - Desacoplamiento de I/O de Disco**
+  - [ ] `11.4.1` **Crear `src/modules/images/images.storage.ts`**: Extraer la manipulación directa de archivos físicos (`fs.mkdir`, `fs.unlink`, streams de lectura/escritura y pipeline) a un satélite dedicado.
+  - [ ] `11.4.2` **Refactorizar `src/modules/images/images.service.ts`**: Delegar la persistencia de disco en `imagesStorage`, reduciendo el servicio de 327 a ~180 líneas sin alterar ninguna firma pública ni contrato de pruebas.
+  - [ ] `11.4.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/images/*.test.ts` asegurando 100% de éxito.
+
+- [ ] **11.5 Validación Integral y Protocolo de Inmutabilidad**
+  - [ ] `11.5.1` Ejecutar `npm test`: Verificar que los 197 tests pasen al 100% con 0 fallos.
+  - [ ] `11.5.2` Ejecutar `npm run build`: Verificar compilación TypeScript limpia (`code 0`).
+  - [ ] `11.5.3` Ejecutar `npm run openapi:export`: Asegurar sincronización exacta de `openapi.json`.
+  - [ ] `11.5.4` Ejecutar `npm audit`: Verificar 0 vulnerabilidades.
+
+---
+
+## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)
+
+> **Regla de Referencia:** [`.agents/rules/modular-refactoring-evolution.md`](.agents/rules/modular-refactoring-evolution.md)  
+> **Umbrales:** Etapa 1 (>300 LOC / I/O técnico) · Etapa 2 (>450 LOC / >6 métodos) · Etapa 3 (Clean Arch / Puertos) · Etapa 4 (Workers asíncronos >25-30MB).
+
+### 🟡 Alertas Activas (Etapa 1 - Extracción de Auxiliares)
+- [ ] **`src/modules/folders/folders.routes.ts` (342 LOC > 300 LOC)**
+  - *Causa:* Contratos OpenAPI 3.1 embebidos dentro de las rutas Fastify.
+  - *Solución:* Extraer esquemas a `folders.schemas.ts` (Cubierto en tarea `11.1`).
+  - *Detectado:* 2026-10-31
+- [ ] **`src/modules/images/images.service.ts` (327 LOC > 300 LOC)**
+  - *Causa:* Mezcla lógica de negocio con operaciones directas de I/O de disco (`fs.unlink`, `createWriteStream`).
+  - *Solución:* Extraer a `images.storage.ts` (Cubierto en tarea `11.4`).
+  - *Detectado:* 2026-10-31
+- [ ] **`src/modules/users/users.routes.ts` (326 LOC > 300 LOC)**
+  - *Causa:* Contratos OpenAPI 3.1 embebidos dentro de las rutas Fastify.
+  - *Solución:* Extraer esquemas a `users.schemas.ts` (Cubierto en tarea `11.2`).
+  - *Detectado:* 2026-10-31
+
+
+
+
 

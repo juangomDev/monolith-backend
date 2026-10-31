@@ -25,6 +25,15 @@ Este repositorio contiene las reglas fundamentales e inviolables para el desarro
 3. **Criterio de finalización (Definition of Done):** Ninguna tarea o fase se considera terminada ni aprobada si carece de sus correspondientes pruebas en `tests/`.
 4. **Congelación inmediata:** En cuanto las pruebas de la nueva función sean implementadas y aprobadas, pasan inmediatamente a estar congeladas e inmutables bajo la Regla 1.
 
+### 3. Documentación y Sincronización Obligatoria (No Feature Without Docs)
+1. **Documentación simultánea:** Para cada nueva función, ruta, parámetro, modelo de datos o regla de negocio que se implemente o modifique, **es estrictamente obligatorio actualizar simultáneamente**:
+   - Los esquemas OpenAPI de Fastify en los archivos `*.routes.ts`.
+   - La especificación estática `openapi.json` mediante `npm run openapi:export`.
+   - Los catálogos de referencia `ENDPOINTS.md` y `RUTAS.md`.
+   - La guía de integración en `docs/frontend-integration.md` si impacta al frontend.
+2. **Criterio de finalización (Definition of Done):** Ninguna tarea o fase se considera terminada ni aprobada si el código implementado carece de su documentación sincronizada al 100%.
+3. **Contratos Vinculantes:** La documentación generada es el contrato de verdad vinculante para el equipo de frontend (`gestor-multimedia`).
+
 ---
 
 ## 🏛️ ARQUITECTURA Y FILOSOFÍA DE DESARROLLO
@@ -48,6 +57,14 @@ Todo nuevo módulo (ej. `src/modules/users/`) DEBE seguir estrictamente esta div
   - La visualización es pública para permitir incrustar imágenes directamente en etiquetas HTML `<img src="...">`, correos o aplicaciones sin lidiar con cabeceras Bearer.
   - La seguridad se garantiza por **opacidad criptográfica (Capability URLs)**: se generan shortcodes de 10 caracteres Base58 (nanoid, >43 billones de combinaciones) no enumerables ni adivinables por fuerza bruta.
   - Se acompaña de cabeceras de caché inmutable (`Cache-Control: public, max-age=31536000, immutable`).
+
+### 4. Evolución Modular y Umbrales de Refactorización (`.agents/rules/modular-refactoring-evolution.md`)
+- **Regla de Crecimiento Progresivo:** Cuando un módulo crece, NUNCA se reescribe de golpe. Se evoluciona en 4 etapas:
+  - **Etapa 1 (Capas Modulares):** `routes` o `service` > 300 LOC o I/O técnico -> Extraer a `*.schemas.ts`, `*.processor.ts`, `*.storage.ts` o `*.parser.ts` (0 cambios en tests).
+  - **Etapa 2 (Casos de Uso / CQRS):** `service` > 450 LOC o >6 métodos complejos -> Dividir en `use-cases/` individuales (≤80 LOC c/u) manteniendo el Service como fachada delegada.
+  - **Etapa 3 (Clean Architecture):** Múltiples destinos de almacenamiento (disco/S3) -> Puertos, Adaptadores y Casos de Uso.
+  - **Etapa 4 (Workers Asíncronos):** Datasets/tablas >30MB o imágenes >25MB -> Procesamiento en segundo plano con `worker_threads` respondiendo `202 Accepted`.
+- **Persistencia Obligatoria en `TODO.md`:** Si un archivo supera un umbral, el agente DEBE alertar en el chat y registrar automáticamente la tarea pendiente en `TODO.md` con su checkbox `- [ ]` para evitar que la deuda técnica se olvide.
 
 ---
 

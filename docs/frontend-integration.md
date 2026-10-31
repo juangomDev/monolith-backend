@@ -141,5 +141,79 @@ Todos los errores del backend devuelven un formato estructurado y predecible:
 - `FORBIDDEN`: Permiso insuficiente (ej. intentar ver una carpeta privada ajena).
 - `NOT_FOUND`: Carpeta, imagen o tabla no encontrada.
 - `INVALID_FOLDER_TYPE`: Intento de mover una imagen a una carpeta de tablas o viceversa.
-- `UNSUPPORTED_MEDIA_TYPE`: Archivo no admitido o magic bytes binarios falsificados.
 - `RATE_LIMIT_EXCEEDED`: Límite de peticiones excedido (máximo 5 intentos por minuto en `/login`).
+- `MALICIOUS_PAYLOAD`: Detección de scripts incrustados o eventos maliciosos en archivos SVG.
+
+---
+
+## 6. 🖼️ Gestión Avanzada de Imágenes y Rendimiento (Fase 10)
+
+### A. Reemplazo en Caliente de Archivos (`PUT /api/v1/images/:id`)
+Permite sustituir físicamente el archivo de una imagen (ej. actualización de un logotipo corporativo o banner) **preservando el mismo `id`, `shortCode` y URL pública**.
+- Todas las páginas, correos o sistemas externos que apunten a `http://localhost:3000/i/:shortCode` continuarán funcionando sin cambios de código.
+- Se regenera automáticamente la miniatura WebP asociada.
+- Para invalidar la caché HTTP inmutable del navegador del cliente, utiliza la propiedad devuelta `urlWithVersion`:
+```typescript
+const formData = new FormData();
+formData.append('file', nuevoArchivoBinario);
+
+const response = await fetch(`http://localhost:3000/api/v1/images/${imageId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+  },
+  body: formData,
+});
+
+const data = await response.json();
+// data.urlWithVersion contiene "http://localhost:3000/i/codigo123?v=1730347300000"
+```
+
+### B. Renombrar Imagen (`PATCH /api/v1/images/:id`)
+Modifica el nombre amigable `originalName` mostrado en las interfaces sin tocar el almacenamiento físico ni su identificador:
+```typescript
+const response = await fetch(`http://localhost:3000/api/v1/images/${imageId}`, {
+  method: 'PATCH',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ originalName: 'logo-vectorial-v2.png' }),
+});
+```
+
+### C. Miniaturas Ultraligeras para Galerías (`variant=thumb`)
+Para listados, grids y tarjetas del frontend, no descargues la imagen original de tamaño completo (que puede ser de varios megabytes o resolución 4K). En su lugar, consume la variante de miniatura WebP optimizada (320px de ancho):
+```tsx
+// Ejemplo en React / Vite:
+<img 
+  src={`${image.url}?variant=thumb`} 
+  alt={image.originalName}
+  width={320}
+  loading="lazy"
+  className="rounded-lg object-cover"
+/>
+```
+- **Rendimiento:** Reduce el peso de transferencia en más de un 85% para un feed o galería de imágenes.
+- **Caché:** Cuenta con cabeceras `Cache-Control: public, max-age=31536000, immutable`.
+
+### D. Soporte de Gráficos Vectoriales (`.svg`)
+- Se admiten archivos SVG (`image/svg+xml`) hasta 50MB.
+- El backend implementa **desinfección anti-XSS**: rechaza cualquier archivo SVG que contenga etiquetas `<script>` o atributos ejecutables como `onload`, `onerror` o `onclick` con código `400 MALICIOUS_PAYLOAD`.
+- Se entrega con la cabecera `Content-Security-Policy: default-src 'none'` en `/i/:short_code` para garantizar aislamiento en caso de ser abierto en una pestaña independiente.
+
+### E. Paginación y Filtrado SQL (`GET /api/v1/images`)
+```typescript
+const query = new URLSearchParams({
+  page: '1',
+  limit: '24',
+  folderId: currentFolderId || '',
+});
+
+const res = await fetch(`http://localhost:3000/api/v1/images?${query.toString()}`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` },
+});
+const { images, meta, total } = await res.json();
+// meta: { page: 1, limit: 24, total: 100, totalPages: 5, hasNext: true }
+```
+
