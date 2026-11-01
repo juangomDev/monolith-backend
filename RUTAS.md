@@ -23,26 +23,27 @@
 | **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario e invalida sus sesiones. |
 | **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico. |
 | **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos. |
-| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso del usuario (`?type=`). |
+| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso (`?type=&search=&page=&limit=`). |
 | **15** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `MANAGER` | Crea una carpeta (tipo `IMAGE` o `TABLE`, pública o privada). |
-| **16** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
-| **17** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
-| **18** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
-| **19** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
-| **20** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
-| **21** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
-| **22** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
-| **23** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
-| **24** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
-| **25** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
-| **26** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
-| **27** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `MANAGER`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
-| **28** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
-| **29** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados. |
-| **30** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
-| **31** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
-| **32** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `MANAGER`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
-| **33** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
+| **16** | `PATCH` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Actualiza propiedades (nombre, color o privacidad) de la carpeta. |
+| **17** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
+| **18** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
+| **19** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
+| **20** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
+| **21** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
+| **22** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
+| **23** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
+| **24** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
+| **25** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
+| **26** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
+| **27** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
+| **28** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
+| **29** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
+| **30** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados. |
+| **31** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
+| **32** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
+| **33** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
+| **34** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -283,11 +284,14 @@ Elimina definitivamente un usuario y destruye en cascada sus archivos en disco (
 ### 3.4. Módulo de Carpetas (`/api/v1/folders`)
 
 #### `GET /api/v1/folders`
-Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públicas y sus privadas; `ADMIN` ve todas).
+Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públicas y sus privadas; `ADMIN` ve todas). Soporta filtrado por tipo, búsqueda por texto y paginación SQL opcional.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Query Params:**
   - `type` (Opcional): `IMAGE` o `TABLE`.
-- **Respuesta 200 OK:**
+  - `search` (Opcional): Búsqueda por nombre de carpeta (insensible a mayúsculas).
+  - `page` (Opcional): Número de página (ej. `1`).
+  - `limit` (Opcional): Cantidad por página (ej. `20`).
+- **Respuesta 200 OK (con paginación):**
   ```json
   {
     "folders": [
@@ -303,15 +307,27 @@ Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públ
           "id": "11111111-1111-1111-1111-111111111111",
           "username": "admin"
         },
+        "myPermission": "EDIT",
         "createdAt": "2026-10-01T00:00:00.000Z"
       }
     ],
-    "total": 1
+    "total": 1,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 1,
+    "meta": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1,
+      "hasNext": false
+    }
   }
   ```
+- **Nota Retrocompatible:** Si no se envían `page` ni `limit`, devuelve `{ folders: [...], total: N }` completo.
 
 #### `POST /api/v1/folders`
-Crea una nueva carpeta organizada por tipo de contenido.
+Crea una nueva carpeta organizada por tipo de contenido. Exclusivo de `MANAGER` o `ADMIN` (`COLLABORATOR` recibe `403 FORBIDDEN`).
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Body:**
   ```json
@@ -333,10 +349,43 @@ Crea una nueva carpeta organizada por tipo de contenido.
       "isPrivate": true,
       "itemCount": 0,
       "userId": "11111111-1111-1111-1111-111111111111",
+      "myPermission": "EDIT",
       "createdAt": "2026-10-31T04:20:00.000Z"
     }
   }
   ```
+
+#### `PATCH /api/v1/folders/:id`
+Actualiza parcialmente las propiedades de una carpeta (renombrar, cambiar color identificador o alternar visibilidad privada).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Parámetros URL:** `id` (UUID de la carpeta).
+- **Permisos:** Exclusivo del propietario de la carpeta o `ADMIN` (`403 FORBIDDEN` a colaboradores o terceros).
+- **Restricción:** No se permite cambiar el nombre de la carpeta default `General`.
+- **Body:**
+  ```json
+  {
+    "name": "Reportes Fiscales 2026",
+    "color": "#3b82f6",
+    "isPrivate": false
+  }
+  ```
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "folder": {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Reportes Fiscales 2026",
+      "type": "TABLE",
+      "color": "#3b82f6",
+      "isPrivate": false,
+      "itemCount": 15,
+      "userId": "11111111-1111-1111-1111-111111111111",
+      "myPermission": "EDIT",
+      "createdAt": "2026-10-31T04:20:00.000Z"
+    }
+  }
+  ```
+- **Errores:** `400 Bad Request` (body vacío, color inválido o intento de renombrar carpeta General), `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
 
 #### `GET /api/v1/folders/:id`
 Obtiene los detalles de una carpeta.

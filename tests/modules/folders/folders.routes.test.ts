@@ -517,4 +517,161 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
     const body = JSON.parse(response.body);
     assert.strictEqual(body.code, 'INVALID_FOLDER_TYPE');
   });
+
+  // ==========================================
+  // 8. Fase 13: PATCH /api/v1/folders/:id (Actualizar Carpeta) y Paginación
+  // ==========================================
+  it('PATCH /api/v1/folders/:id: retorna 200 tras actualizar exitosamente la carpeta', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersService, 'updateFolder', async () => ({
+      id: validFolderId,
+      name: 'Carpeta Modificada',
+      type: FolderType.IMAGE,
+      color: '#10b981',
+      isPrivate: true,
+      itemCount: 4,
+      userId: testUserId,
+      createdAt: new Date(),
+    }));
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/folders/${validFolderId}`,
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+      payload: {
+        name: 'Carpeta Modificada',
+        color: '#10b981',
+        isPrivate: true,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.folder.name, 'Carpeta Modificada');
+    assert.strictEqual(body.folder.color, '#10b981');
+    assert.strictEqual(body.folder.isPrivate, true);
+  });
+
+  it('PATCH /api/v1/folders/:id: retorna 403 si el solicitante no tiene permiso', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersService, 'updateFolder', async () => {
+      throw new AppError(403, 'No tienes permiso para modificar esta carpeta', 'FORBIDDEN');
+    });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/folders/${validFolderId}`,
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+      payload: {
+        name: 'Intento Prohibido',
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 403);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.code, 'FORBIDDEN');
+  });
+
+  it('PATCH /api/v1/folders/:id: retorna 400 si el body es inválido', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersService, 'updateFolder', async () => {
+      throw new AppError(400, 'Debe especificar al menos un campo para actualizar', 'BAD_REQUEST');
+    });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/folders/${validFolderId}`,
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+      payload: {},
+    });
+
+    assert.strictEqual(response.statusCode, 400);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.code, 'BAD_REQUEST');
+  });
+
+  it('GET /api/v1/folders: retorna 200 con paginación y búsqueda', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersService, 'listFolders', async (requester: any, opts: any) => {
+      assert.strictEqual(opts.search, 'reportes');
+      assert.strictEqual(opts.page, 1);
+      assert.strictEqual(opts.limit, 10);
+      return {
+        folders: [
+          {
+            id: validFolderId,
+            name: 'Mis reportes',
+            type: FolderType.TABLE,
+            color: null,
+            isPrivate: false,
+            itemCount: 2,
+            userId: testUserId,
+            createdAt: new Date(),
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+        meta: { page: 1, limit: 10, total: 1, totalPages: 1, hasNext: false },
+      };
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/folders?search=reportes&page=1&limit=10',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.total, 1);
+    assert.strictEqual(body.page, 1);
+    assert.strictEqual(body.folders.length, 1);
+    assert.strictEqual(body.folders[0].name, 'Mis reportes');
+  });
 });

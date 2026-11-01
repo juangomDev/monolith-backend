@@ -581,4 +581,230 @@ describe('Módulo Carpetas: FoldersService', () => {
     assert.strictEqual(folder.isPrivate, false);
     assert.strictEqual(folder.userId, ownerUserId);
   });
+
+  // ==========================================
+  // 8. Fase 13: Mutación y Actualización de Carpetas (updateFolder)
+  // ==========================================
+  it('updateFolder: actualiza nombre, color y privacidad exitosamente si es propietario', async () => {
+    mock.method(foldersRepository, 'findFolderById', async (id: string) => ({
+      id,
+      name: 'Nombre Original',
+      type: FolderType.IMAGE,
+      color: '#3b82f6',
+      isPrivate: false,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 3, tables: 0 },
+      user: { id: ownerUserId, username: 'owner' },
+    }));
+
+    mock.method(foldersRepository, 'updateFolder', async (id: string, data: any) => ({
+      id,
+      name: data.name ?? 'Nombre Original',
+      type: FolderType.IMAGE,
+      color: data.color !== undefined ? data.color : '#3b82f6',
+      isPrivate: data.isPrivate ?? false,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 3, tables: 0 },
+      user: { id: ownerUserId, username: 'owner' },
+    }));
+
+    const result = await foldersService.updateFolder(
+      validFolderId,
+      { name: 'Nombre Modificado', color: '#10b981', isPrivate: true },
+      userRequester
+    );
+
+    assert.strictEqual(result.name, 'Nombre Modificado');
+    assert.strictEqual(result.color, '#10b981');
+    assert.strictEqual(result.isPrivate, true);
+    assert.strictEqual(result.myPermission, 'EDIT');
+  });
+
+  it('updateFolder: permite a ADMIN modificar cualquier carpeta', async () => {
+    mock.method(foldersRepository, 'findFolderById', async (id: string) => ({
+      id,
+      name: 'Carpeta de Otro',
+      type: FolderType.TABLE,
+      color: null,
+      isPrivate: true,
+      userId: otherUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 5 },
+      user: { id: otherUserId, username: 'other' },
+    }));
+
+    mock.method(foldersRepository, 'updateFolder', async (id: string, data: any) => ({
+      id,
+      name: data.name ?? 'Carpeta de Otro',
+      type: FolderType.TABLE,
+      color: '#ef4444',
+      isPrivate: false,
+      userId: otherUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 5 },
+      user: { id: otherUserId, username: 'other' },
+    }));
+
+    const result = await foldersService.updateFolder(
+      validFolderId,
+      { color: '#ef4444', isPrivate: false },
+      adminRequester
+    );
+
+    assert.strictEqual(result.color, '#ef4444');
+    assert.strictEqual(result.isPrivate, false);
+    assert.strictEqual(result.myPermission, 'ADMIN');
+  });
+
+  it('updateFolder: rechaza 403 si un usuario ajeno o colaborador intenta editar la carpeta', async () => {
+    mock.method(foldersRepository, 'findFolderById', async (id: string) => ({
+      id,
+      name: 'Carpeta Ajena',
+      type: FolderType.IMAGE,
+      color: null,
+      isPrivate: false,
+      userId: otherUserId,
+      createdAt: new Date(),
+      _count: { images: 1, tables: 0 },
+      user: { id: otherUserId, username: 'other' },
+    }));
+
+    await assert.rejects(
+      async () => {
+        await foldersService.updateFolder(
+          validFolderId,
+          { name: 'Intento Ilegal' },
+          userRequester
+        );
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 403);
+        assert.strictEqual((err as AppError).code, 'FORBIDDEN');
+        return true;
+      }
+    );
+  });
+
+  it('updateFolder: rechaza 400 si se intenta cambiar el nombre de la carpeta default General', async () => {
+    mock.method(foldersRepository, 'findFolderById', async (id: string) => ({
+      id,
+      name: 'General',
+      type: FolderType.IMAGE,
+      color: null,
+      isPrivate: false,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 2, tables: 0 },
+      user: { id: ownerUserId, username: 'owner' },
+    }));
+
+    await assert.rejects(
+      async () => {
+        await foldersService.updateFolder(
+          validFolderId,
+          { name: 'Nuevo Nombre Invalido' },
+          userRequester
+        );
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 400);
+        assert.match((err as AppError).message, /No se permite cambiar el nombre de la carpeta General/);
+        return true;
+      }
+    );
+  });
+
+  it('updateFolder: rechaza 400 si el body está vacío o el color es inválido', async () => {
+    await assert.rejects(
+      async () => {
+        await foldersService.updateFolder(validFolderId, {}, userRequester);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 400);
+        return true;
+      }
+    );
+
+    await assert.rejects(
+      async () => {
+        await foldersService.updateFolder(validFolderId, { color: 'color-falso' }, userRequester);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 400);
+        return true;
+      }
+    );
+  });
+
+  it('deleteFolder: rechaza 400 al intentar eliminar la carpeta default General', async () => {
+    mock.method(foldersRepository, 'findFolderById', async (id: string) => ({
+      id,
+      name: 'General',
+      type: FolderType.IMAGE,
+      color: null,
+      isPrivate: false,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 0 },
+      user: { id: ownerUserId, username: 'owner' },
+    }));
+
+    await assert.rejects(
+      async () => {
+        await foldersService.deleteFolder(validFolderId, userRequester);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 400);
+        assert.match((err as AppError).message, /No se permite eliminar la carpeta General/);
+        return true;
+      }
+    );
+  });
+
+  it('listFolders: soporta paginación y búsqueda por texto retornando metadata', async () => {
+    const mockFolder = {
+      id: validFolderId,
+      name: 'Reportes Fiscales',
+      type: FolderType.TABLE,
+      color: null,
+      isPrivate: false,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 8 },
+      user: { id: ownerUserId, username: 'owner' },
+    };
+
+    mock.method(foldersRepository, 'findFolders', async (filter: any) => {
+      assert.strictEqual(filter.search, 'Fiscales');
+      assert.strictEqual(filter.page, 1);
+      assert.strictEqual(filter.limit, 10);
+      return [mockFolder];
+    });
+
+    mock.method(foldersRepository, 'countFolders', async (filter: any) => {
+      assert.strictEqual(filter.search, 'Fiscales');
+      return 1;
+    });
+
+    const result = await foldersService.listFolders(userRequester, {
+      search: 'Fiscales',
+      page: 1,
+      limit: 10,
+    });
+
+    assert.strictEqual(result.total, 1);
+    assert.strictEqual(result.page, 1);
+    assert.strictEqual(result.limit, 10);
+    assert.strictEqual(result.totalPages, 1);
+    assert.ok(result.meta);
+    assert.strictEqual(result.folders.length, 1);
+    assert.strictEqual(result.folders[0].name, 'Reportes Fiscales');
+  });
 });

@@ -22,6 +22,7 @@
 | **Fase 10** | Evolución Integral del Módulo de Imágenes (Sharp, Miniaturas y Hot-Swap) | ✅ Completado |
 | **Fase 11** | Evolución Integral del Módulo de Tablas y Modularización Arquitectónica | ✅ Completado |
 | **Fase 12** | Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas | ✅ Completado |
+| **Fase 13** | Evolución Integral del Módulo de Carpetas (Edición, Protección de General y RBAC de Reasignación) | ✅ Completado |
 
 ---
 
@@ -557,6 +558,74 @@
   - [x] `12.7.3` Tests de integración en `tests/modules/users/users.routes.test.ts` y `tests/modules/folders/folders.routes.test.ts`.
   - [x] `12.7.4` Protocolo Obligatorio: `npm test` (0 fallos: 235 tests pasando), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
 
+
+---
+
+## 📁 FASE 13: Evolución Integral del Módulo de Carpetas (Edición, Protección de General y RBAC de Reasignación)
+
+### 🎯 Objetivos de la Fase
+> 1. **Mutación y Actualización Parcial (`PATCH /api/v1/folders/:id`):** Permitir renombrar (`name`), cambiar color (`color`) o alternar visibilidad (`isPrivate`) de una carpeta existente validando titularidad o rol `ADMIN` (impidiendo renombrar la carpeta del sistema `General`).
+> 2. **Protección Defensiva de la Carpeta del Sistema (`General`):** Blindar `DELETE /api/v1/folders/:id` para rechazar con `400 BAD_REQUEST` cualquier intento de eliminación de la carpeta predeterminada del sistema, garantizando siempre una carpeta raíz válida para subidas de archivos.
+> 3. **Alineación Total de RBAC en Reasignación de Recursos (`PATCH /api/v1/:resource/:id/folder`):** Integrar `foldersSharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT)` en `moveImageToFolder` y `moveTableToFolder` para que los colaboradores con permiso `EDIT` puedan reasignar archivos entre carpetas autorizadas sin ser bloqueados.
+> 4. **Paginación y Filtrado SQL Opcional (`GET /api/v1/folders`):** Añadir soporte para `page`, `limit` y búsqueda por texto `search` opcionales en el listado de carpetas, manteniendo retrocompatibilidad total (array completo si no se envían parámetros).
+> 5. **Modularidad y Límites Arquitectónicos (< 300 LOC):** Mantener todos los archivos del módulo estrictamente por debajo de 300 LOC.
+> 6. **Inmutabilidad y Documentación Simultánea (Reglas 1, 2 y 3):** Preservar el 100% de las 235 pruebas congeladas existentes, incorporar nuevas pruebas unitarias e integradas, y actualizar OpenAPI 3.1, `openapi.json`, `ENDPOINTS.md`, `RUTAS.md` y `docs/frontend-integration.md`.
+
+- [x] **13.1 Capa de Datos y Repositorio (`src/modules/folders/folders.repository.ts`)**
+  - [x] `13.1.1` Implementar método `updateFolder(id: string, data: { name?: string; color?: string | null; isPrivate?: boolean })` para actualizar propiedades de la carpeta en PostgreSQL.
+  - [x] `13.1.2` Actualizar `findFolders` para admitir búsqueda por texto `search?: string` (coincidencia insensible a mayúsculas en `name`) y paginación opcional `page?: number`, `limit?: number`.
+  - [x] `13.1.3` Implementar método `countFolders(filter)` para cálculo de metadatos de paginación si se especifican `page` o `limit`.
+
+- [x] **13.2 Capa de Negocio y Reglas de Seguridad (`src/modules/folders/folders.service.ts`)**
+  - [x] `13.2.1` Definir esquema Zod `updateFolderSchema`:
+    - `name`: string opcional limpio (2-60 caracteres).
+    - `color`: string opcional hex (`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`) o `null`.
+    - `isPrivate`: booleano opcional.
+    - Rechazar cuerpo vacío con al menos un campo a modificar.
+  - [x] `13.2.2` Implementar `updateFolder(id: string, rawInput: unknown, requester: RequesterContext)`:
+    - Validar formato de UUID.
+    - Verificar existencia de la carpeta (`404 NOT_FOUND`).
+    - Validar titularidad: solo el propietario (`folder.userId === requester.id`) o `ADMIN` pueden editarla (`403 FORBIDDEN` a colaboradores u otros usuarios).
+    - Bloqueo de sistema: rechazar con `400 BAD_REQUEST` cualquier intento de modificar el nombre si la carpeta es la default `'General'`.
+    - Actualizar en base de datos y devolver carpeta formateada con `myPermission`.
+  - [x] `13.2.3` Blindar `deleteFolder(id: string, requester: RequesterContext)`:
+    - Rechazar explícitamente con `400 BAD_REQUEST` (`CANNOT_DELETE_DEFAULT_FOLDER`) si `folder.name === 'General'`.
+  - [x] `13.2.4` Conectar guardia de permisos RBAC en reasignación:
+    - En `moveImageToFolder`: sustituir la verificación básica de privacidad por `await foldersSharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT)`.
+    - En `moveTableToFolder`: sustituir la verificación básica de privacidad por `await foldersSharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT)`.
+  - [x] `13.2.5` Soportar paginación y búsqueda en `listFolders`:
+    - Si se reciben `page` o `limit`, retornar `{ folders, total, page, limit, totalPages, meta: { ... } }`.
+    - Si no se reciben parámetros de paginación, mantener `{ folders, total }` garantizando 100% de retrocompatibilidad con los tests existentes.
+
+- [x] **13.3 Esquemas OpenAPI y Rutas HTTP Fastify (`src/modules/folders/`)**
+  - [x] `13.3.1` En `folders.schemas.ts`:
+    - Definir `updateFolderRouteSchema` para `PATCH /api/v1/folders/:id` con esquemas de entrada, respuestas 200, 400, 401, 403 y 404 RFC 7807.
+    - Actualizar `listFoldersRouteSchema` incorporando query params opcionales `page`, `limit` y `search`.
+  - [x] `13.3.2` En `folders.routes.ts`:
+    - Registrar ruta `PATCH /api/v1/folders/:id` protegida con `authenticateUserOrApiKey`.
+    - Actualizar `GET /api/v1/folders` extrayendo `page`, `limit` y `search` del query string.
+
+- [x] **13.4 Documentación Simultánea y Sincronización de Contratos (Regla 3)**
+  - [x] `13.4.1` Actualizar catálogos en `ENDPOINTS.md` y `RUTAS.md` con el nuevo endpoint `PATCH /api/v1/folders/:id`, parámetros de búsqueda/paginación y regla de protección de `General`.
+  - [x] `13.4.2` Actualizar `docs/frontend-integration.md` con ejemplos de renombrado/edición de carpetas y consumo con filtros.
+  - [x] `13.4.3` Regenerar `openapi.json` con `npm run openapi:export`.
+
+- [x] **13.5 Cobertura de Pruebas Automatizadas y Protocolo Obligatorio (Reglas 1 y 2)**
+  - [x] `13.5.1` Pruebas unitarias en `tests/modules/folders/folders.service.test.ts`:
+    - `updateFolder`: actualización exitosa de nombre, color y privacidad por el dueño o ADMIN.
+    - `updateFolder`: rechazo 403 a usuarios ajenos o colaboradores.
+    - `updateFolder`: rechazo 400 si se intenta renombrar la carpeta `General`.
+    - `updateFolder`: rechazo 400 con cuerpo vacío o colores hex inválidos.
+    - `deleteFolder`: rechazo 400 al intentar eliminar la carpeta `General`.
+    - `moveImageToFolder` / `moveTableToFolder`: verificación de que colaboradores con permiso `EDIT` pueden mover archivos a la carpeta compartida, y rechazo 403 si solo tienen `READ`.
+  - [x] `13.5.2` Pruebas de integración HTTP en `tests/modules/folders/folders.routes.test.ts`:
+    - `PATCH /api/v1/folders/:id`: 200 al editar datos, 400 con body inválido, 403 usuario no autorizado, 404 no encontrado.
+  - [x] `13.5.3` Protocolo Obligatorio:
+    - Ejecutar `npm test` verificando 0 fallos preservando los 235 tests congelados previos (246 tests en total).
+    - Ejecutar `npm run build` verificando compilación TypeScript limpia (`tsc`) con código 0.
+    - Ejecutar `npm audit` confirmando 0 vulnerabilidades.
+    - Verificar que todos los archivos del repositorio permanezcan estrictamente `< 300 LOC`.
+
 ---
 
 ## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)
@@ -565,19 +634,24 @@
 > **Umbrales:** Etapa 1 (>300 LOC / I/O técnico) · Etapa 2 (>450 LOC / >6 métodos) · Etapa 3 (Clean Arch / Puertos) · Etapa 4 (Workers asíncronos >25-30MB).
 
 ### 🟢 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
+- [x] **`src/modules/folders/folders.service.ts`**: 291 líneas.
 - [x] **`src/modules/users/users.schemas.ts`**: 274 líneas.
 - [x] **`src/modules/tables/tables.service.ts`**: 260 líneas.
-- [x] **`src/modules/folders/folders.schemas.ts`**: 256 líneas.
 - [x] **`src/modules/images/images.service.ts`**: 251 líneas.
-- [x] **`src/modules/folders/folders.service.ts`**: 248 líneas.
+- [x] **`src/modules/folders/folders.schemas.ts`**: 246 líneas.
 - [x] **`src/modules/tables/tables.parser.ts`**: 238 líneas.
 - [x] **`src/modules/images/images.schemas.ts`**: 233 líneas.
 - [x] **`src/modules/folders/folders.shares.routes.ts`**: 217 líneas.
+- [x] **`src/modules/folders/folders.repository.ts`**: 216 líneas.
 - [x] **`src/modules/tables/tables.schemas.ts`**: 199 líneas.
 - [x] **`src/modules/users/users.routes.ts`**: 186 líneas.
 - [x] **`src/modules/users/users.service.ts`**: 181 líneas.
+- [x] **`src/app.ts`**: 169 líneas.
+- [x] **`src/modules/images/images.routes.ts`**: 145 líneas.
+- [x] **`src/modules/folders/folders.routes.ts`**: 129 líneas.
 - [x] **`src/modules/folders/folders.shares.service.ts`**: 107 líneas.
-- [x] **`src/modules/folders/folders.routes.ts`**: 105 líneas.
+- [x] **`src/modules/folders/folders.move.schemas.ts`**: 92 líneas.
+- [x] **`src/modules/folders/folders.validation.ts`**: 54 líneas.
 
 
 

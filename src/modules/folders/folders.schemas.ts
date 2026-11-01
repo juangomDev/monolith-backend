@@ -7,6 +7,11 @@ import {
 } from '../../shared/schemas.js';
 import type { RequesterContext } from './folders.service.js';
 
+export {
+  moveImageToFolderRouteSchema,
+  moveTableToFolderRouteSchema,
+} from './folders.move.schemas.js';
+
 export const passValidator = () => () => true;
 
 export const folderItemSchema = {
@@ -26,6 +31,7 @@ export const folderItemSchema = {
         username: { type: 'string', example: 'juan_perez' },
       },
     },
+    myPermission: { type: 'string', enum: ['ADMIN', 'EDIT', 'READ'], example: 'EDIT' },
     createdAt: { type: 'string', format: 'date-time' },
   },
   required: ['id', 'name', 'type', 'isPrivate', 'itemCount', 'userId', 'createdAt'],
@@ -48,7 +54,7 @@ export const listFoldersRouteSchema: FastifySchema = {
   tags: ['Folders'],
   summary: 'Listar carpetas respetando reglas de privacidad',
   description:
-    'Retorna las carpetas visibles para el usuario. Usuarios comunes ven carpetas públicas y privadas propias; ADMIN ve todas. Permite filtrar con ?type=IMAGE|TABLE.',
+    'Retorna las carpetas visibles para el usuario. Usuarios comunes ven carpetas públicas y privadas propias; ADMIN ve todas. Permite filtrar con ?type=IMAGE|TABLE, buscar por texto con ?search y paginar con ?page y ?limit.',
   security: securityDualAuth,
   querystring: {
     type: 'object',
@@ -57,6 +63,21 @@ export const listFoldersRouteSchema: FastifySchema = {
         type: 'string',
         enum: ['IMAGE', 'TABLE'],
         description: 'Filtrar por tipo de contenido',
+      },
+      search: {
+        type: 'string',
+        description: 'Búsqueda por nombre de carpeta (insensible a mayúsculas)',
+      },
+      page: {
+        type: 'integer',
+        minimum: 1,
+        description: 'Número de página para paginación',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        description: 'Cantidad de carpetas por página',
       },
     },
   },
@@ -70,6 +91,19 @@ export const listFoldersRouteSchema: FastifySchema = {
           items: folderItemSchema,
         },
         total: { type: 'integer', example: 5 },
+        page: { type: 'integer', example: 1 },
+        limit: { type: 'integer', example: 50 },
+        totalPages: { type: 'integer', example: 1 },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            hasNext: { type: 'boolean' },
+          },
+        },
       },
       required: ['folders', 'total'],
     },
@@ -116,6 +150,53 @@ export const createFolderRouteSchema: FastifySchema = {
   },
 };
 
+export const updateFolderRouteSchema: FastifySchema = {
+  tags: ['Folders'],
+  summary: 'Actualizar propiedades de una carpeta (renombrar, color o privacidad)',
+  description:
+    'Modifica el nombre, color identificador o visibilidad privada de una carpeta. Requiere ser el propietario o ADMIN. No se permite renombrar la carpeta del sistema General.',
+  security: securityDualAuth,
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string', format: 'uuid', description: 'UUID de la carpeta' },
+    },
+  },
+  body: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 2, maxLength: 60, example: 'Galería Actualizada' },
+      color: {
+        type: 'string',
+        nullable: true,
+        pattern: '^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$',
+        example: '#10b981',
+        description: 'Código hexadecimal del color de la carpeta o null para removerlo',
+      },
+      isPrivate: {
+        type: 'boolean',
+        example: true,
+        description: 'Modificar visibilidad privada',
+      },
+    },
+  },
+  response: {
+    200: {
+      description: 'Carpeta actualizada exitosamente',
+      type: 'object',
+      properties: {
+        folder: folderItemSchema,
+      },
+      required: ['folder'],
+    },
+    400: standardErrorResponses[400],
+    401: standardErrorResponses[401],
+    403: standardErrorResponses[403],
+    404: standardErrorResponses[404],
+  },
+};
+
 export const getFolderByIdRouteSchema: FastifySchema = {
   tags: ['Folders'],
   summary: 'Obtener detalle de una carpeta específica',
@@ -148,7 +229,7 @@ export const deleteFolderRouteSchema: FastifySchema = {
   tags: ['Folders'],
   summary: 'Eliminar carpeta en cascada física y lógica',
   description:
-    'Elimina la carpeta de PostgreSQL y destruye físicamente en disco todos los archivos (imágenes o tablas) contenidos en ella. Requiere ser propietario o ADMIN.',
+    'Elimina la carpeta de PostgreSQL y destruye físicamente en disco todos los archivos (imágenes o tablas) contenidos en ella. Requiere ser propietario o ADMIN. Prohibido eliminar la carpeta General.',
   security: securityDualAuth,
   params: {
     type: 'object',
@@ -166,97 +247,6 @@ export const deleteFolderRouteSchema: FastifySchema = {
         deletedCount: { type: 'integer', example: 3 },
       },
       required: ['message', 'deletedCount'],
-    },
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
-  },
-};
-
-export const moveImageToFolderRouteSchema: FastifySchema = {
-  tags: ['Folders'],
-  summary: 'Mover imagen a otra carpeta',
-  description:
-    'Reasigna una imagen a una carpeta de tipo IMAGE. Valida compatibilidad de tipo y permisos sobre la carpeta destino.',
-  security: securityDualAuth,
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string', format: 'uuid', description: 'UUID de la imagen' },
-    },
-  },
-  body: {
-    type: 'object',
-    required: ['folderId'],
-    properties: {
-      folderId: { type: 'string', format: 'uuid', description: 'UUID de la carpeta destino de tipo IMAGE' },
-    },
-  },
-  response: {
-    200: {
-      description: 'Imagen reasignada exitosamente',
-      type: 'object',
-      properties: {
-        image: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            shortCode: { type: 'string', example: 'abc1234567' },
-            folderId: { type: 'string', format: 'uuid' },
-            originalName: { type: 'string' },
-            mimeType: { type: 'string' },
-            sizeBytes: { type: 'integer' },
-          },
-        },
-      },
-      required: ['image'],
-    },
-    400: standardErrorResponses[400],
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
-  },
-};
-
-export const moveTableToFolderRouteSchema: FastifySchema = {
-  tags: ['Folders'],
-  summary: 'Mover tabla (dataset) a otra carpeta',
-  description:
-    'Reasigna una tabla a una carpeta de tipo TABLE. Valida compatibilidad de tipo y permisos sobre la carpeta destino.',
-  security: securityDualAuth,
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string', format: 'uuid', description: 'UUID de la tabla' },
-    },
-  },
-  body: {
-    type: 'object',
-    required: ['folderId'],
-    properties: {
-      folderId: { type: 'string', format: 'uuid', description: 'UUID de la carpeta destino de tipo TABLE' },
-    },
-  },
-  response: {
-    200: {
-      description: 'Tabla reasignada exitosamente',
-      type: 'object',
-      properties: {
-        table: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            shortCode: { type: 'string', example: 'tab1234567' },
-            folderId: { type: 'string', format: 'uuid' },
-            tableName: { type: 'string' },
-            rowCount: { type: 'integer' },
-            sizeBytes: { type: 'integer' },
-          },
-        },
-      },
-      required: ['table'],
     },
     400: standardErrorResponses[400],
     401: standardErrorResponses[401],

@@ -7,6 +7,7 @@ import {
   extractRequester,
   listFoldersRouteSchema,
   createFolderRouteSchema,
+  updateFolderRouteSchema,
   getFolderByIdRouteSchema,
   deleteFolderRouteSchema,
   moveImageToFolderRouteSchema,
@@ -24,9 +25,17 @@ export const foldersRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const requester = await extractRequester(request);
-      const { type } = request.query as { type?: FolderType };
+      const query = (request.query as any) || {};
+      const { type, search } = query as { type?: FolderType; search?: string };
+      const page = query.page !== undefined ? parseInt(String(query.page), 10) : undefined;
+      const limit = query.limit !== undefined ? parseInt(String(query.limit), 10) : undefined;
 
-      const result = await foldersService.listFolders(requester, type);
+      const result = await foldersService.listFolders(requester, {
+        type,
+        search,
+        page: page !== undefined && !isNaN(page) ? page : undefined,
+        limit: limit !== undefined && !isNaN(limit) ? limit : undefined,
+      });
       return reply.status(200).send(result);
     }
   );
@@ -43,6 +52,23 @@ export const foldersRoutes: FastifyPluginAsync = async (fastify) => {
       const requester = await extractRequester(request);
       const folder = await foldersService.createFolder(request.body, requester);
       return reply.status(201).send({ folder });
+    }
+  );
+
+  // PATCH /api/v1/folders/:id: Actualizar carpeta (renombrar, color o privacidad)
+  fastify.patch(
+    '/api/v1/folders/:id',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: updateFolderRouteSchema,
+    },
+    async (request, reply) => {
+      const requester = await extractRequester(request);
+      const { id } = request.params as { id: string };
+
+      const folder = await foldersService.updateFolder(id, request.body, requester);
+      return reply.status(200).send({ folder });
     }
   );
 

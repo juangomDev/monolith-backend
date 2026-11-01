@@ -99,18 +99,81 @@ await fetch('http://localhost:3000/api/v1/auth/logout', {
 
 ---
 
-## 4. 📁 Carpetas y Reglas de Privacidad
+## 4. 📁 Carpetas, Edición y Reglas de Privacidad (Fase 13)
 
-1. **Cero Archivos Huérfanos:**
-   - Si al subir una imagen (`POST /api/v1/images`) o tabla (`POST /api/v1/tables`) no se envía `folderId`, el backend lo asigna automáticamente a la carpeta `'General'` del usuario.
-2. **Carpetas Privadas (`isPrivate: true`):**
-   - Solo el creador y el usuario con rol `ADMIN` pueden ver la carpeta y sus archivos asociados.
-   - Cualquier intento de acceso o movimiento no autorizado responderá `403 FORBIDDEN`.
-3. **Eliminación en Cascada (`DELETE /api/v1/folders/:id`):**
-   - Al eliminar una carpeta, se borran automáticamente sus registros en base de datos y todos los archivos físicos en disco.
-4. **Reasignación de Archivos:**
-   - `PATCH /api/v1/images/:id/folder` con `{ "folderId": "uuid" }` (debe ser carpeta tipo `IMAGE`).
-   - `PATCH /api/v1/tables/:id/folder` con `{ "folderId": "uuid" }` (debe ser carpeta tipo `TABLE`).
+### A. Cero Archivos Huérfanos y Protección de 'General'
+1. **Asignación Automática:**
+   - Si al subir una imagen (`POST /api/v1/images`) o tabla (`POST /api/v1/tables`) no se envía `folderId`, el backend lo asigna automáticamente a la carpeta de sistema `'General'` del usuario.
+2. **Inmutabilidad de 'General':**
+   - **Prohibido Renombrar:** Cualquier intento de cambiar el nombre de la carpeta `'General'` vía `PATCH /api/v1/folders/:id` es rechazado con `400 BAD_REQUEST` (`"No se puede renombrar la carpeta del sistema 'General'"`).
+   - **Prohibido Eliminar:** La eliminación vía `DELETE /api/v1/folders/:id` de la carpeta `'General'` está bloqueada con `400 BAD_REQUEST` (`"No se puede eliminar la carpeta del sistema 'General'"`).
+   - *Nota:* Se permite modificar su `color` o `isPrivate` sin restricciones.
+
+### B. Edición de Carpetas (`PATCH /api/v1/folders/:id`)
+Permite al propietario de la carpeta o a un `ADMIN` actualizar sus metadatos:
+- **Body:** Al menos uno de los siguientes campos:
+  ```json
+  {
+    "name": "Nuevas Ilustraciones 2026",
+    "color": "#6366f1",
+    "isPrivate": true
+  }
+  ```
+- **Control de Acceso:** Usuarios ajenos o colaboradores sin permisos reciben `403 FORBIDDEN`.
+- **Respuesta 200:**
+  ```json
+  {
+    "folder": {
+      "id": "uuid",
+      "name": "Nuevas Ilustraciones 2026",
+      "type": "IMAGE",
+      "color": "#6366f1",
+      "isPrivate": true,
+      "userId": "uuid-creador",
+      "createdAt": "2026-11-01T...",
+      "updatedAt": "2026-11-01T..."
+    }
+  }
+  ```
+
+### C. Listado, Búsqueda y Paginación (`GET /api/v1/folders`)
+Soporta filtrado por tipo, búsqueda insensible a mayúsculas/minúsculas y paginación estructurada:
+- **Query Params:**
+  - `type`: `'IMAGE' | 'TABLE'` (opcional)
+  - `search`: Texto a buscar en el nombre de la carpeta (opcional, insensible a mayúsculas)
+  - `page`: Número de página `>= 1` (opcional)
+  - `limit`: Cantidad por página `1..100` (opcional, por defecto 20 si se envía `page`)
+
+```typescript
+// Ejemplo de búsqueda paginada en React / Next.js / Vite:
+const query = new URLSearchParams({
+  type: 'IMAGE',
+  search: 'diseño',
+  page: '1',
+  limit: '15'
+});
+
+const res = await fetch(`http://localhost:3000/api/v1/folders?${query.toString()}`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+const { folders, total, page, limit, totalPages, meta } = await res.json();
+// meta: { page: 1, limit: 15, total: 3, totalPages: 1, hasNext: false }
+```
+
+### D. Eliminación en Cascada (`DELETE /api/v1/folders/:id`)
+- Al eliminar una carpeta (salvo `'General'`), se destruyen en cascada todos sus registros asociados en PostgreSQL (imágenes o tablas) y sus archivos físicos/miniaturas/artefactos en disco.
+- Requiere ser propietario o `ADMIN`.
+
+### E. Reasignación de Recursos con RBAC Granular
+Permite transferir una imagen o tabla a otra carpeta del mismo tipo:
+- `PATCH /api/v1/images/:id/folder` con `{ "folderId": "uuid" }`
+- `PATCH /api/v1/tables/:id/folder` con `{ "folderId": "uuid" }`
+- **Reglas de Seguridad y Validación:**
+  1. **Tipo Coincidente:** La carpeta destino debe ser del mismo tipo (`IMAGE` para imágenes, `TABLE` para tablas).
+  2. **Validación RBAC en Destino:**
+     - Si el solicitante es el dueño de la carpeta destino o `ADMIN`, la transferencia se autoriza inmediatamente.
+     - Si es un `COLLABORATOR`, se verifica que la carpeta le haya sido compartida con permiso `EDIT`. Si solo posee `READ` o no es miembro, el backend rechaza con `403 FORBIDDEN`.
+     - Si la carpeta destino es privada y no pertenece al usuario ni tiene rol superior, se rechaza con `403 FORBIDDEN`.
 
 ---
 

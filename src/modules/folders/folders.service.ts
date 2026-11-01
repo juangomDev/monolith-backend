@@ -1,43 +1,33 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { z } from 'zod';
-import { FolderType, Role, type Folder } from '@prisma/client';
+import { FolderType, Role, FolderPermission, type Folder } from '@prisma/client';
 import { foldersRepository, type FoldersRepository, type FolderWithDetails } from './folders.repository.js';
+import { foldersSharesService, type FoldersSharesService } from './folders.shares.service.js';
 import { AppError } from '../../shared/errors.js';
+import {
+  UUID_REGEX,
+  createFolderSchema,
+  updateFolderSchema,
+  moveResourceSchema,
+  type RequesterContext,
+  type FormattedFolder,
+  type ListFoldersQueryOptions,
+} from './folders.validation.js';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export const createFolderSchema = z.object({
-  name: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres').max(60, 'El nombre no puede exceder 60 caracteres'),
-  type: z.enum(['IMAGE', 'TABLE']),
-  color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'El color debe ser un código hexadecimal válido (ej. #3b82f6)').optional().nullable(),
-  isPrivate: z.boolean().optional().default(false),
-});
-
-export const moveResourceSchema = z.object({
-  folderId: z.string().uuid('El folderId debe ser un UUID válido'),
-});
-
-export interface RequesterContext {
-  id: string;
-  role: Role;
-}
-
-export interface FormattedFolder {
-  id: string;
-  name: string;
-  type: FolderType;
-  color: string | null;
-  isPrivate: boolean;
-  itemCount: number;
-  userId: string;
-  owner?: { id: string; username: string };
-  myPermission?: string;
-  createdAt: Date;
-}
+export {
+  createFolderSchema,
+  updateFolderSchema,
+  moveResourceSchema,
+  type RequesterContext,
+  type FormattedFolder,
+  type ListFoldersQueryOptions,
+};
 
 export class FoldersService {
-  constructor(private readonly repo: FoldersRepository = foldersRepository) {}
+  constructor(
+    private readonly repo: FoldersRepository = foldersRepository,
+    private readonly sharesService: FoldersSharesService = foldersSharesService
+  ) {}
 
   private formatFolder(
     folder: FolderWithDetails | (Folder & { _count?: { images: number; tables: number }; user?: { id: string; username: string }; members?: { permission: string }[] }),
@@ -104,16 +94,91 @@ export class FoldersService {
     };
   }
 
-  async listFolders(requester: RequesterContext, type?: FolderType): Promise<{ folders: FormattedFolder[]; total: number }> {
+  async updateFolder(id: string, rawInput: unknown, requester: RequesterContext): Promise<FormattedFolder> {
+    if (!UUID_REGEX.test(id)) {
+      throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
+    }
+
+    const parseResult = updateFolderSchema.safeParse(rawInput);
+    if (!parseResult.success) {
+      throw new AppError(
+        400,
+        parseResult.error.issues[0]?.message || 'Datos de actualización inválidos',
+        'BAD_REQUEST',
+        parseResult.error.issues.map((i) => ({ name: i.path.join('.'), reason: i.message }))
+      );
+    }
+
+    const folder = await this.repo.findFolderById(id);
+    if (!folder) {
+      throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
+    }
+
+    if (requester.role !== Role.ADMIN && folder.userId !== requester.id) {
+      throw new AppError(403, 'No tienes permiso para modificar esta carpeta', 'FORBIDDEN');
+    }
+
+    if (folder.name === 'General' && parseResult.data.name && parseResult.data.name !== 'General') {
+      throw new AppError(400, 'No se permite cambiar el nombre de la carpeta General del sistema', 'BAD_REQUEST');
+    }
+
+    const updated = await this.repo.updateFolder(id, parseResult.data);
+    return this.formatFolder(updated, requester);
+  }
+
+  async listFolders(
+    requester: RequesterContext,
+    optionsOrType?: FolderType | ListFoldersQueryOptions
+  ) {
     const isAdmin = requester.role === Role.ADMIN;
-    const folders = await this.repo.findFolders({
+    let type: FolderType | undefined;
+    let search: string | undefined;
+    let page: number | undefined;
+    let limit: number | undefined;
+
+    if (typeof optionsOrType === 'string') {
+      type = optionsOrType;
+    } else if (typeof optionsOrType === 'object' && optionsOrType !== null) {
+      type = optionsOrType.type;
+      search = optionsOrType.search;
+      page = optionsOrType.page && optionsOrType.page > 0 ? optionsOrType.page : undefined;
+      limit = optionsOrType.limit && optionsOrType.limit > 0 ? optionsOrType.limit : undefined;
+    }
+
+    const filter = {
       type,
+      search,
+      page,
+      limit,
       userId: requester.id,
       isAdmin,
       role: requester.role,
-    });
+    };
 
+    const folders = await this.repo.findFolders(filter);
     const formatted = folders.map((f) => this.formatFolder(f, requester));
+
+    if (page !== undefined || limit !== undefined) {
+      const activeLimit = limit ?? 50;
+      const activePage = page ?? 1;
+      const total = await this.repo.countFolders(filter);
+      const totalPages = Math.ceil(total / activeLimit) || 1;
+      return {
+        folders: formatted,
+        total,
+        page: activePage,
+        limit: activeLimit,
+        totalPages,
+        meta: {
+          page: activePage,
+          limit: activeLimit,
+          total,
+          totalPages,
+          hasNext: activePage < totalPages,
+        },
+      };
+    }
+
     return {
       folders: formatted,
       total: formatted.length,
@@ -130,12 +195,11 @@ export class FoldersService {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    // Regla de privacidad: si es privada, solo el dueño o ADMIN pueden verla
     if (folder.isPrivate && requester.role !== Role.ADMIN && folder.userId !== requester.id) {
       throw new AppError(403, 'Acceso denegado a esta carpeta privada', 'FORBIDDEN');
     }
 
-    return this.formatFolder(folder);
+    return this.formatFolder(folder, requester);
   }
 
   async deleteFolder(id: string, requester: RequesterContext): Promise<{ message: string; deletedCount: number }> {
@@ -148,7 +212,10 @@ export class FoldersService {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    // Regla de privacidad: Solo el propietario o ADMIN pueden borrar
+    if (folder.name === 'General') {
+      throw new AppError(400, 'No se permite eliminar la carpeta General del sistema', 'BAD_REQUEST');
+    }
+
     if (requester.role !== Role.ADMIN && folder.userId !== requester.id) {
       throw new AppError(403, 'No tienes permiso para eliminar esta carpeta', 'FORBIDDEN');
     }
@@ -158,7 +225,6 @@ export class FoldersService {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    // Eliminación en cascada física de archivos en disco (incluyendo .data.json.gz de tablas)
     await Promise.allSettled(
       deleteResult.storagePaths.flatMap((filePath) => {
         const paths = [filePath];
@@ -183,39 +249,31 @@ export class FoldersService {
 
     const parseResult = moveResourceSchema.safeParse(rawInput);
     if (!parseResult.success) {
-      throw new AppError(
-        400,
-        parseResult.error.issues[0]?.message || 'El folderId destino es inválido',
-        'BAD_REQUEST'
-      );
+      throw new AppError(400, parseResult.error.issues[0]?.message || 'El folderId destino es inválido', 'BAD_REQUEST');
     }
 
     const { folderId } = parseResult.data;
 
-    // Verificar que la imagen existe
     const image = await this.repo.findImageById(imageId);
     if (!image) {
       throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
     }
 
-    // Verificar que la carpeta destino existe
     const targetFolder = await this.repo.findFolderById(folderId);
     if (!targetFolder) {
       throw new AppError(404, 'Carpeta destino no encontrada', 'NOT_FOUND');
     }
 
-    // Validar tipo cruzado
     if (targetFolder.type !== FolderType.IMAGE) {
-      throw new AppError(
-        400,
-        "Incompatibilidad de tipos: Las imágenes solo pueden moverse a carpetas de tipo 'IMAGE'",
-        'INVALID_FOLDER_TYPE'
-      );
+      throw new AppError(400, "Incompatibilidad de tipos: Las imágenes solo pueden moverse a carpetas de tipo 'IMAGE'", 'INVALID_FOLDER_TYPE');
     }
 
-    // Validar privacidad de la carpeta destino
-    if (targetFolder.isPrivate && requester.role !== Role.ADMIN && targetFolder.userId !== requester.id) {
+    if (requester.role === Role.ADMIN || targetFolder.userId === requester.id) {
+      // Propietario o ADMIN tienen acceso de edición directo
+    } else if (targetFolder.isPrivate && requester.role !== Role.COLLABORATOR) {
       throw new AppError(403, 'No tienes permiso para mover archivos a esta carpeta privada', 'FORBIDDEN');
+    } else {
+      await this.sharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT);
     }
 
     const updated = await this.repo.moveImageToFolder(imageId, folderId);
@@ -236,39 +294,31 @@ export class FoldersService {
 
     const parseResult = moveResourceSchema.safeParse(rawInput);
     if (!parseResult.success) {
-      throw new AppError(
-        400,
-        parseResult.error.issues[0]?.message || 'El folderId destino es inválido',
-        'BAD_REQUEST'
-      );
+      throw new AppError(400, parseResult.error.issues[0]?.message || 'El folderId destino es inválido', 'BAD_REQUEST');
     }
 
     const { folderId } = parseResult.data;
 
-    // Verificar que la tabla existe
     const table = await this.repo.findTableById(tableId);
     if (!table) {
       throw new AppError(404, 'Tabla no encontrada', 'NOT_FOUND');
     }
 
-    // Verificar que la carpeta destino existe
     const targetFolder = await this.repo.findFolderById(folderId);
     if (!targetFolder) {
       throw new AppError(404, 'Carpeta destino no encontrada', 'NOT_FOUND');
     }
 
-    // Validar tipo cruzado
     if (targetFolder.type !== FolderType.TABLE) {
-      throw new AppError(
-        400,
-        "Incompatibilidad de tipos: Las tablas solo pueden moverse a carpetas de tipo 'TABLE'",
-        'INVALID_FOLDER_TYPE'
-      );
+      throw new AppError(400, "Incompatibilidad de tipos: Las tablas solo pueden moverse a carpetas de tipo 'TABLE'", 'INVALID_FOLDER_TYPE');
     }
 
-    // Validar privacidad de la carpeta destino
-    if (targetFolder.isPrivate && requester.role !== Role.ADMIN && targetFolder.userId !== requester.id) {
+    if (requester.role === Role.ADMIN || targetFolder.userId === requester.id) {
+      // Propietario o ADMIN tienen acceso de edición directo
+    } else if (targetFolder.isPrivate && requester.role !== Role.COLLABORATOR) {
       throw new AppError(403, 'No tienes permiso para mover archivos a esta carpeta privada', 'FORBIDDEN');
+    } else {
+      await this.sharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT);
     }
 
     const updated = await this.repo.moveTableToFolder(tableId, folderId);

@@ -9,11 +9,20 @@ export interface CreateFolderInput {
   userId: string;
 }
 
+export interface UpdateFolderInput {
+  name?: string;
+  color?: string | null;
+  isPrivate?: boolean;
+}
+
 export interface FindFoldersFilter {
   type?: FolderType;
   userId?: string;
   isAdmin: boolean;
   role?: Role;
+  search?: string;
+  page?: number;
+  limit?: number;
 }
 
 export type FolderWithDetails = Folder & {
@@ -34,23 +43,15 @@ export interface DeletedFolderResult {
 }
 
 export class FoldersRepository {
-  async createFolder(data: CreateFolderInput): Promise<Folder> {
-    return prisma.folder.create({
-      data: {
-        name: data.name,
-        type: data.type,
-        color: data.color,
-        isPrivate: data.isPrivate ?? false,
-        userId: data.userId,
-      },
-    });
-  }
-
-  async findFolders(filter: FindFoldersFilter): Promise<FolderWithDetails[]> {
+  private buildWhereClause(filter: FindFoldersFilter): Prisma.FolderWhereInput {
     const where: Prisma.FolderWhereInput = {};
 
     if (filter.type) {
       where.type = filter.type;
+    }
+
+    if (filter.search && filter.search.trim().length > 0) {
+      where.name = { contains: filter.search.trim(), mode: 'insensitive' };
     }
 
     if (!filter.isAdmin) {
@@ -65,8 +66,55 @@ export class FoldersRepository {
       }
     }
 
+    return where;
+  }
+
+  async createFolder(data: CreateFolderInput): Promise<Folder> {
+    return prisma.folder.create({
+      data: {
+        name: data.name,
+        type: data.type,
+        color: data.color,
+        isPrivate: data.isPrivate ?? false,
+        userId: data.userId,
+      },
+    });
+  }
+
+  async updateFolder(id: string, data: UpdateFolderInput): Promise<FolderWithDetails> {
+    return prisma.folder.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.color !== undefined ? { color: data.color } : {}),
+        ...(data.isPrivate !== undefined ? { isPrivate: data.isPrivate } : {}),
+      },
+      include: {
+        _count: {
+          select: {
+            images: true,
+            tables: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+    });
+  }
+
+  async findFolders(filter: FindFoldersFilter): Promise<FolderWithDetails[]> {
+    const where = this.buildWhereClause(filter);
+    const skip = filter.page && filter.limit ? (filter.page - 1) * filter.limit : undefined;
+    const take = filter.limit;
+
     return prisma.folder.findMany({
       where,
+      skip,
+      take,
       include: {
         _count: {
           select: {
@@ -89,6 +137,11 @@ export class FoldersRepository {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async countFolders(filter: FindFoldersFilter): Promise<number> {
+    const where = this.buildWhereClause(filter);
+    return prisma.folder.count({ where });
   }
 
   async findFolderById(id: string): Promise<FolderWithDetails | null> {
