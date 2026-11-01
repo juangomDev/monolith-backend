@@ -13,7 +13,9 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "openapi:export": "tsx --env-file=.env src/scripts/export-openapi.ts"
+    "openapi:export": "tsx --env-file=.env src/scripts/export-openapi.ts",
+    "test:smoke": "tsx --env-file=.env src/scripts/smoke-test.ts",
+    "test:smoke:local": "tsx --env-file=.env src/scripts/smoke-test.ts --local"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
