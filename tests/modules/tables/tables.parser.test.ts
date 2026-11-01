@@ -10,6 +10,8 @@ import {
   readXlsxRows,
   parseTableMetadata,
   readTableRows,
+  extractRichTableData,
+  sanitizeFormulaCell,
 } from '../../../src/modules/tables/tables.parser.js';
 import { AppError } from '../../../src/shared/errors.js';
 
@@ -99,5 +101,52 @@ describe('Módulo Tablas: Parser CSV y XLSX', () => {
 
     const xlsxResult = await readTableRows(sampleXlsxPath, '.xlsx', 1, 10);
     assert.strictEqual(xlsxResult.rows.length, 3);
+  });
+
+  it('sanitizeFormulaCell: debe escapar caracteres de fórmula y preservar texto seguro', () => {
+    assert.strictEqual(sanitizeFormulaCell('=SUM(A1:A5)'), "'=SUM(A1:A5)");
+    assert.strictEqual(sanitizeFormulaCell('+100'), "'+100");
+    assert.strictEqual(sanitizeFormulaCell('-50'), "'-50");
+    assert.strictEqual(sanitizeFormulaCell('@cmd'), "'@cmd");
+    assert.strictEqual(sanitizeFormulaCell('Texto Normal'), 'Texto Normal');
+    assert.strictEqual(sanitizeFormulaCell(1234), 1234);
+    assert.strictEqual(sanitizeFormulaCell(null), null);
+  });
+
+  it('extractRichTableData: debe extraer datos completos de archivo CSV', async () => {
+    const result = await extractRichTableData(sampleCsvPath, '.csv');
+    assert.deepStrictEqual(result.columns, ['id', 'nombre', 'precio']);
+    assert.strictEqual(result.rowCount, 5);
+    assert.strictEqual(result.rows.length, 5);
+    assert.deepStrictEqual(result.merges, []);
+    assert.deepStrictEqual(result.headers, [['id', 'nombre', 'precio']]);
+  });
+
+  it('extractRichTableData: debe extraer celdas combinadas y estilos de celda en Excel', async () => {
+    const richXlsxPath = path.join(tmpDir, 'styled.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Reporte');
+
+    sheet.addRow(['Categoria', 'Producto', 'Total']);
+    const row2 = sheet.addRow(['Frutas', 'Manzanas', 500]);
+
+    // Aplicar estilo de color a una celda
+    const cellFrutas = row2.getCell(1);
+    cellFrutas.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFF0000' }, // Rojo
+    };
+
+    // Combinar celdas para probar merges
+    sheet.mergeCells('A1:B1');
+    await workbook.xlsx.writeFile(richXlsxPath);
+
+    const result = await extractRichTableData(richXlsxPath, '.xlsx');
+    assert.ok(result.merges.includes('A1:B1'));
+    assert.strictEqual(result.rowCount, 1);
+    assert.strictEqual(result.rows[0].Categoria, 'Frutas');
+    assert.ok(result.cellStyles);
+    assert.ok(result.cellStyles['0']?.Categoria?.bg?.includes('#FF0000'));
   });
 });

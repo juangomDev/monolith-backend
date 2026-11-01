@@ -17,8 +17,8 @@ describe('Módulo Carpetas: FoldersService', () => {
   const otherUserId = 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee';
   const validFileId = '33333333-4444-4555-8666-777777777777';
 
-  const userRequester = { id: ownerUserId, role: Role.USER };
-  const otherUserRequester = { id: otherUserId, role: Role.USER };
+  const userRequester = { id: ownerUserId, role: Role.MANAGER };
+  const otherUserRequester = { id: otherUserId, role: Role.MANAGER };
   const adminRequester = { id: otherUserId, role: Role.ADMIN };
 
   // ==========================================

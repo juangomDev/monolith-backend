@@ -217,3 +217,154 @@ const { images, meta, total } = await res.json();
 // meta: { page: 1, limit: 24, total: 100, totalPages: 5, hasNext: true }
 ```
 
+---
+
+## 7. 📊 Gestión Avanzada de Tablas y Doble Artefacto (Fase 11)
+
+### A. Patrón de Doble Artefacto (Rendimiento Extremo de Lectura)
+Al cargar un archivo Excel (`.xlsx`) o CSV (`.csv`):
+1. **Archivo Original Intacto:** El backend preserva el binario original en disco sin alteraciones para descargas directas de alta fidelidad (`GET /t/:short_code?download=true`).
+2. **Artefacto Pre-calculado `.data.json.gz`:** En la subida, se extraen celdas combinadas (`merges`), estilos de celda (color de fondo) y encabezados, comprimiéndose en un archivo `.data.json.gz` adyacente.
+
+### B. Consumo Instantáneo en el Frontend (`GET /t/:short_code`)
+Al consultar los datos para pintar la gráfica o tabla:
+```typescript
+// En React / Vue / Vanilla JS:
+const res = await fetch(`http://localhost:3000/t/${shortCode}`);
+const { columns, headers, merges, cellStyles, data, meta } = await res.json();
+
+// Para cuadros estadísticos con colores y merges:
+// merges: ['A1:B1'] -> Celdas combinadas nativas
+// cellStyles['0']['monto']: { bg: '#10b981', bold: true, align: 'right' } -> Estilos extraídos
+```
+- **Tiempo de Respuesta:** Responde en ~2 ms con 0% de CPU en lecturas, ya que transmite directamente el flujo precalculado.
+- **Paginación:** Si se especifican `?page=1&limit=50`, se entrega la porción solicitada con metadatos `{ page, limit, total, totalPages, hasNext }`.
+
+### C. Descarga de Archivo Original (`?download=true`)
+Para permitir al usuario final descargar el archivo Excel original intacto (conservando fórmulas y estilos nativos de Excel):
+```tsx
+<a 
+  href={`http://localhost:3000/t/${shortCode}?download=true`} 
+  className="btn btn-primary"
+>
+  Descargar Excel Original
+</a>
+```
+
+### D. Paginación y Filtrado SQL de Datasets (`GET /api/v1/tables`)
+```typescript
+const query = new URLSearchParams({
+  page: '1',
+  limit: '20',
+  folderId: currentFolderId || '',
+});
+
+const res = await fetch(`http://localhost:3000/api/v1/tables?${query.toString()}`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` },
+});
+const { tables, total, page, limit, totalPages, meta } = await res.json();
+```
+
+### E. Protección Anti-IDOR y Eliminación en Cascada (`DELETE /api/v1/tables/:id`)
+- Requiere autenticación Bearer JWT.
+- Si el usuario no es el propietario de la carpeta ni `ADMIN`, el backend rechaza con `403 FORBIDDEN`.
+- Al eliminar con éxito (`204 No Content`), el backend destruye automáticamente el registro en PostgreSQL, el archivo fuente original y el artefacto comprimido `.data.json.gz`.
+
+---
+
+## 8. 👥 Sistema Jerárquico de Roles y RBAC de Carpetas (Fase 12)
+
+### A. Jerarquía Estricta de 3 Niveles (Sin Roles Legacy)
+El sistema erradica el rol genérico `USER` y define 3 niveles jerárquicos claros:
+- **`ADMIN` (Nivel 3):** Superusuario global del sistema. Gestiona todos los usuarios, carpetas y recursos sin restricciones.
+- **`MANAGER` (Nivel 2):** Titular o Gestor. Es dueño de sus propias carpetas (`IMAGE` y `TABLE`), puede crear colaboradores y compartirles carpetas asignando permisos.
+- **`COLLABORATOR` (Nivel 1):** Invitado o Asistente. Solo puede acceder a las carpetas que le hayan sido expresamente compartidas. No puede crear carpetas raíz ni gestionar usuarios.
+
+**Regla de Creación y Jerarquía:** `peso(creador) > peso(nuevo_usuario)`:
+- `ADMIN` puede crear `MANAGER` y `COLLABORATOR`.
+- `MANAGER` solo puede crear `COLLABORATOR` (quedan vinculados a él mediante `createdById`).
+- `COLLABORATOR` no puede crear usuarios (403 `FORBIDDEN`).
+
+### B. Autogestión de Perfil y Cambio de Contraseña Propia
+- **Consultar Perfil Activo (`GET /api/v1/auth/me`):**
+  ```typescript
+  const res = await fetch('http://localhost:3000/api/v1/auth/me', {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  const { user } = await res.json();
+  // user: { id, username, role, isActive, createdById, createdAt }
+  ```
+- **Cambiar Contraseña Propia (`PATCH /api/v1/auth/password`):**
+  ```typescript
+  await fetch('http://localhost:3000/api/v1/auth/password', {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      currentPassword: 'MiClaveActual123!',
+      newPassword: 'MiNuevaClaveSegura2026!'
+    })
+  });
+  // Invalida sesiones activas en otros dispositivos incrementando tokenVersion
+  ```
+
+### C. Gestión Jerárquica de Usuarios (`/api/v1/users`)
+- **Crear Usuario (`POST /api/v1/users`):**
+  - Invocado por `ADMIN` o `MANAGER`:
+  ```typescript
+  const res = await fetch('http://localhost:3000/api/v1/users', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      username: 'nuevo_asistente',
+      password: 'ClaveSegura123!',
+      role: 'COLLABORATOR' // ADMIN puede enviar MANAGER o COLLABORATOR; MANAGER solo COLLABORATOR
+    })
+  });
+  ```
+- **Listar Usuarios (`GET /api/v1/users`):**
+  - Si el solicitante es `ADMIN`, retorna todos los usuarios del sistema.
+  - Si es `MANAGER`, retorna únicamente sus colaboradores creados (`createdById === manager.id`).
+- **Activar / Suspender Usuario (`PATCH /api/v1/users/:id/status`):**
+  - Payload: `{ "isActive": false }`. Al suspender, se invalida de inmediato el token del usuario en PostgreSQL.
+- **Restablecer Contraseña por Superior (`PATCH /api/v1/users/:id/password`):**
+  - Payload: `{ "newPassword": "NuevaClaveTemporal123!" }`.
+- **Eliminar Usuario (`DELETE /api/v1/users/:id`):**
+  - Destruye la cuenta y limpia archivos asociados en cascada.
+
+### D. Compartición de Carpetas con Membresías Granulares (`/api/v1/folders/:id/shares`)
+Permite al `MANAGER` dueño de la carpeta (o `ADMIN`) compartirla con colaboradores:
+- **Asignar Colaborador (`POST /api/v1/folders/:id/shares`):**
+  ```typescript
+  await fetch(`http://localhost:3000/api/v1/folders/${folderId}/shares`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      userId: collaboratorUserId,
+      permission: 'EDIT' // 'READ' (solo ver/descargar) o 'EDIT' (ver, subir y modificar)
+    })
+  });
+  ```
+- **Listar Colaboradores de Carpeta (`GET /api/v1/folders/:id/shares`):**
+  - Retorna `shares: [{ id, folderId, userId, permission, user: { id, username, role } }]`.
+- **Modificar Permiso (`PATCH /api/v1/folders/:id/shares/:userId`):**
+  - Payload: `{ "permission": "READ" }`.
+- **Revocar Colaborador (`DELETE /api/v1/folders/:id/shares/:userId`):**
+  - Expulsa al colaborador de la carpeta compartida.
+
+### E. Reglas de Ingesta y Operación para Colaboradores
+1. **Creación de Carpetas Raíz:** Bloqueada para `COLLABORATOR` (403 `FORBIDDEN`). Solo `MANAGER` y `ADMIN` pueden crear carpetas.
+2. **Listado de Carpetas (`GET /api/v1/folders`):** Los colaboradores solo reciben las carpetas compartidas con ellos, incluyendo el campo `myPermission: 'READ' | 'EDIT'`.
+3. **Subida de Imágenes y Tablas (`POST /api/v1/images`, `POST /api/v1/tables`):**
+   - Para un `COLLABORATOR`, el campo `folderId` es obligatorio.
+   - Si se envía sin `folderId` o hacia una carpeta donde solo tiene permiso `READ`, el backend rechaza con `403 FORBIDDEN`.
+   - Con permiso `EDIT`, la subida y modificación se procesan con normalidad.
+

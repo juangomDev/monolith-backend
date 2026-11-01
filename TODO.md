@@ -18,6 +18,10 @@
 | **Fase 6** | Sistema de Carpetas y Proyectos Compartidos en PostgreSQL | ✅ Completado |
 | **Fase 7** | Blindaje de Seguridad y Hardening Defensivo | ✅ Completado |
 | **Fase 8** | Documentación Interactiva y Contratos OpenAPI con Scalar | ✅ Completado |
+| **Fase 9** | Endurecimiento de Seguridad Inmediato y Monitoreo Proactivo | ✅ Completado |
+| **Fase 10** | Evolución Integral del Módulo de Imágenes (Sharp, Miniaturas y Hot-Swap) | ✅ Completado |
+| **Fase 11** | Evolución Integral del Módulo de Tablas y Modularización Arquitectónica | ✅ Completado |
+| **Fase 12** | Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas | ✅ Completado |
 
 ---
 
@@ -441,39 +445,117 @@
 
 ---
 
-## 🧹 FASE 11: Modularización Arquitectónica y Desacoplamiento de Esquemas (Carpetas, Usuarios y Tablas)
+## 📊 FASE 11: Evolución Integral del Módulo de Tablas y Modularización Arquitectónica
 
 ### 🎯 Objetivos de la Fase
-> 1. **Principio de Responsabilidad Única (SRP):** Desacoplar las definiciones extensas de esquemas OpenAPI 3.1 y esquemas Zod de los enrutadores Fastify, trasladándolos a archivos dedicados `*.schemas.ts`.
-> 2. **Archivos Cómodos y Legibles:** Reducir la extensión de los archivos de rutas de >300 líneas a menos de 120-150 líneas por archivo.
-> 3. **Inmutabilidad Absoluta de Contratos (Regla 1):** Preservar el 100% de los endpoints, códigos de estado, parámetros y tipos de respuesta sin alterar ninguna aserción en los 197 tests existentes.
-> 4. **Compilación y OpenAPI Limpios:** Garantizar compilación perfecta (`tsc`) y exportación estática de `openapi.json` sin discrepancias de contrato.
+> 1. **Patrón de Doble Artefacto en Tablas (Pre-cálculo para Visualización Rápida):** Generar `.data.json.gz` en la subida para servir cuadros estadísticos formateados con colores y encabezados multinivel en 2 ms, conservando el `.xlsx` original intacto para descargas de alta fidelidad.
+> 2. **Seguridad y Control de Acceso (Anti-IDOR y Fórmulas):** Exigir `requester` en `DELETE /api/v1/tables/:id` para que solo el propietario o ADMIN puedan borrar datasets, y neutralizar la inyección de fórmulas CSV (`=`, `+`, `-`, `@`).
+> 3. **Paginación y Filtrado SQL Directo en Prisma:** Migrar el listado de tablas a filtrado y paginación a nivel de PostgreSQL con `page`, `limit` y `folderId`.
+> 4. **Modularización de Esquemas y Satélites (Etapa 1 de Refactorización):** Extraer los esquemas OpenAPI de las rutas que superan el umbral (`tables.schemas.ts`, `folders.schemas.ts`, `users.schemas.ts`) e I/O de disco (`images.storage.ts`).
+> 5. **Inmutabilidad Absoluta de Contratos (Reglas 1, 2 y 3):** Preservar el 100% de los 197 tests existentes y documentar simultáneamente en OpenAPI.
 
-- [ ] **11.1 Módulo Carpetas (`src/modules/folders/`)**
-  - [ ] `11.1.1` **Crear `src/modules/folders/folders.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 y Zod para `POST /api/v1/folders`, `GET /api/v1/folders`, `GET /api/v1/folders/:id`, `DELETE /api/v1/folders/:id`, `PATCH /api/v1/images/:id/folder`, `PATCH /api/v1/tables/:id/folder`.
-  - [ ] `11.1.2` **Refactorizar `src/modules/folders/folders.routes.ts`**: Limpiar el controlador reduciendo el archivo de 342 a ~110 líneas mediante importación de esquemas.
-  - [ ] `11.1.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/folders/*.test.ts` asegurando 100% éxito.
+- [x] **11.1 Desacoplamiento de Esquemas OpenAPI (Etapa 1 de Refactorización Modular)**
+  - [x] `11.1.1` **Módulo Tablas (`src/modules/tables/tables.schemas.ts`)**: Extraer y centralizar esquemas OpenAPI 3.1 para `POST /api/v1/tables`, `GET /api/v1/tables`, `GET /t/:short_code`, `DELETE /api/v1/tables/:id`. Refactorizar `tables.routes.ts` reduciendo de 252 a 90 líneas.
+  - [x] `11.1.2` **Módulo Carpetas (`src/modules/folders/folders.schemas.ts`)**: Extraer esquemas OpenAPI 3.1 de `folders.routes.ts` reduciendo de 342 a 105 líneas.
+  - [x] `11.1.3` **Módulo Usuarios (`src/modules/users/users.schemas.ts`)**: Extraer esquemas OpenAPI 3.1 de `users.routes.ts` reduciendo de 326 a 192 líneas.
+  - [x] `11.1.4` **Módulo Imágenes (`src/modules/images/images.storage.ts`)**: Extraer manipulación de disco reduciendo `images.service.ts` de 383 a 297 líneas.
+  - [x] `11.1.5` **Verificación de Pruebas**: Confirmar 0 roturas en los 197 tests congelados y compilación limpia (`tsc`).
 
-- [ ] **11.2 Módulo Usuarios y Autenticación (`src/modules/users/`)**
-  - [ ] `11.2.1` **Crear `src/modules/users/users.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 y Zod para `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, y `POST /api/v1/users`.
-  - [ ] `11.2.2` **Refactorizar `src/modules/users/users.routes.ts`**: Limpiar el controlador reduciendo el archivo de 326 a ~110 líneas mediante importación de esquemas.
-  - [ ] `11.2.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/users/*.test.ts` asegurando 100% éxito.
+- [x] **11.2 Patrón de Doble Artefacto en Tablas (Pre-cálculo para Visualización Rápida y Formato Rico)**
+  - [x] `11.2.1` **Extractor Enriquecido en `tables.parser.ts`**: Extraer con `exceljs` celdas combinadas (`merges`), encabezados multinivel y colores de fondo (`cell.fill`) para cuadros estadísticos formateados.
+  - [x] `11.2.2` **Generación y Compresión del Artefacto (`.data.json.gz`)**: En la subida (`saveTable`), comprimir el JSON precalculado con `zlib.createGzip()` y almacenarlo en `./storage/tables/${shortCode}.data.json.gz`.
+  - [x] `11.2.3` **Entrega Instantánea (2 ms) en `GET /t/:short_code`**: Transmitir directamente `${shortCode}.data.json.gz` con cabeceras `Content-Type: application/json` y `Content-Encoding: gzip` (0% CPU en lecturas).
+  - [x] `11.2.4` **Descarga de Alta Fidelidad (`GET /t/:short_code?download=true`)**: Stream directo del `.xlsx` o `.csv` original intacto conservando fórmulas, macroestructura y estilos nativos.
+  - [x] `11.2.5` **Limpieza Integral en Cascada**: Actualizar `deleteTable` y la eliminación de carpetas para destruir tanto el archivo fuente como el `.data.json.gz` asociado con `fs.unlink`.
 
-- [ ] **11.3 Módulo Tablas y Datasets (`src/modules/tables/`)**
-  - [ ] `11.3.1` **Crear `src/modules/tables/tables.schemas.ts`**: Extraer y centralizar esquemas OpenAPI 3.1 para `POST /api/v1/tables`, `GET /api/v1/tables`, `GET /t/:short_code`, `DELETE /api/v1/tables/:id`.
-  - [ ] `11.3.2` **Refactorizar `src/modules/tables/tables.routes.ts`**: Limpiar el controlador reduciendo el archivo de 238 a ~90 líneas mediante importación de esquemas.
-  - [ ] `11.3.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/tables/*.test.ts` asegurando 100% éxito.
+- [x] **11.3 Hardening de Seguridad Anti-IDOR y Sanitización de Fórmulas**
+  - [x] `11.3.1` **Blindaje Anti-IDOR en Eliminación (`DELETE /api/v1/tables/:id`)**: Requerir `requester?: RequesterContext` comprobando que solo el propietario de la carpeta contenedora o un `ADMIN` puedan eliminar la tabla (403 Forbidden para terceros).
+  - [x] `11.3.2` **Protección contra CSV Formula Injection**: Sanitizar o escapar caracteres dinámicos de comando (`=`, `+`, `-`, `@`) en descargas y exportaciones de datasets.
 
-- [ ] **11.4 Módulo Imágenes (`src/modules/images/`) - Desacoplamiento de I/O de Disco**
-  - [ ] `11.4.1` **Crear `src/modules/images/images.storage.ts`**: Extraer la manipulación directa de archivos físicos (`fs.mkdir`, `fs.unlink`, streams de lectura/escritura y pipeline) a un satélite dedicado.
-  - [ ] `11.4.2` **Refactorizar `src/modules/images/images.service.ts`**: Delegar la persistencia de disco en `imagesStorage`, reduciendo el servicio de 327 a ~180 líneas sin alterar ninguna firma pública ni contrato de pruebas.
-  - [ ] `11.4.3` **Verificación de Pruebas**: Ejecutar `npx tsx --env-file=.env --test tests/modules/images/*.test.ts` asegurando 100% de éxito.
+- [x] **11.4 Paginación y Filtrado SQL Directo en PostgreSQL**
+  - [x] `11.4.1` Actualizar `tablesRepository.findAll` para aceptar `page`, `limit`, `folderId`, `userId` e `isAdmin`, aplicando filtrado de privacidad y paginación `take`/`skip` directo en Prisma.
+  - [x] `11.4.2` Actualizar `tablesService.listTables` para retornar metadatos completos `{ tables: [...], total, page, limit, totalPages, meta: { ... } }`.
 
-- [ ] **11.5 Validación Integral y Protocolo de Inmutabilidad**
-  - [ ] `11.5.1` Ejecutar `npm test`: Verificar que los 197 tests pasen al 100% con 0 fallos.
-  - [ ] `11.5.2` Ejecutar `npm run build`: Verificar compilación TypeScript limpia (`code 0`).
-  - [ ] `11.5.3` Ejecutar `npm run openapi:export`: Asegurar sincronización exacta de `openapi.json`.
-  - [ ] `11.5.4` Ejecutar `npm audit`: Verificar 0 vulnerabilidades.
+- [x] **11.5 Documentación Simultánea y Sincronización de Contratos (Regla 3)**
+  - [x] `11.5.1` Actualizar esquemas OpenAPI con los nuevos metadatos de respuesta, parámetros de paginación y cabeceras.
+  - [x] `11.5.2` Regenerar `openapi.json` con `npm run openapi:export`.
+  - [x] `11.5.3` Actualizar `ENDPOINTS.md`, `RUTAS.md` y `docs/frontend-integration.md`.
+
+- [x] **11.6 Cobertura de Pruebas Automatizadas y Congelación (Reglas 1 y 2)**
+  - [x] `11.6.1` Pruebas unitarias en `tables.service.test.ts` y `tables.parser.test.ts` para el doble artefacto, anti-IDOR y paginación.
+  - [x] `11.6.2` Pruebas de integración en `tables.routes.test.ts`.
+  - [x] `11.6.3` Protocolo Obligatorio: `npm test` (100% pasando: 207 tests, 0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 👥 FASE 12: Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas
+
+### 🎯 Objetivos de la Fase
+> 1. **Jerarquía Estricta de 3 Niveles (Sin Roles Legacy):** Definir `ADMIN` (3), `MANAGER` (2) y `COLLABORATOR` (1). Regla de creación y gestión: `peso(creador) > peso(nuevo_usuario)`. Se erradica el rol `USER` para no dejar código legacy.
+> 2. **Autogestión de Perfil de Usuario:** Implementar `GET /api/v1/auth/me` para consulta de sesión activa y `PATCH /api/v1/auth/password` para cambio seguro de contraseña propia.
+> 3. **Gestión Jerárquica de Usuarios:** ADMIN gestiona todo el sistema; MANAGER crea y gestiona exclusivamente sus colaboradores (`createdById`); COLLABORATOR no puede crear ni gestionar usuarios.
+> 4. **Compartición de Carpetas con Permisos Granulares (RBAC):** Modelo `FolderMember` con permisos `READ` (solo visualización/descarga) y `EDIT` (lectura, subida y modificación de archivos).
+> 5. **Guards de Seguridad Puros:** `canManageUserRole` para validar jerarquía de creación y `assertFolderAccess` para validar acceso a carpetas y archivos.
+> 6. **Modernización Autorizada de Tests:** Actualizar las referencias de `Role.USER` a `Role.MANAGER` en la suite de pruebas bajo la orden directa y escrita del usuario (excepción expresa a la Regla 1 para alineación arquitectónica sin deuda técnica).
+> 7. **Arquitectura Modular (< 300 LOC):** Mantener cada archivo de producción estrictamente por debajo de 300 LOC extrayendo lógica satélite en `folders.shares.service.ts` y esquemas en `*.schemas.ts`.
+
+- [x] **12.1 Modelo de Datos Prisma y Soporte Jerárquico**
+  - [x] `12.1.1` Actualizar `enum Role` en `prisma/schema.prisma` estrictamente con `ADMIN`, `MANAGER` y `COLLABORATOR` (eliminando rol legacy `USER`).
+  - [x] `12.1.2` Agregar en `model User` el campo `createdById String?` con relación autorreferencial `createdBy` / `createdUsers`.
+  - [x] `12.1.3` Crear `enum FolderPermission { READ, EDIT }` y `model FolderMember` con índice único compuesto `[folderId, userId]`.
+  - [x] `12.1.4` Ejecutar `npx prisma generate` y aplicar cambios en PostgreSQL.
+  - [x] `12.1.5` **Ajuste de Tests Existentes (Excepción Autorizada)**: Migrar las referencias de `Role.USER` a `Role.MANAGER` en `tests/` para reflejar la nueva especificación sin dejar código legacy.
+
+- [x] **12.2 Autogestión de Perfil y Sesión de Usuario**
+  - [x] `12.2.1` **Endpoint `GET /api/v1/auth/me`**: Retornar sesión del usuario autenticado (`id`, `username`, `role`, `isActive`, `createdAt`).
+  - [x] `12.2.2` **Endpoint `PATCH /api/v1/auth/password`**: Permitir a cualquier usuario cambiar su propia contraseña validando `currentPassword` e incrementando `tokenVersion` en PostgreSQL para invalidar sesiones en otros dispositivos.
+
+- [x] **12.3 Gestión Jerárquica de Usuarios (`Guard 1: canManageUserRole`)**
+  - [x] `12.3.1` **Creación Jerárquica (`POST /api/v1/users`)**:
+    - ADMIN puede crear `MANAGER` y `COLLABORATOR`.
+    - MANAGER solo puede crear `COLLABORATOR` (vinculando automáticamente `createdById = manager.id`).
+    - COLLABORATOR recibe 403 Forbidden al intentar crear usuarios.
+  - [x] `12.3.2` **Listado de Usuarios (`GET /api/v1/users`)**:
+    - ADMIN lista todos los usuarios del sistema.
+    - MANAGER lista únicamente a sus colaboradores vinculados (`createdById === manager.id`).
+    - COLLABORATOR recibe 403 Forbidden.
+  - [x] `12.3.3` **Suspensión / Activación (`PATCH /api/v1/users/:id/status`)**:
+    - ADMIN puede suspender/activar a cualquier usuario (excepto a sí mismo).
+    - MANAGER puede suspender/activar a sus propios colaboradores.
+    - Al suspender (`isActive = false`), incremento inmediato de `tokenVersion`.
+  - [x] `12.3.4` **Restablecimiento de Contraseña por Superior (`PATCH /api/v1/users/:id/password`)**:
+    - ADMIN o MANAGER (sobre sus colaboradores) asignan nueva clave e incrementan `tokenVersion`.
+  - [x] `12.3.5` **Eliminación Segura de Usuarios (`DELETE /api/v1/users/:id`)**:
+    - ADMIN elimina managers o colaboradores (con limpieza en cascada de archivos físicos en `./storage`).
+    - MANAGER elimina a sus propios colaboradores. Prohibido eliminar al ADMIN o auto-eliminarse.
+
+- [x] **12.4 Compartición de Carpetas y Membresías (`Guard 2: assertFolderAccess`)**
+  - [x] `12.4.1` Crear módulo satélite `src/modules/folders/folders.shares.service.ts` para mantener `folders.service.ts` estrictamente < 300 LOC.
+  - [x] `12.4.2` **Asignar Colaborador (`POST /api/v1/folders/:id/shares`)**: Exclusivo del MANAGER de la carpeta o ADMIN. Asigna `userId` con permiso `READ` o `EDIT`.
+  - [x] `12.4.3` **Listar Colaboradores (`GET /api/v1/folders/:id/shares`)**: Lista qué usuarios tienen acceso a la carpeta y su nivel de permiso.
+  - [x] `12.4.4` **Modificar Permiso (`PATCH /api/v1/folders/:id/shares/:userId`)**: Actualiza entre `READ` y `EDIT`.
+  - [x] `12.4.5` **Revocar Colaborador (`DELETE /api/v1/folders/:id/shares/:userId`)**: Expulsa al usuario de la carpeta compartida.
+
+- [x] **12.5 Enlace de Permisos en Ingesta y Mutación de Archivos**
+  - [x] `12.5.1` **Listado de Carpetas (`GET /api/v1/folders`)**:
+    - ADMIN ve todas las carpetas.
+    - MANAGER ve sus carpetas propias y las que le hayan compartido.
+    - COLLABORATOR solo ve carpetas compartidas con él (con metadato `myPermission: 'READ' | 'EDIT'`).
+  - [x] `12.5.2` **Subida de Archivos (`POST /api/v1/images`, `POST /api/v1/tables`)**:
+    - COLLABORATOR requiere obligatoriamente `folderId` donde tenga permiso `EDIT` (403 si es `READ` o sin carpeta).
+  - [x] `12.5.3` **Mutación de Archivos (`PATCH`, `PUT`)**: Permitida si el usuario tiene permiso `EDIT` sobre la carpeta contenedora o es ADMIN.
+  - [x] `12.5.4` **Eliminación de Carpetas (`DELETE /api/v1/folders/:id`)**: Exclusivo del MANAGER dueño de la carpeta o ADMIN.
+
+- [x] **12.6 Documentación Simultánea, OpenAPI y Guía Frontend (Regla 3)**
+  - [x] `12.6.1` Actualizar esquemas OpenAPI 3.1 en `users.schemas.ts` y `folders.schemas.ts`.
+  - [x] `12.6.2` Regenerar especificación `openapi.json` con `npm run openapi:export`.
+  - [x] `12.6.3` Sincronizar catálogos en `ENDPOINTS.md`, `RUTAS.md` y documentar la guía de roles en `docs/frontend-integration.md`.
+
+- [x] **12.7 Cobertura de Pruebas Automatizadas y Protocolo Obligatorio (Reglas 1 y 2)**
+  - [x] `12.7.1` Tests unitarios de jerarquía de creación y control de perfil en `tests/modules/users/users.service.test.ts`.
+  - [x] `12.7.2` Tests unitarios de compartición y membresías en `tests/modules/folders/folders.shares.service.test.ts`.
+  - [x] `12.7.3` Tests de integración en `tests/modules/users/users.routes.test.ts` y `tests/modules/folders/folders.routes.test.ts`.
+  - [x] `12.7.4` Protocolo Obligatorio: `npm test` (0 fallos: 235 tests pasando), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
 
 ---
 
@@ -482,19 +564,20 @@
 > **Regla de Referencia:** [`.agents/rules/modular-refactoring-evolution.md`](.agents/rules/modular-refactoring-evolution.md)  
 > **Umbrales:** Etapa 1 (>300 LOC / I/O técnico) · Etapa 2 (>450 LOC / >6 métodos) · Etapa 3 (Clean Arch / Puertos) · Etapa 4 (Workers asíncronos >25-30MB).
 
-### 🟡 Alertas Activas (Etapa 1 - Extracción de Auxiliares)
-- [ ] **`src/modules/folders/folders.routes.ts` (342 LOC > 300 LOC)**
-  - *Causa:* Contratos OpenAPI 3.1 embebidos dentro de las rutas Fastify.
-  - *Solución:* Extraer esquemas a `folders.schemas.ts` (Cubierto en tarea `11.1`).
-  - *Detectado:* 2026-10-31
-- [ ] **`src/modules/images/images.service.ts` (327 LOC > 300 LOC)**
-  - *Causa:* Mezcla lógica de negocio con operaciones directas de I/O de disco (`fs.unlink`, `createWriteStream`).
-  - *Solución:* Extraer a `images.storage.ts` (Cubierto en tarea `11.4`).
-  - *Detectado:* 2026-10-31
-- [ ] **`src/modules/users/users.routes.ts` (326 LOC > 300 LOC)**
-  - *Causa:* Contratos OpenAPI 3.1 embebidos dentro de las rutas Fastify.
-  - *Solución:* Extraer esquemas a `users.schemas.ts` (Cubierto en tarea `11.2`).
-  - *Detectado:* 2026-10-31
+### 🟢 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
+- [x] **`src/modules/users/users.schemas.ts`**: 274 líneas.
+- [x] **`src/modules/tables/tables.service.ts`**: 260 líneas.
+- [x] **`src/modules/folders/folders.schemas.ts`**: 256 líneas.
+- [x] **`src/modules/images/images.service.ts`**: 251 líneas.
+- [x] **`src/modules/folders/folders.service.ts`**: 248 líneas.
+- [x] **`src/modules/tables/tables.parser.ts`**: 238 líneas.
+- [x] **`src/modules/images/images.schemas.ts`**: 233 líneas.
+- [x] **`src/modules/folders/folders.shares.routes.ts`**: 217 líneas.
+- [x] **`src/modules/tables/tables.schemas.ts`**: 199 líneas.
+- [x] **`src/modules/users/users.routes.ts`**: 186 líneas.
+- [x] **`src/modules/users/users.service.ts`**: 181 líneas.
+- [x] **`src/modules/folders/folders.shares.service.ts`**: 107 líneas.
+- [x] **`src/modules/folders/folders.routes.ts`**: 105 líneas.
 
 
 

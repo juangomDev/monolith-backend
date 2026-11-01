@@ -84,7 +84,7 @@ describe('Módulo Usuarios: Refresh Tokens, Logout y Revocación (tokenVersion)'
     const testUser = {
       id: 'user-refresh-id',
       username: 'usuario_activo',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
       isActive: true,
     };
@@ -235,7 +235,7 @@ describe('Módulo Usuarios: Refresh Tokens, Logout y Revocación (tokenVersion)'
     (prisma.user as any).findUnique = async () => ({
       id: 'revoked-user-id',
       username: 'usuario',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 1,
       isActive: true,
     });
@@ -245,7 +245,7 @@ describe('Módulo Usuarios: Refresh Tokens, Logout y Revocación (tokenVersion)'
       {
         id: 'revoked-user-id',
         username: 'usuario',
-        role: Role.USER,
+        role: Role.MANAGER,
         tokenVersion: 0,
         type: 'refresh',
       },

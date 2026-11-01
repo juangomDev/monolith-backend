@@ -315,7 +315,7 @@ describe('Módulo Imágenes: ImagesService', () => {
 
     const result = await imagesService.renameImage(validUuid, 'new-name.png', {
       id: 'user-owner',
-      role: Role.USER,
+      role: Role.MANAGER,
     });
 
     assert.strictEqual(result.id, validUuid);
@@ -355,7 +355,7 @@ describe('Módulo Imágenes: ImagesService', () => {
       async () => {
         await imagesService.renameImage(validUuid, 'hacked.png', {
           id: 'user-attacker',
-          role: Role.USER,
+          role: Role.MANAGER,
         });
       },
       (err: unknown) => {
@@ -391,7 +391,7 @@ describe('Módulo Imágenes: ImagesService', () => {
       async () => {
         await imagesService.replaceImageFile(validUuid, fakePart, {
           id: 'user-attacker',
-          role: Role.USER,
+          role: Role.MANAGER,
         });
       },
       (err: unknown) => {
@@ -421,7 +421,7 @@ describe('Módulo Imágenes: ImagesService', () => {
       async () => {
         await imagesService.deleteImage(validUuid, {
           id: 'user-attacker',
-          role: Role.USER,
+          role: Role.MANAGER,
         });
       },
       (err: unknown) => {

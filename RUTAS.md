@@ -15,26 +15,36 @@
 | **3** | `GET` | `/openapi.json` | Docs | Pública | Anónimo | Especificación OpenAPI 3.1 en formato JSON crudo. |
 | **4** | `POST` | `/api/v1/auth/login` | Auth | Pública | Anónimo | Autenticación de credenciales; emite access y refresh tokens. |
 | **5** | `POST` | `/api/v1/auth/refresh` | Auth | Pública / Cookie | Anónimo | Renueva el access token mediante cookie `refreshToken` o body. |
-| **6** | `POST` | `/api/v1/auth/logout` | Auth | Bearer JWT | `USER` | Invalida los refresh tokens del usuario y limpia cookies. |
-| **7** | `POST` | `/api/v1/users` | Users | Bearer JWT | `ADMIN` | Registro de nuevos usuarios con rol `ADMIN` o `USER`. |
-| **8** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `USER` | Lista carpetas visibles con conteo de elementos (`?type=`). |
-| **9** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `USER` | Crea una carpeta (tipo `IMAGE` o `TABLE`, pública o privada). |
-| **10** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `USER`* | Detalle de carpeta (evalúa propiedad si es privada). |
-| **11** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `USER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
-| **12** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
-| **13** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `USER` | Carga multipart de imagen (JPEG, PNG, WebP, SVG máx 50MB). |
-| **14** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Renombra `originalName` validando propiedad anti-IDOR. |
-| **15** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
-| **16** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `USER`* | Destrucción física y lógica de imagen y su miniatura WebP. |
-| **17** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
-| **18** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
-| **19** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Listado de datasets tabulares registrados. |
-| **20** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `USER` | Carga multipart de dataset (CSV o Excel, máx 100MB). |
-| **21** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `USER`* | Destrucción física y lógica del dataset y archivo origen. |
-| **22** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `USER`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
-| **23** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
+| **6** | `POST` | `/api/v1/auth/logout` | Auth | Bearer JWT | `COLLABORATOR` | Invalida los refresh tokens del usuario y limpia cookies. |
+| **7** | `GET` | `/api/v1/auth/me` | Auth | Bearer JWT | `COLLABORATOR` | Retorna los datos de sesión activa del usuario autenticado. |
+| **8** | `PATCH` | `/api/v1/auth/password` | Auth | Bearer JWT | `COLLABORATOR` | Permite al usuario cambiar su propia contraseña. |
+| **9** | `POST` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Registro de nuevos usuarios respetando jerarquía (`ADMIN > MANAGER > COLLABORATOR`). |
+| **10** | `GET` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Listado de usuarios (`ADMIN` ve todos; `MANAGER` solo sus colaboradores). |
+| **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario e invalida sus sesiones. |
+| **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico. |
+| **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos. |
+| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso del usuario (`?type=`). |
+| **15** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `MANAGER` | Crea una carpeta (tipo `IMAGE` o `TABLE`, pública o privada). |
+| **16** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
+| **17** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
+| **18** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
+| **19** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
+| **20** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
+| **21** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
+| **22** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
+| **23** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
+| **24** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
+| **25** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
+| **26** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
+| **27** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `MANAGER`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
+| **28** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
+| **29** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados. |
+| **30** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
+| **31** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
+| **32** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `MANAGER`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
+| **33** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
 
-*\*Nota: Los endpoints marcados con `USER*` verifican propiedad: un usuario común solo puede operar sobre recursos propios o en carpetas de su propiedad; un `ADMIN` tiene acceso irrestricto.*
+*\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
 ---
 
@@ -147,7 +157,7 @@ Renueva el par de tokens. Extrae el `refreshToken` automáticamente de la cookie
 - **Errores:** `401 Unauthorized` (token expirado, revocado o inválido).
 
 #### `POST /api/v1/auth/logout`
-Invalida la sesión actual, revoca el refresh token en base de datos y borra la cookie en el navegador.
+Invalida la sesión actual, revoca el refresh token en base de datos incrementando `tokenVersion` y borra la cookie en el navegador.
 - **Autenticación:** `Bearer JWT`.
 - **Respuesta 200 OK:**
   ```json
@@ -157,33 +167,118 @@ Invalida la sesión actual, revoca el refresh token en base de datos y borra la 
   ```
 - **Errores:** `401 Unauthorized`.
 
+#### `GET /api/v1/auth/me`
+Retorna la información de perfil y sesión activa del usuario autenticado.
+- **Autenticación:** `Bearer JWT`.
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "user": {
+      "id": "11111111-2222-4333-8444-555555555555",
+      "username": "gestor_principal",
+      "role": "MANAGER",
+      "isActive": true,
+      "createdById": null,
+      "createdAt": "2026-10-31T04:20:00.000Z"
+    }
+  }
+  ```
+- **Errores:** `401 Unauthorized`.
+
+#### `PATCH /api/v1/auth/password`
+Permite a cualquier usuario autenticado actualizar su contraseña tras validar su contraseña actual. Invalida automáticamente las sesiones previas en otros dispositivos incrementando `tokenVersion`.
+- **Autenticación:** `Bearer JWT`.
+- **Body:**
+  ```json
+  {
+    "currentPassword": "ClaveActual123!",
+    "newPassword": "NuevaClaveSuperSegura2026!"
+  }
+  ```
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "message": "Contraseña actualizada exitosamente"
+  }
+  ```
+- **Errores:** `400 Bad Request`, `401 Unauthorized` (si la contraseña actual es errónea).
+
 ---
 
 ### 3.3. Módulo de Usuarios (`/api/v1/users`)
 
 #### `POST /api/v1/users`
-Crea una nueva cuenta de usuario en el sistema.
-- **Autenticación:** `Bearer JWT` (Exclusivo rol `ADMIN`).
+Crea una nueva cuenta de usuario respetando la jerarquía estricta de 3 niveles (`peso(creador) > peso(nuevo_usuario)`).
+- **Autenticación:** `Bearer JWT` (Rol `ADMIN` o `MANAGER`).
+- **Reglas de Jerarquía:**
+  - `ADMIN` puede crear `MANAGER` o `COLLABORATOR`. No se pueden crear administradores adicionales.
+  - `MANAGER` solo puede crear `COLLABORATOR` (se vincula automáticamente con `createdById = manager.id`).
+  - `COLLABORATOR` recibe `403 FORBIDDEN`.
 - **Body:**
   ```json
   {
-    "username": "nuevo_editor",
+    "username": "nuevo_colaborador",
     "password": "PasswordFuerte2026!",
-    "role": "USER"
+    "role": "COLLABORATOR"
   }
   ```
 - **Respuesta 201 Created:**
   ```json
   {
-    "id": "22222222-2222-2222-2222-222222222222",
-    "username": "nuevo_editor",
-    "role": "USER",
-    "createdAt": "2026-10-31T04:20:00.000Z"
+    "user": {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "username": "nuevo_colaborador",
+      "role": "COLLABORATOR",
+      "isActive": true,
+      "createdById": "11111111-2222-4333-8444-555555555555",
+      "createdAt": "2026-10-31T04:20:00.000Z"
+    }
   }
   ```
-- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden` (si no es admin), `409 Conflict` (username ya existe).
+- **Errores:** `400 Bad Request` (datos inválidos o intento de crear ADMIN), `401 Unauthorized`, `403 Forbidden` (rol insuficiente), `409 Conflict` (username ya existe).
 
----
+#### `GET /api/v1/users`
+Lista usuarios registrados según el rango jerárquico del solicitante.
+- **Autenticación:** `Bearer JWT` (Rol `ADMIN` o `MANAGER`).
+- **Comportamiento:**
+  - `ADMIN` lista todos los usuarios del sistema.
+  - `MANAGER` lista únicamente a sus colaboradores vinculados (`createdById === manager.id`).
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "users": [
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "username": "nuevo_colaborador",
+        "role": "COLLABORATOR",
+        "isActive": true,
+        "createdById": "11111111-2222-4333-8444-555555555555",
+        "createdAt": "2026-10-31T04:20:00.000Z"
+      }
+    ]
+  }
+  ```
+- **Errores:** `401 Unauthorized`, `403 Forbidden`.
+
+#### `PATCH /api/v1/users/:id/status`
+Activa o suspende (`isActive: false`) una cuenta de usuario. Si se suspende, se invalida de inmediato su `tokenVersion` en PostgreSQL cerrando sus sesiones activas.
+- **Autenticación:** `Bearer JWT` (`ADMIN` o `MANAGER` sobre sus colaboradores). Prohibido auto-suspenderse.
+- **Body:** `{ "isActive": false }`.
+- **Respuesta 200 OK:** `{ "user": { ... } }`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+#### `PATCH /api/v1/users/:id/password`
+Restablece forzosamente la contraseña de un usuario por su superior jerárquico. Invalida todas las sesiones previas del usuario afectado.
+- **Autenticación:** `Bearer JWT` (`ADMIN` o `MANAGER` sobre sus colaboradores).
+- **Body:** `{ "newPassword": "NuevaClaveTemporal123!" }`.
+- **Respuesta 200 OK:** `{ "message": "Contraseña restablecida exitosamente" }`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+#### `DELETE /api/v1/users/:id`
+Elimina definitivamente un usuario y destruye en cascada sus archivos en disco (`./storage`).
+- **Autenticación:** `Bearer JWT` (`ADMIN` o `MANAGER` sobre sus colaboradores). Prohibido eliminar al `ADMIN` o auto-eliminarse.
+- **Respuesta 200 OK:** `{ "deleted": true }`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
 
 ### 3.4. Módulo de Carpetas (`/api/v1/folders`)
 
@@ -262,6 +357,69 @@ Elimina la carpeta y destruye en cascada todos los archivos físicos y registros
   }
   ```
 - **Errores:** `400 Bad Request` (intento de borrar carpeta General del sistema), `403 Forbidden`, `404 Not Found`.
+
+#### `POST /api/v1/folders/:id/shares`
+Comparte una carpeta asignando acceso a un colaborador con permiso `READ` o `EDIT`. Exclusivo del `MANAGER` propietario de la carpeta o `ADMIN`.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Parámetros URL:** `id` (UUID de la carpeta).
+- **Body:**
+  ```json
+  {
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "permission": "EDIT"
+  }
+  ```
+- **Respuesta 201 Created:**
+  ```json
+  {
+    "share": {
+      "id": "share-uuid",
+      "folderId": "44444444-4444-4444-4444-444444444444",
+      "userId": "22222222-2222-4222-8222-222222222222",
+      "permission": "EDIT",
+      "createdAt": "2026-10-31T04:20:00.000Z"
+    }
+  }
+  ```
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+#### `GET /api/v1/folders/:id/shares`
+Lista los miembros o colaboradores que tienen acceso a la carpeta y su nivel de permiso.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Parámetros URL:** `id` (UUID de la carpeta).
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "shares": [
+      {
+        "id": "share-uuid",
+        "folderId": "44444444-4444-4444-4444-444444444444",
+        "userId": "22222222-2222-4222-8222-222222222222",
+        "permission": "EDIT",
+        "createdAt": "2026-10-31T04:20:00.000Z",
+        "user": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "username": "nuevo_colaborador",
+          "role": "COLLABORATOR"
+        }
+      }
+    ]
+  }
+  ```
+- **Errores:** `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+#### `PATCH /api/v1/folders/:id/shares/:userId`
+Actualiza el nivel de permiso (`READ` o `EDIT`) otorgado a un colaborador en la carpeta.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Body:** `{ "permission": "READ" }`.
+- **Respuesta 200 OK:** `{ "share": { ... } }`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+#### `DELETE /api/v1/folders/:id/shares/:userId`
+Revoca el acceso del colaborador a la carpeta compartida (expulsión de membresía).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Respuesta 200 OK:** `{ "revoked": true }`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
 
 #### `PATCH /api/v1/images/:id/folder`
 Mueve una imagen a otra carpeta existente de tipo `IMAGE`.
@@ -449,8 +607,12 @@ Entrega binaria de la imagen mediante capability URL opaca no enumerable. Apta p
 ### 3.6. Módulo de Tablas y Datasets (`/api/v1/tables` y `/t/:short_code`)
 
 #### `GET /api/v1/tables`
-Lista los datasets tabulares registrados en el sistema.
+Lista los datasets tabulares registrados en el sistema con paginación y filtrado SQL a nivel de base de datos.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Query Params:**
+  - `page` (Opcional): Número de página (Default: `1`).
+  - `limit` (Opcional): Datasets por página (Default: `50`, máx. `100`).
+  - `folderId` (Opcional): UUID de la carpeta contenedora para filtrado directo.
 - **Respuesta 200 OK:**
   ```json
   {
@@ -469,12 +631,22 @@ Lista los datasets tabulares registrados en el sistema.
         "updatedAt": "2026-10-31T04:20:00.000Z"
       }
     ],
-    "total": 1
+    "total": 1,
+    "page": 1,
+    "limit": 50,
+    "totalPages": 1,
+    "meta": {
+      "page": 1,
+      "limit": 50,
+      "total": 1,
+      "totalPages": 1,
+      "hasNext": false
+    }
   }
   ```
 
 #### `POST /api/v1/tables`
-Sube y procesa un dataset tabular estructurado (`.csv`, `.xlsx`, `.xls`). Parsea columnas y almacena filas optimizadas.
+Sube y procesa un dataset tabular estructurado (`.csv` o `.xlsx`). Aplica el **Patrón de Doble Artefacto**: almacena el archivo fuente intacto para descargas y genera un artefacto pre-calculado `.data.json.gz` con colores, encabezados y celdas combinadas para consultas instantáneas.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Content-Type:** `multipart/form-data`
 - **Campos del Formulario:**
@@ -487,42 +659,48 @@ Sube y procesa un dataset tabular estructurado (`.csv`, `.xlsx`, `.xls`). Parsea
     "shortCode": "tab1234567",
     "tableName": "ventas_octubre.csv",
     "rowCount": 1500,
+    "columns": ["id", "producto", "monto", "fecha"],
     "sizeBytes": 1048576,
+    "folderId": "44444444-4444-4444-4444-444444444444",
     "url": "http://localhost:3000/t/tab1234567",
     "urlWithVersion": "http://localhost:3000/t/tab1234567?v=1740000000000",
     "createdAt": "2026-10-31T04:20:00.000Z",
     "updatedAt": "2026-10-31T04:20:00.000Z"
   }
   ```
-- **Errores:** `400 Bad Request` (archivo corrupto o formato no soportado), `413 Payload Too Large` (> 100MB).
+- **Errores:** `400 Bad Request` (archivo corrupto), `413 Payload Too Large` (> 100MB), `415 Unsupported Media Type`.
 
 #### `DELETE /api/v1/tables/:id`
-Elimina físicamente el archivo del disco y todas las filas de la tabla en base de datos.
+Elimina física y lógicamente el dataset. Destruye en disco tanto el archivo original como el artefacto comprimido `.data.json.gz`.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Control de Acceso Anti-IDOR:** Solo el propietario de la carpeta contenedora o un `ADMIN` pueden eliminar la tabla.
 - **Parámetros URL:** `id` (UUID de la tabla).
-- **Respuesta 200 OK:**
-  ```json
-  {
-    "message": "Tabla eliminada exitosamente"
-  }
-  ```
-- **Errores:** `403 Forbidden`, `404 Not Found`.
+- **Respuesta 204 No Content:** Eliminación exitosa sin cuerpo.
+- **Errores:** `400 Bad Request` (UUID inválido), `401 Unauthorized`, `403 Forbidden` (no propietario ni ADMIN), `404 Not Found`.
 
 #### `GET /t/:short_code` (Pública por Diseño)
-Consulta JSON paginada o descarga binaria del archivo original del dataset.
+Entrega de datos tabulares enriquecidos o descarga binaria del archivo original del dataset.
 - **Autenticación:** Ninguna (Pública).
 - **Parámetros URL:** `short_code` (Código Base58 opaco de 10 caracteres).
 - **Query Params:**
   - `page`: Número de página (Default: `1`).
   - `limit`: Filas por página (Default: `100`, máx. `500`).
-  - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original con cabecera `Content-Disposition`.
-- **Respuesta 200 OK (Modo JSON):**
+  - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original (`.xlsx` o `.csv`) con cabecera `Content-Disposition`.
+  - `raw`: Si es `'true'` o si se envía con `Accept-Encoding: gzip` sin paginación, sirve directamente el stream precalculado ultra-rápido (2 ms) con cabecera `Content-Encoding: gzip`.
+- **Respuesta 200 OK (Modo JSON Enriquecido):**
   ```json
   {
     "id": "66666666-6666-6666-6666-666666666666",
     "shortCode": "tab1234567",
-    "tableName": "ventas_octubre.csv",
+    "tableName": "ventas_octubre.xlsx",
     "columns": ["id", "producto", "monto", "fecha"],
+    "headers": [["id", "producto", "monto", "fecha"]],
+    "merges": ["A1:B1"],
+    "cellStyles": {
+      "0": {
+        "monto": { "bg": "#10b981", "bold": true, "align": "right" }
+      }
+    },
     "data": [
       { "id": 1, "producto": "Laptop Pro", "monto": 1200.50, "fecha": "2026-10-15" }
     ],

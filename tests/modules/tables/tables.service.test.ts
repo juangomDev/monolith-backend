@@ -6,6 +6,7 @@ import { AppError } from '../../../src/shared/errors.js';
 import { Readable } from 'node:stream';
 import type { MultipartFile } from '@fastify/multipart';
 import fs from 'node:fs/promises';
+import { Role } from '@prisma/client';
 
 describe('Módulo Tablas: TablesService', () => {
   afterEach(() => {
@@ -225,5 +226,134 @@ describe('Módulo Tablas: TablesService', () => {
     assert.strictEqual(result.tables[0].rowCount, 45);
     assert.deepStrictEqual(result.tables[0].columns, ['id', 'producto', 'precio']);
     assert.strictEqual(result.tables[0].sizeBytes, 1500);
+  });
+
+  it('deleteTable: debe lanzar 403 FORBIDDEN si el usuario no es ADMIN ni el propietario de la carpeta', async () => {
+    mock.method(tablesRepository, 'findById', async () => ({
+      id: validUuid,
+      shortCode: 'tablaAjena',
+      tableName: 'ajena.csv',
+      rowCount: 5,
+      columnsSchema: ['a'],
+      sizeBytes: 50,
+      storagePath: '/mock/storage/tables/ajena.csv',
+      folder: {
+        id: 'folder-1',
+        userId: 'propietario-1',
+        isPrivate: true,
+      },
+      createdAt: new Date(),
+    }));
+
+    await assert.rejects(
+      async () => {
+        await tablesService.deleteTable(validUuid, { id: 'atacante-2', role: Role.MANAGER });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 403);
+        assert.strictEqual((err as AppError).code, 'FORBIDDEN');
+        return true;
+      }
+    );
+  });
+
+  it('deleteTable: debe permitir eliminar si el requester es ADMIN aunque no sea propietario', async () => {
+    mock.method(tablesRepository, 'findById', async () => ({
+      id: validUuid,
+      shortCode: 'tablaAdmin',
+      tableName: 'admin.csv',
+      rowCount: 5,
+      columnsSchema: ['a'],
+      sizeBytes: 50,
+      storagePath: '/mock/storage/tables/admin.csv',
+      folder: {
+        id: 'folder-1',
+        userId: 'propietario-1',
+        isPrivate: true,
+      },
+      createdAt: new Date(),
+    }));
+    mock.method(tablesRepository, 'deleteById', async () => ({} as any));
+    mock.method(fs, 'unlink', async () => {});
+
+    const result = await tablesService.deleteTable(validUuid, { id: 'admin-id', role: Role.ADMIN });
+    assert.strictEqual(result.deleted, true);
+  });
+
+  it('listTables: debe soportar paginación SQL con page, limit y folderId', async () => {
+    let capturedOptions: any = null;
+    mock.method(tablesRepository, 'findAll', async (opts: any) => {
+      capturedOptions = opts;
+      return [
+        {
+          id: validUuid,
+          shortCode: 'tabPaginada',
+          tableName: 'ventas.csv',
+          rowCount: 200,
+          columnsSchema: ['id'],
+          sizeBytes: 800,
+          folderId: 'folder-test',
+          createdAt: new Date(),
+        },
+      ];
+    });
+    mock.method(tablesRepository, 'count', async () => 200);
+
+    const result = await tablesService.listTables(
+      { page: 2, limit: 10, folderId: 'folder-test' },
+      { id: 'user-1', role: Role.MANAGER }
+    );
+
+    assert.strictEqual(capturedOptions.page, 2);
+    assert.strictEqual(capturedOptions.limit, 10);
+    assert.strictEqual(capturedOptions.folderId, 'folder-test');
+    assert.strictEqual(result.total, 200);
+    assert.strictEqual(result.page, 2);
+    assert.strictEqual(result.limit, 10);
+    assert.strictEqual(result.totalPages, 20);
+    assert.strictEqual(result.meta.hasNext, true);
+  });
+
+  it('getTableDataPaginated: debe leer y servir datos desde .data.json.gz si existe', async () => {
+    const zlib = await import('node:zlib');
+    const { promisify } = await import('node:util');
+    const gzipAsync = promisify(zlib.gzip);
+
+    const cachedData = {
+      id: validUuid,
+      shortCode: 'tabPrecalc',
+      tableName: 'rapida.csv',
+      rowCount: 2,
+      columns: ['id', 'valor'],
+      headers: [['id', 'valor']],
+      merges: [],
+      data: [
+        { id: '1', valor: 'A' },
+        { id: '2', valor: 'B' },
+      ],
+    };
+    const gzBuffer = await gzipAsync(Buffer.from(JSON.stringify(cachedData)));
+
+    mock.method(tablesRepository, 'findByShortCode', async () => ({
+      id: validUuid,
+      shortCode: 'tabPrecalc',
+      tableName: 'rapida.csv',
+      rowCount: 2,
+      columnsSchema: ['id', 'valor'],
+      sizeBytes: 100,
+      storagePath: '/mock/storage/tables/rapida.csv',
+      createdAt: new Date(),
+    }));
+
+    mock.method(fs, 'access', async () => {});
+    mock.method(fs, 'readFile', async () => gzBuffer);
+
+    const result = await tablesService.getTableDataPaginated('tabPrecalc', 1, 10);
+    assert.strictEqual(result.shortCode, 'tabPrecalc');
+    assert.strictEqual(result.data.length, 2);
+    assert.strictEqual(result.data[0].id, '1');
+    assert.strictEqual(result.data[1].id, '2');
+    assert.strictEqual(result.meta.total, 2);
   });
 });

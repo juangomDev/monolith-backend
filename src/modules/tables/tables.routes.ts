@@ -3,39 +3,13 @@ import { tablesService } from './tables.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import {
-  standardErrorResponses,
-  securityDualAuth,
-} from '../../shared/schemas.js';
-
-const passValidator = () => () => true;
-
-const tableItemSchema = {
-  type: 'object',
-  additionalProperties: true,
-  properties: {
-    id: { type: 'string', format: 'uuid' },
-    shortCode: { type: 'string', example: 'tab1234567' },
-    tableName: { type: 'string', example: 'ventas_2026.csv' },
-    rowCount: { type: 'integer', example: 1500 },
-    columns: {
-      type: 'array',
-      items: { type: 'string' },
-      example: ['id', 'producto', 'precio', 'fecha'],
-    },
-    columnsSchema: {
-      type: 'array',
-      items: { type: 'string' },
-    },
-    sizeBytes: { type: 'integer', example: 51200 },
-    folderId: { type: 'string', format: 'uuid', nullable: true },
-    url: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567' },
-    urlWithVersion: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567?v=1740000000000' },
-    downloadUrl: { type: 'string', format: 'uri', example: 'http://localhost:3000/t/tab1234567?download=true' },
-    createdAt: { type: 'string', format: 'date-time' },
-    updatedAt: { type: 'string', format: 'date-time' },
-  },
-  required: ['id', 'shortCode', 'tableName', 'rowCount', 'sizeBytes'],
-};
+  passValidator,
+  getTableByShortCodeRouteSchema,
+  listTablesRouteSchema,
+  uploadTableRouteSchema,
+  deleteTableRouteSchema,
+  extractRequester,
+} from './tables.schemas.js';
 
 export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /t/:short_code (Consulta paginada o descarga directa)
@@ -43,66 +17,11 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     '/t/:short_code',
     {
       validatorCompiler: passValidator,
-      schema: {
-        tags: ['Tables'],
-        summary: 'Consulta JSON paginada o descarga de dataset por shortCode',
-        description:
-          'Si incluye query param ?download=true, descarga directamente el archivo original (.csv o .xlsx). De lo contrario, entrega los datos en formato JSON paginado con esquema de columnas y metadatos.',
-        params: {
-          type: 'object',
-          required: ['short_code'],
-          properties: {
-            short_code: {
-              type: 'string',
-              minLength: 8,
-              maxLength: 14,
-              example: 'tab1234567',
-              description: 'Código Base58 opaco de 10 caracteres',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            download: { type: 'string', enum: ['true', 'false'], description: 'Descargar archivo original' },
-            page: { type: 'integer', default: 1, description: 'Número de página a consultar' },
-            limit: { type: 'integer', default: 100, maximum: 500, description: 'Registros por página (máx 500)' },
-          },
-        },
-        response: {
-          200: {
-            description: 'Datos paginados o stream de descarga de dataset',
-            type: 'object',
-            additionalProperties: true,
-            properties: {
-              id: { type: 'string' },
-              shortCode: { type: 'string' },
-              tableName: { type: 'string' },
-              columns: { type: 'array', items: { type: 'string' } },
-              data: {
-                type: 'array',
-                items: { type: 'object', additionalProperties: true },
-              },
-              meta: {
-                type: 'object',
-                additionalProperties: true,
-                properties: {
-                  page: { type: 'integer' },
-                  limit: { type: 'integer' },
-                  total: { type: 'integer' },
-                  totalPages: { type: 'integer' },
-                  hasNext: { type: 'boolean' },
-                },
-              },
-            },
-          },
-          404: standardErrorResponses[404],
-        },
-      },
+      schema: getTableByShortCodeRouteSchema,
     },
     async (request, reply) => {
       const { short_code } = request.params as { short_code: string };
-      const query = request.query as { download?: string; page?: string; limit?: string };
+      const query = request.query as { download?: string; page?: string; limit?: string; raw?: string };
 
       if (query?.download === 'true') {
         const { record, fileStream } = await tablesService.getTableDownloadStream(short_code);
@@ -114,6 +33,20 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
         reply.header('Content-Type', contentType);
         reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(record.tableName)}"`);
         return reply.send(fileStream);
+      }
+
+      const isPaginated = query?.page !== undefined || query?.limit !== undefined;
+      const acceptsGzip = Boolean(request.headers['accept-encoding']?.includes('gzip'));
+
+      // Entrega instantánea de artefacto precalculado (2 ms) si se pide raw o si el cliente acepta gzip sin paginar
+      if (query?.raw === 'true' || (acceptsGzip && !isPaginated)) {
+        const precalc = await tablesService.getPrecalculatedGzipStream(short_code);
+        if (precalc) {
+          reply.header('Content-Type', 'application/json');
+          reply.header('Content-Encoding', 'gzip');
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+          return reply.send(precalc.stream);
+        }
       }
 
       const page = Math.max(1, parseInt(query?.page || '1', 10) || 1);
@@ -130,32 +63,16 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     {
       validatorCompiler: passValidator,
       preHandler: [authenticateUserOrApiKey],
-      schema: {
-        tags: ['Tables'],
-        summary: 'Listar datasets tabulares registrados',
-        description: 'Retorna el listado de tablas respetando las reglas de privacidad de las carpetas contenedoras.',
-        security: securityDualAuth,
-        response: {
-          200: {
-            description: 'Listado de tablas obtenido exitosamente',
-            type: 'object',
-            additionalProperties: true,
-            properties: {
-              tables: {
-                type: 'array',
-                items: tableItemSchema,
-              },
-              total: { type: 'integer', example: 1 },
-            },
-            required: ['tables', 'total'],
-          },
-          401: standardErrorResponses[401],
-        },
-      },
+      schema: listTablesRouteSchema,
     },
     async (request, reply) => {
       const requester = request.user ? { id: request.user.id, role: request.user.role } : undefined;
-      const result = await tablesService.listTables(requester);
+      const query = request.query as { page?: string; limit?: string; folderId?: string };
+      const page = query?.page ? parseInt(query.page, 10) : undefined;
+      const limit = query?.limit ? parseInt(query.limit, 10) : undefined;
+      const folderId = query?.folderId;
+
+      const result = await tablesService.listTables({ page, limit, folderId, requester });
       return reply.send(result);
     }
   );
@@ -166,36 +83,7 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     {
       validatorCompiler: passValidator,
       preHandler: [authenticateUserOrApiKey],
-      schema: {
-        tags: ['Tables'],
-        summary: 'Subir y procesar dataset tabular (CSV o Excel)',
-        description:
-          'Ingesta multipart/form-data de archivos CSV o XLSX. Inspecciona cabeceras para deducir columnas y total de filas. Se asigna a General si no se provee folderId.',
-        security: securityDualAuth,
-        consumes: ['multipart/form-data'],
-        response: {
-          201: {
-            description: 'Dataset subido y procesado exitosamente',
-            type: 'object',
-            additionalProperties: true,
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              shortCode: { type: 'string', example: 'tab1234567' },
-              url: { type: 'string', format: 'uri' },
-              tableName: { type: 'string', example: 'datos.csv' },
-              rowCount: { type: 'integer', example: 100 },
-              columns: { type: 'array', items: { type: 'string' } },
-              sizeBytes: { type: 'integer' },
-              folderId: { type: 'string', format: 'uuid', nullable: true },
-            },
-            required: ['id', 'shortCode', 'url', 'tableName', 'rowCount', 'sizeBytes'],
-          },
-          400: standardErrorResponses[400],
-          401: standardErrorResponses[401],
-          413: standardErrorResponses[413],
-          415: standardErrorResponses[415],
-        },
-      },
+      schema: uploadTableRouteSchema,
     },
     async (request, reply) => {
       if (!request.isMultipart()) {
@@ -207,11 +95,11 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
       }
 
-      const userId = request.user?.id;
+      const requester = extractRequester(request);
       const folderIdField = file.fields?.folderId as { value?: string } | undefined;
       const folderId = folderIdField?.value || (request.query as { folderId?: string })?.folderId;
 
-      const result = await tablesService.saveTable(file, folderId, userId);
+      const result = await tablesService.saveTable(file, folderId, requester);
       return reply.status(201).send(result);
     }
   );
@@ -222,31 +110,12 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     {
       validatorCompiler: passValidator,
       preHandler: [authenticateUserOrApiKey],
-      schema: {
-        tags: ['Tables'],
-        summary: 'Eliminar dataset física y lógicamente',
-        description: 'Elimina el registro de la tabla en base de datos PostgreSQL y destruye su archivo binario en disco.',
-        security: securityDualAuth,
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: { type: 'string', format: 'uuid', description: 'UUID de la tabla a eliminar' },
-          },
-        },
-        response: {
-          204: {
-            description: 'Dataset eliminado exitosamente (sin contenido)',
-            type: 'null',
-          },
-          401: standardErrorResponses[401],
-          404: standardErrorResponses[404],
-        },
-      },
+      schema: deleteTableRouteSchema,
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      await tablesService.deleteTable(id);
+      const requester = extractRequester(request);
+      await tablesService.deleteTable(id, requester);
       return reply.status(204).send();
     }
   );

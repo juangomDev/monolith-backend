@@ -39,7 +39,7 @@ describe('Gateway: Autenticación JWT y Control de Acceso por Roles', () => {
         authorization: 'Bearer valid_looking_token',
       },
       jwtVerify: async () => {},
-      user: { id: 'user-inactivo-id', username: 'inactivo', role: Role.USER },
+      user: { id: 'user-inactivo-id', username: 'inactivo', role: Role.MANAGER },
     } as unknown as FastifyRequest;
     const fakeReply = {} as FastifyReply;
 
@@ -72,7 +72,7 @@ describe('Gateway: Autenticación JWT y Control de Acceso por Roles', () => {
   it('requireRole: lanza 403 FORBIDDEN si el rol del usuario no está permitido', async () => {
     const guard = requireRole([Role.ADMIN]);
     const fakeRequest = {
-      user: { id: 'user-1', username: 'user', role: Role.USER },
+      user: { id: 'user-1', username: 'user', role: Role.MANAGER },
     } as unknown as FastifyRequest;
     const fakeReply = {} as FastifyReply;
 
@@ -94,13 +94,13 @@ describe('Gateway: Autenticación JWT y Control de Acceso por Roles', () => {
     const token = app.jwt.sign({
       id: 'uploader-id',
       username: 'usuario_subida',
-      role: Role.USER,
+      role: Role.MANAGER,
     });
 
     (prisma.user as any).findUnique = async () => ({
       id: 'uploader-id',
       username: 'usuario_subida',
-      role: Role.USER,
+      role: Role.MANAGER,
       isActive: true,
     });
 
@@ -123,13 +123,13 @@ describe('Gateway: Autenticación JWT y Control de Acceso por Roles', () => {
     const token = app.jwt.sign({
       id: 'analista-id',
       username: 'analista_tablas',
-      role: Role.USER,
+      role: Role.MANAGER,
     });
 
     (prisma.user as any).findUnique = async () => ({
       id: 'analista-id',
       username: 'analista_tablas',
-      role: Role.USER,
+      role: Role.MANAGER,
       isActive: true,
     });
 

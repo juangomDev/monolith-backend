@@ -83,7 +83,7 @@ describe('Módulo Usuarios: UsersService y Hashing scrypt', () => {
           id: '11111111-1111-1111-1111-111111111111',
           username: 'inactivo',
           passwordHash: hash,
-          role: Role.USER,
+          role: Role.MANAGER,
           isActive: false,
           createdAt: new Date(),
         }) as User,
@@ -112,7 +112,7 @@ describe('Módulo Usuarios: UsersService y Hashing scrypt', () => {
           id: '22222222-2222-2222-2222-222222222222',
           username: 'usuario1',
           passwordHash: hash,
-          role: Role.USER,
+          role: Role.MANAGER,
           isActive: true,
           createdAt: new Date(),
         }) as User,
@@ -157,12 +157,12 @@ describe('Módulo Usuarios: UsersService y Hashing scrypt', () => {
     assert.strictEqual(session.role, Role.ADMIN);
   });
 
-  it('createUser: debe lanzar 403 si el rol del invocador no es ADMIN', async () => {
+  it('createUser: debe lanzar 403 si el rol del invocador es COLLABORATOR', async () => {
     const service = new UsersService({} as UsersRepository);
 
     await assert.rejects(
       async () => {
-        await service.createUser(Role.USER, { username: 'nuevo', password: 'pass123' });
+        await service.createUser(Role.COLLABORATOR, { username: 'nuevo', password: 'pass123' });
       },
       (err: unknown) => {
         assert.ok(err instanceof AppError);
@@ -257,7 +257,7 @@ describe('Módulo Usuarios: UsersService y Hashing scrypt', () => {
     );
   });
 
-  it('createUser: debe crear usuario USER exitosamente y retornar datos seguros sin hash', async () => {
+  it('createUser: debe crear usuario MANAGER exitosamente y retornar datos seguros sin hash', async () => {
     let createdPayload: any = null;
     const mockRepo = {
       findByUsername: async () => null,
@@ -282,10 +282,176 @@ describe('Módulo Usuarios: UsersService y Hashing scrypt', () => {
 
     assert.strictEqual(result.id, '55555555-5555-5555-5555-555555555555');
     assert.strictEqual(result.username, 'nuevo_analista');
-    assert.strictEqual(result.role, Role.USER);
+    assert.strictEqual(result.role, Role.MANAGER);
     assert.strictEqual(result.isActive, true);
     assert.strictEqual((result as any).passwordHash, undefined);
-    assert.strictEqual(createdPayload.role, Role.USER);
+    assert.strictEqual(createdPayload.role, Role.MANAGER);
     assert.ok(createdPayload.passwordHash.includes(':'));
+  });
+
+  it('getProfile: retorna datos del usuario sin passwordHash', async () => {
+    const mockRepo = {
+      findById: async (id: string) => ({
+        id,
+        username: 'perfil_usuario',
+        passwordHash: 'secret:hash',
+        role: Role.MANAGER,
+        tokenVersion: 2,
+        isActive: true,
+        createdById: null,
+        createdAt: new Date(),
+      }),
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    const profile = await service.getProfile('11111111-2222-3333-4444-555555555555');
+    assert.strictEqual(profile.username, 'perfil_usuario');
+    assert.strictEqual((profile as any).passwordHash, undefined);
+  });
+
+  it('changePassword: debe actualizar contraseña e incrementar tokenVersion', async () => {
+    const oldHash = await hashPassword('claveVieja123');
+    let updatedPayload: any = null;
+    let incrementedId: string | null = null;
+
+    const mockRepo = {
+      findById: async (id: string) => ({
+        id,
+        username: 'user_cambio',
+        passwordHash: oldHash,
+        role: Role.MANAGER,
+        tokenVersion: 0,
+        isActive: true,
+        createdAt: new Date(),
+      }),
+      update: async (id: string, data: any) => {
+        updatedPayload = data;
+        return {} as any;
+      },
+      incrementTokenVersion: async (id: string) => {
+        incrementedId = id;
+        return {} as any;
+      },
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    await service.changePassword('user-uuid-1', 'claveVieja123', 'claveNuevaSegura456');
+
+    assert.ok(updatedPayload?.passwordHash);
+    assert.strictEqual(incrementedId, 'user-uuid-1');
+  });
+
+  it('createUser: permite a un MANAGER crear un COLLABORATOR vinculando createdById', async () => {
+    let createdPayload: any = null;
+    const mockRepo = {
+      findByUsername: async () => null,
+      create: async (data: any) => {
+        createdPayload = data;
+        return {
+          id: 'collab-uuid',
+          username: data.username,
+          passwordHash: data.passwordHash,
+          role: data.role,
+          isActive: true,
+          createdById: data.createdById,
+          createdAt: new Date(),
+        };
+      },
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    const result = await service.createUser(
+      { id: 'manager-uuid', role: Role.MANAGER },
+      { username: 'colaborador_test', password: 'passwordSeguro1' }
+    );
+
+    assert.strictEqual(result.role, Role.COLLABORATOR);
+    assert.strictEqual(createdPayload.role, Role.COLLABORATOR);
+    assert.strictEqual(createdPayload.createdById, 'manager-uuid');
+  });
+
+  it('createUser: rechaza si un MANAGER intenta crear otro MANAGER', async () => {
+    const service = new UsersService({} as UsersRepository);
+    await assert.rejects(
+      async () => {
+        await service.createUser(
+          { id: 'manager-uuid', role: Role.MANAGER },
+          { username: 'otro_manager', password: 'passwordSeguro1', role: Role.MANAGER }
+        );
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof AppError);
+        assert.strictEqual((err as AppError).status, 403);
+        return true;
+      }
+    );
+  });
+
+  it('listUsers: MANAGER solo obtiene sus propios colaboradores creados', async () => {
+    let capturedFilter: any = null;
+    const mockRepo = {
+      listAll: async (filter?: any) => {
+        capturedFilter = filter;
+        return [];
+      },
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    await service.listUsers({ id: 'manager-123', role: Role.MANAGER });
+
+    assert.deepStrictEqual(capturedFilter, { createdById: 'manager-123' });
+  });
+
+  it('updateUserStatus: MANAGER suspende su colaborador e invalida su tokenVersion', async () => {
+    let incrementedId: string | null = null;
+    const mockRepo = {
+      findById: async (id: string) => ({
+        id,
+        username: 'mi_colaborador',
+        role: Role.COLLABORATOR,
+        createdById: 'manager-1',
+        isActive: true,
+      }),
+      update: async (id: string, data: any) => ({ id, ...data }),
+      incrementTokenVersion: async (id: string) => {
+        incrementedId = id;
+        return {} as any;
+      },
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    const updated = await service.updateUserStatus(
+      { id: 'manager-1', role: Role.MANAGER },
+      '11111111-2222-4333-8444-555555555555',
+      false
+    );
+
+    assert.strictEqual(updated.isActive, false);
+    assert.strictEqual(incrementedId, '11111111-2222-4333-8444-555555555555');
+  });
+
+  it('deleteUser: MANAGER elimina su propio colaborador exitosamente', async () => {
+    let deletedId: string | null = null;
+    const mockRepo = {
+      findById: async (id: string) => ({
+        id,
+        username: 'colaborador_a_borrar',
+        role: Role.COLLABORATOR,
+        createdById: 'manager-1',
+      }),
+      deleteById: async (id: string) => {
+        deletedId = id;
+        return {} as any;
+      },
+    } as unknown as UsersRepository;
+
+    const service = new UsersService(mockRepo);
+    const result = await service.deleteUser(
+      { id: 'manager-1', role: Role.MANAGER },
+      '11111111-2222-4333-8444-666666666666'
+    );
+
+    assert.strictEqual(result.deleted, true);
+    assert.strictEqual(deletedId, '11111111-2222-4333-8444-666666666666');
   });
 });

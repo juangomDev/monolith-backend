@@ -223,4 +223,77 @@ describe('Módulo Tablas: Rutas HTTP', () => {
     assert.strictEqual(body.tables[0].shortCode, 'tab123XYZ');
     assert.strictEqual(body.tables[0].rowCount, 100);
   });
+
+  it('GET /t/:short_code: transmite stream gzip si el cliente acepta gzip y no pide paginación', async () => {
+    const fakeGzStream = Readable.from([Buffer.from('gzipped-binary-content')]);
+    mock.method(tablesService, 'getPrecalculatedGzipStream', async () => ({
+      record: { shortCode: 'tabGzip' },
+      stream: fakeGzStream,
+    }));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/t/tabGzip',
+      headers: {
+        'accept-encoding': 'gzip',
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    assert.strictEqual(response.headers['content-type'], 'application/json');
+    assert.strictEqual(response.headers['content-encoding'], 'gzip');
+    assert.ok(response.headers['cache-control']?.includes('immutable'));
+  });
+
+  it('DELETE /api/v1/tables/:id: retorna 403 si el requester no tiene permisos', async () => {
+    mockValidAuthClient();
+    mock.method(tablesService, 'deleteTable', async () => {
+      const { AppError } = await import('../../../src/shared/errors.js');
+      throw new AppError(403, 'No tienes permiso para eliminar este dataset', 'FORBIDDEN');
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/tables/${validUuid}`,
+      headers: {
+        'x-api-key': validKey,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 403);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.code, 'FORBIDDEN');
+  });
+
+  it('GET /api/v1/tables: soporta query params de paginación ?page=2&limit=5&folderId=...', async () => {
+    mockValidAuthClient();
+    let capturedOptions: any = null;
+    mock.method(tablesService, 'listTables', async (options: any) => {
+      capturedOptions = options;
+      return {
+        tables: [],
+        total: 0,
+        page: 2,
+        limit: 5,
+        totalPages: 0,
+        meta: { page: 2, limit: 5, total: 0, totalPages: 0, hasNext: false },
+      };
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/tables?page=2&limit=5&folderId=${validUuid}`,
+      headers: {
+        'x-api-key': validKey,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    assert.strictEqual(capturedOptions.page, 2);
+    assert.strictEqual(capturedOptions.limit, 5);
+    assert.strictEqual(capturedOptions.folderId, validUuid);
+  });
 });

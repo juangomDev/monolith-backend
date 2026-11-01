@@ -78,12 +78,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('GET /api/v1/folders: retorna 200 con listado de carpetas para usuario autenticado', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -144,12 +144,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('POST /api/v1/folders: retorna 201 y crea una nueva carpeta', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -185,12 +185,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('POST /api/v1/folders: propaga 400 si los datos son inválidos según el esquema', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -220,12 +220,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('GET /api/v1/folders/:id: retorna 200 con el detalle de la carpeta', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -256,12 +256,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('GET /api/v1/folders/:id: retorna 403 si la carpeta es privada y no pertenece al usuario', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -284,12 +284,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('GET /api/v1/folders/:id: retorna 404 si la carpeta no existe', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -315,12 +315,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('DELETE /api/v1/folders/:id: retorna 200 si la carpeta es eliminada exitosamente', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -344,12 +344,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('DELETE /api/v1/folders/:id: retorna 403 si el usuario intenta eliminar una carpeta ajena', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -375,12 +375,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('PATCH /api/v1/images/:id/folder: retorna 200 tras mover la imagen a otra carpeta', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -411,12 +411,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('PATCH /api/v1/images/:id/folder: retorna 400 si se intenta mover a una carpeta incompatible de tablas', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -449,12 +449,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
   // ==========================================
   it('PATCH /api/v1/tables/:id/folder: retorna 200 tras mover la tabla a otra carpeta', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 
@@ -485,12 +485,12 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
 
   it('PATCH /api/v1/tables/:id/folder: retorna 400 si se intenta mover a una carpeta incompatible de imágenes', async () => {
     const app = await buildApp();
-    mockDbUser({ id: testUserId, username: 'juan', role: Role.USER });
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
 
     const token = app.jwt.sign({
       id: testUserId,
       username: 'juan',
-      role: Role.USER,
+      role: Role.MANAGER,
       tokenVersion: 0,
     });
 

@@ -6,6 +6,7 @@ export interface CreateUserInput {
   passwordHash: string;
   role: Role;
   isActive?: boolean;
+  createdById?: string;
 }
 
 export class UsersRepository {
@@ -34,21 +35,37 @@ export class UsersRepository {
         passwordHash: data.passwordHash,
         role: data.role,
         isActive: data.isActive ?? true,
+        createdById: data.createdById ?? null,
       },
     });
   }
 
-  async listAll(): Promise<Omit<User, 'passwordHash'>[]> {
+  async listAll(filter?: { createdById?: string }): Promise<Omit<User, 'passwordHash'>[]> {
     return prisma.user.findMany({
+      where: filter?.createdById ? { createdById: filter.createdById } : undefined,
       select: {
         id: true,
         username: true,
         role: true,
         tokenVersion: true,
         isActive: true,
+        createdById: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async update(id: string, data: Partial<Pick<User, 'passwordHash' | 'isActive' | 'tokenVersion'>>): Promise<User> {
+    return prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteById(id: string): Promise<User> {
+    return prisma.user.delete({
+      where: { id },
     });
   }
 

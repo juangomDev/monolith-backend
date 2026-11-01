@@ -1,16 +1,15 @@
 import path from 'node:path';
-import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
 import type { MultipartFile } from '@fastify/multipart';
-import { Role, FolderType } from '@prisma/client';
+import { Role, FolderType, FolderPermission } from '@prisma/client';
 import { env } from '../../config/env.js';
 import { generateShortCode } from '../../shared/shortcode.js';
 import { AppError } from '../../shared/errors.js';
 import { validateMagicBytes, ALLOWED_IMAGE_MIMES } from '../../gateway/file-guard.js';
 import { imagesRepository } from './images.repository.js';
 import { imagesProcessor } from './images.processor.js';
+import { imagesStorage } from './images.storage.js';
 import { foldersRepository } from '../folders/folders.repository.js';
+import { foldersSharesService } from '../folders/folders.shares.service.js';
 import type { RequesterContext } from '../folders/folders.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -22,8 +21,36 @@ export interface ListImagesQueryOptions {
   requester?: RequesterContext;
 }
 
+function formatImageItem(record: any) {
+  const dateForVersion = record.updatedAt ? new Date(record.updatedAt) : (record.createdAt ? new Date(record.createdAt) : new Date());
+  return {
+    id: record.id,
+    shortCode: record.shortCode,
+    url: `${env.BASE_URL}/i/${record.shortCode}`,
+    urlWithVersion: `${env.BASE_URL}/i/${record.shortCode}?v=${dateForVersion.getTime()}`,
+    originalName: record.originalName,
+    mimeType: record.mimeType,
+    sizeBytes: record.sizeBytes,
+    width: record.width ?? null,
+    height: record.height ?? null,
+    folderId: (record as any).folderId ?? null,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt ?? record.createdAt,
+  };
+}
+
 export class ImagesService {
-  async saveImage(part: MultipartFile, folderId?: string, userId?: string) {
+  async saveImage(part: MultipartFile, folderId?: string, user?: RequesterContext | string) {
+    const requesterCtx = typeof user === 'string' ? { id: user, role: Role.ADMIN } : user;
+    if (requesterCtx?.role === Role.COLLABORATOR) {
+      if (!folderId) {
+        throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
+      }
+      await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
+    } else if (folderId && requesterCtx) {
+      await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
+    }
+
     const isImage = part.mimetype.startsWith('image/') || part.mimetype === 'image/svg+xml';
     if (!isImage) {
       throw new AppError(415, `Tipo de archivo '${part.mimetype}' no permitido. Solo se aceptan imágenes.`, 'UNSUPPORTED_MEDIA_TYPE');
@@ -38,44 +65,32 @@ export class ImagesService {
       ext = `.${subtype === 'jpeg' ? 'jpg' : subtype}`;
     }
 
-    const imagesDir = path.resolve(env.STORAGE_DIR, 'images');
-    await fs.mkdir(imagesDir, { recursive: true });
-
     const fileName = `${shortCode}${ext}`;
-    const targetPath = path.join(imagesDir, fileName);
+    const targetPath = imagesStorage.resolvePath(fileName);
 
-    try {
-      await pipeline(part.file, createWriteStream(targetPath));
-    } catch (streamErr) {
-      await fs.unlink(targetPath).catch(() => {});
-      throw streamErr;
-    }
+    await imagesStorage.saveStream(part.file, targetPath);
 
     if (part.file.truncated) {
-      await fs.unlink(targetPath).catch(() => {});
+      await imagesStorage.deleteFile(targetPath);
       throw new AppError(413, 'La imagen supera el tamaño máximo permitido', 'PAYLOAD_TOO_LARGE');
     }
 
     let detectedType = { mime: part.mimetype, ext: ext.replace('.', '') };
     try {
-      const handle = await fs.open(targetPath, 'r');
-      const buffer = Buffer.alloc(4100);
-      const { bytesRead } = await handle.read(buffer, 0, 4100, 0);
-      await handle.close();
-      const chunk = buffer.subarray(0, bytesRead);
-
+      const chunk = await imagesStorage.readHeaderChunk(targetPath, 4100);
       detectedType = await validateMagicBytes(chunk, ALLOWED_IMAGE_MIMES);
     } catch (valErr) {
-      await fs.unlink(targetPath).catch(() => {});
+      await imagesStorage.deleteFile(targetPath);
       throw valErr;
     }
 
-    const stats = await fs.stat(targetPath);
+    const fileSize = await imagesStorage.getFileSize(targetPath);
 
-    // Procesamiento multimedia delegable a imagesProcessor
+    // Procesamiento multimedia delegado a imagesProcessor
     const { width, height } = await imagesProcessor.extractDimensions(targetPath);
     await imagesProcessor.generateThumbnail(targetPath, shortCode);
 
+    const userId = requesterCtx?.id;
     if (!folderId && userId) {
       const defaultFolder = await foldersRepository.findOrCreateDefaultFolder(userId, FolderType.IMAGE);
       folderId = defaultFolder.id;
@@ -85,29 +100,14 @@ export class ImagesService {
       shortCode,
       originalName: part.filename || 'image',
       mimeType: detectedType.mime,
-      sizeBytes: stats.size,
+      sizeBytes: fileSize,
       width,
       height,
       storagePath: targetPath,
       folderId,
     });
 
-    const dateForVersion = record.updatedAt ? new Date(record.updatedAt) : (record.createdAt ? new Date(record.createdAt) : new Date());
-
-    return {
-      id: record.id,
-      shortCode: record.shortCode,
-      url: `${env.BASE_URL}/i/${record.shortCode}`,
-      urlWithVersion: `${env.BASE_URL}/i/${record.shortCode}?v=${dateForVersion.getTime()}`,
-      originalName: record.originalName,
-      mimeType: record.mimeType,
-      sizeBytes: record.sizeBytes,
-      width: record.width ?? null,
-      height: record.height ?? null,
-      folderId: (record as any).folderId ?? null,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt ?? record.createdAt,
-    };
+    return formatImageItem(record);
   }
 
   async listImages(
@@ -139,20 +139,7 @@ export class ImagesService {
     const totalPages = Math.ceil(total / limit) || 1;
 
     return {
-      images: records.map((record: any) => ({
-        id: record.id,
-        shortCode: record.shortCode,
-        url: `${env.BASE_URL}/i/${record.shortCode}`,
-        urlWithVersion: `${env.BASE_URL}/i/${record.shortCode}?v=${new Date(record.updatedAt || record.createdAt || Date.now()).getTime()}`,
-        originalName: record.originalName,
-        mimeType: record.mimeType,
-        sizeBytes: record.sizeBytes,
-        width: record.width ?? null,
-        height: record.height ?? null,
-        folderId: record.folderId ?? null,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt ?? record.createdAt,
-      })),
+      images: records.map(formatImageItem),
       total,
       page,
       limit,
@@ -175,28 +162,25 @@ export class ImagesService {
 
     if (variant === 'thumb') {
       const thumbPath = imagesProcessor.getThumbnailPath(shortCode);
-      try {
-        await fs.access(thumbPath, fs.constants.R_OK);
+      const isThumbAccessible = await imagesStorage.isAccessible(thumbPath);
+      if (isThumbAccessible) {
         return {
           record,
-          fileStream: createReadStream(thumbPath),
+          fileStream: imagesStorage.createReadStream(thumbPath),
           mimeType: 'image/webp',
           isThumbnail: true,
         };
-      } catch {
-        // Si la miniatura aún no existe en disco, fallback al original
       }
     }
 
-    try {
-      await fs.access(record.storagePath, fs.constants.R_OK);
-    } catch {
+    const isOriginalAccessible = await imagesStorage.isAccessible(record.storagePath);
+    if (!isOriginalAccessible) {
       throw new AppError(404, 'El archivo físico de la imagen no existe en almacenamiento', 'FILE_NOT_FOUND');
     }
 
     return {
       record,
-      fileStream: createReadStream(record.storagePath),
+      fileStream: imagesStorage.createReadStream(record.storagePath),
       mimeType: record.mimeType,
       isThumbnail: false,
     };
@@ -210,67 +194,39 @@ export class ImagesService {
     return record;
   }
 
-  async renameImage(id: string, newName: string, requester?: RequesterContext) {
-    if (!UUID_REGEX.test(id)) {
-      throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
-    }
-
-    const trimmed = typeof newName === 'string' ? newName.trim() : '';
-    if (!trimmed || trimmed.length > 255) {
-      throw new AppError(400, 'El nombre original debe tener entre 1 y 255 caracteres', 'INVALID_NAME');
-    }
-
-    const record = await imagesRepository.findById(id);
-    if (!record) {
-      throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
-    }
-
+  private async checkImageAccess(record: any, requester?: RequesterContext) {
     if (requester && requester.role !== Role.ADMIN) {
-      if (!record.folder || record.folder.userId !== requester.id) {
-        throw new AppError(403, 'No tienes permiso para modificar esta imagen', 'FORBIDDEN');
+      if (record.folder && record.folder.userId !== requester.id) {
+        if (record.folderId) {
+          await foldersSharesService.assertFolderAccess(record.folderId, requester, FolderPermission.EDIT);
+        } else {
+          throw new AppError(403, 'No tienes permiso para acceder o modificar esta imagen', 'FORBIDDEN');
+        }
       }
     }
+  }
 
-    const updated = await imagesRepository.update(id, {
-      originalName: trimmed,
-    });
+  async renameImage(id: string, newName: string, requester?: RequesterContext) {
+    if (!UUID_REGEX.test(id)) throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
+    const trimmed = typeof newName === 'string' ? newName.trim() : '';
+    if (!trimmed || trimmed.length > 255) throw new AppError(400, 'El nombre original debe tener entre 1 y 255 caracteres', 'INVALID_NAME');
 
-    return {
-      id: updated.id,
-      shortCode: updated.shortCode,
-      url: `${env.BASE_URL}/i/${updated.shortCode}`,
-      urlWithVersion: `${env.BASE_URL}/i/${updated.shortCode}?v=${updated.updatedAt.getTime()}`,
-      originalName: updated.originalName,
-      mimeType: updated.mimeType,
-      sizeBytes: updated.sizeBytes,
-      width: updated.width ?? null,
-      height: updated.height ?? null,
-      folderId: updated.folderId,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
+    const record = await imagesRepository.findById(id);
+    if (!record) throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
+    await this.checkImageAccess(record, requester);
+
+    const updated = await imagesRepository.update(id, { originalName: trimmed });
+    return formatImageItem(updated);
   }
 
   async replaceImageFile(id: string, part: MultipartFile, requester?: RequesterContext) {
-    if (!UUID_REGEX.test(id)) {
-      throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
-    }
-
+    if (!UUID_REGEX.test(id)) throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
     const isImage = part.mimetype.startsWith('image/') || part.mimetype === 'image/svg+xml';
-    if (!isImage) {
-      throw new AppError(415, `Tipo de archivo '${part.mimetype}' no permitido. Solo se aceptan imágenes.`, 'UNSUPPORTED_MEDIA_TYPE');
-    }
+    if (!isImage) throw new AppError(415, `Tipo de archivo '${part.mimetype}' no permitido. Solo se aceptan imágenes.`, 'UNSUPPORTED_MEDIA_TYPE');
 
     const record = await imagesRepository.findById(id);
-    if (!record) {
-      throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
-    }
-
-    if (requester && requester.role !== Role.ADMIN) {
-      if (!record.folder || record.folder.userId !== requester.id) {
-        throw new AppError(403, 'No tienes permiso para modificar esta imagen', 'FORBIDDEN');
-      }
-    }
+    if (!record) throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
+    await this.checkImageAccess(record, requester);
 
     let ext = path.extname(part.filename).toLowerCase();
     if (part.mimetype === 'image/svg+xml' || ext === '.svg') {
@@ -280,44 +236,33 @@ export class ImagesService {
       ext = `.${subtype === 'jpeg' ? 'jpg' : subtype}`;
     }
 
-    const imagesDir = path.resolve(env.STORAGE_DIR, 'images');
     const fileName = `${record.shortCode}${ext}`;
-    const targetPath = path.join(imagesDir, fileName);
+    const targetPath = imagesStorage.resolvePath(fileName);
+    const tempPath = imagesStorage.resolvePath(`temp_${record.shortCode}_${Date.now()}${ext}`);
 
-    const tempPath = path.join(imagesDir, `temp_${record.shortCode}_${Date.now()}${ext}`);
-    try {
-      await pipeline(part.file, createWriteStream(tempPath));
-    } catch (streamErr) {
-      await fs.unlink(tempPath).catch(() => {});
-      throw streamErr;
-    }
+    await imagesStorage.saveStream(part.file, tempPath);
 
     if (part.file.truncated) {
-      await fs.unlink(tempPath).catch(() => {});
+      await imagesStorage.deleteFile(tempPath);
       throw new AppError(413, 'La imagen supera el tamaño máximo permitido', 'PAYLOAD_TOO_LARGE');
     }
 
     let detectedType = { mime: part.mimetype, ext: ext.replace('.', '') };
     try {
-      const handle = await fs.open(tempPath, 'r');
-      const buffer = Buffer.alloc(4100);
-      const { bytesRead } = await handle.read(buffer, 0, 4100, 0);
-      await handle.close();
-      const chunk = buffer.subarray(0, bytesRead);
-
+      const chunk = await imagesStorage.readHeaderChunk(tempPath, 4100);
       detectedType = await validateMagicBytes(chunk, ALLOWED_IMAGE_MIMES);
     } catch (valErr) {
-      await fs.unlink(tempPath).catch(() => {});
+      await imagesStorage.deleteFile(tempPath);
       throw valErr;
     }
 
     // Si cambió la extensión física, eliminar el archivo anterior en disco
     if (record.storagePath !== targetPath) {
-      await fs.unlink(record.storagePath).catch(() => {});
+      await imagesStorage.deleteFile(record.storagePath);
     }
 
-    await fs.rename(tempPath, targetPath);
-    const stats = await fs.stat(targetPath);
+    await imagesStorage.renameFile(tempPath, targetPath);
+    const fileSize = await imagesStorage.getFileSize(targetPath);
 
     // Sharp: Dimensiones y regeneración de miniatura delegadas
     const { width, height } = await imagesProcessor.extractDimensions(targetPath);
@@ -326,55 +271,23 @@ export class ImagesService {
     const updated = await imagesRepository.update(id, {
       storagePath: targetPath,
       mimeType: detectedType.mime,
-      sizeBytes: stats.size,
+      sizeBytes: fileSize,
       width,
       height,
     });
 
-    return {
-      id: updated.id,
-      shortCode: updated.shortCode,
-      url: `${env.BASE_URL}/i/${updated.shortCode}`,
-      urlWithVersion: `${env.BASE_URL}/i/${updated.shortCode}?v=${updated.updatedAt.getTime()}`,
-      originalName: updated.originalName,
-      mimeType: updated.mimeType,
-      sizeBytes: updated.sizeBytes,
-      width: updated.width ?? null,
-      height: updated.height ?? null,
-      folderId: updated.folderId,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
+    return formatImageItem(updated);
   }
 
   async deleteImage(id: string, requester?: RequesterContext) {
-    if (!UUID_REGEX.test(id)) {
-      throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
-    }
-
+    if (!UUID_REGEX.test(id)) throw new AppError(400, 'El ID de la imagen debe ser un UUID válido', 'INVALID_ID');
     const record = await imagesRepository.findById(id);
-    if (!record) {
-      throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
-    }
-
-    // Validación Anti-IDOR de Autorización
-    if (requester && requester.role !== Role.ADMIN) {
-      if (!record.folder || record.folder.userId !== requester.id) {
-        throw new AppError(403, 'No tienes permiso para eliminar esta imagen', 'FORBIDDEN');
-      }
-    }
+    if (!record) throw new AppError(404, 'Imagen no encontrada', 'NOT_FOUND');
+    await this.checkImageAccess(record, requester);
 
     await imagesRepository.deleteById(id);
-
-    try {
-      await fs.unlink(record.storagePath);
-    } catch {
-      // Ignorar si el archivo físico ya no existía
-    }
-
-    // Limpieza de miniatura asociada delegada a imagesProcessor
+    await imagesStorage.deleteFile(record.storagePath);
     await imagesProcessor.deleteThumbnail(record.shortCode);
-
     return { deleted: true };
   }
 }

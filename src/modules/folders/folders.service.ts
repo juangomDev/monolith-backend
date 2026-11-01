@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { z } from 'zod';
 import { FolderType, Role, type Folder } from '@prisma/client';
 import { foldersRepository, type FoldersRepository, type FolderWithDetails } from './folders.repository.js';
@@ -7,24 +8,14 @@ import { AppError } from '../../shared/errors.js';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const createFolderSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, 'El nombre debe tener al menos 2 caracteres')
-    .max(60, 'El nombre no puede exceder 60 caracteres'),
+  name: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres').max(60, 'El nombre no puede exceder 60 caracteres'),
   type: z.enum(['IMAGE', 'TABLE']),
-  color: z
-    .string()
-    .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'El color debe ser un código hexadecimal válido (ej. #3b82f6)')
-    .optional()
-    .nullable(),
+  color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'El color debe ser un código hexadecimal válido (ej. #3b82f6)').optional().nullable(),
   isPrivate: z.boolean().optional().default(false),
 });
 
 export const moveResourceSchema = z.object({
-  folderId: z
-    .string()
-    .uuid('El folderId debe ser un UUID válido'),
+  folderId: z.string().uuid('El folderId debe ser un UUID válido'),
 });
 
 export interface RequesterContext {
@@ -40,19 +31,27 @@ export interface FormattedFolder {
   isPrivate: boolean;
   itemCount: number;
   userId: string;
-  owner?: {
-    id: string;
-    username: string;
-  };
+  owner?: { id: string; username: string };
+  myPermission?: string;
   createdAt: Date;
 }
 
 export class FoldersService {
   constructor(private readonly repo: FoldersRepository = foldersRepository) {}
 
-  private formatFolder(folder: FolderWithDetails | (Folder & { _count?: { images: number; tables: number }; user?: { id: string; username: string } })): FormattedFolder {
+  private formatFolder(
+    folder: FolderWithDetails | (Folder & { _count?: { images: number; tables: number }; user?: { id: string; username: string }; members?: { permission: string }[] }),
+    requester?: RequesterContext
+  ): FormattedFolder {
     const imagesCount = folder._count?.images ?? 0;
     const tablesCount = folder._count?.tables ?? 0;
+    let myPermission: string | undefined;
+    if (requester) {
+      if (requester.role === Role.ADMIN) myPermission = 'ADMIN';
+      else if (folder.userId === requester.id) myPermission = 'EDIT';
+      else if ((folder as any).members?.[0]?.permission) myPermission = (folder as any).members[0].permission;
+      else if (!folder.isPrivate) myPermission = 'READ';
+    }
 
     return {
       id: folder.id,
@@ -63,26 +62,27 @@ export class FoldersService {
       itemCount: folder.type === FolderType.IMAGE ? imagesCount : tablesCount,
       userId: folder.userId,
       owner: folder.user ? { id: folder.user.id, username: folder.user.username } : undefined,
+      myPermission,
       createdAt: folder.createdAt,
     };
   }
 
   async createFolder(rawInput: unknown, requester: RequesterContext): Promise<FormattedFolder> {
+    if (requester.role === Role.COLLABORATOR) {
+      throw new AppError(403, 'Los colaboradores no tienen permiso para crear carpetas en el sistema', 'FORBIDDEN');
+    }
+
     const parseResult = createFolderSchema.safeParse(rawInput);
     if (!parseResult.success) {
       throw new AppError(
         400,
         parseResult.error.issues[0]?.message || 'Datos de carpeta inválidos',
         'BAD_REQUEST',
-        parseResult.error.issues.map((i) => ({
-          name: i.path.join('.'),
-          reason: i.message,
-        }))
+        parseResult.error.issues.map((i) => ({ name: i.path.join('.'), reason: i.message }))
       );
     }
 
     const { name, type, color, isPrivate } = parseResult.data;
-
     const created = await this.repo.createFolder({
       name,
       type,
@@ -99,6 +99,7 @@ export class FoldersService {
       isPrivate: created.isPrivate,
       itemCount: 0,
       userId: created.userId,
+      myPermission: 'EDIT',
       createdAt: created.createdAt,
     };
   }
@@ -109,9 +110,10 @@ export class FoldersService {
       type,
       userId: requester.id,
       isAdmin,
+      role: requester.role,
     });
 
-    const formatted = folders.map((f) => this.formatFolder(f));
+    const formatted = folders.map((f) => this.formatFolder(f, requester));
     return {
       folders: formatted,
       total: formatted.length,
@@ -156,11 +158,16 @@ export class FoldersService {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    // Eliminación en cascada física de archivos en disco
+    // Eliminación en cascada física de archivos en disco (incluyendo .data.json.gz de tablas)
     await Promise.allSettled(
-      deleteResult.storagePaths.map((filePath) =>
-        fs.unlink(filePath).catch(() => {})
-      )
+      deleteResult.storagePaths.flatMap((filePath) => {
+        const paths = [filePath];
+        if (filePath.includes('tables')) {
+          const parsed = path.parse(filePath);
+          paths.push(path.join(parsed.dir, `${parsed.name}.data.json.gz`));
+        }
+        return paths.map((p) => fs.unlink(p).catch(() => {}));
+      })
     );
 
     return {

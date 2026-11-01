@@ -82,11 +82,11 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError(400, 'Debe adjuntar un archivo de imagen en el campo multipart', 'BAD_REQUEST');
       }
 
-      const userId = request.user?.id;
+      const requester = extractRequester(request);
       const folderIdField = file.fields?.folderId as { value?: string } | undefined;
       const folderId = folderIdField?.value || (request.query as { folderId?: string })?.folderId;
 
-      const result = await imagesService.saveImage(file, folderId, userId);
+      const result = await imagesService.saveImage(file, folderId, requester);
       return reply.status(201).send(result);
     }
   );

@@ -1,5 +1,5 @@
 import { prisma } from '../../config/db.js';
-import type { Folder, FolderType, Prisma, ImageRegistry, TableRegistry } from '@prisma/client';
+import { Role, FolderPermission, type Folder, type FolderType, type Prisma, type ImageRegistry, type TableRegistry } from '@prisma/client';
 
 export interface CreateFolderInput {
   name: string;
@@ -13,6 +13,7 @@ export interface FindFoldersFilter {
   type?: FolderType;
   userId?: string;
   isAdmin: boolean;
+  role?: Role;
 }
 
 export type FolderWithDetails = Folder & {
@@ -24,6 +25,7 @@ export type FolderWithDetails = Folder & {
     id: string;
     username: string;
   };
+  members?: { permission: FolderPermission }[];
 };
 
 export interface DeletedFolderResult {
@@ -52,10 +54,15 @@ export class FoldersRepository {
     }
 
     if (!filter.isAdmin) {
-      where.OR = [
-        { isPrivate: false },
-        { userId: filter.userId },
-      ];
+      if (filter.role === Role.COLLABORATOR) {
+        where.members = { some: { userId: filter.userId } };
+      } else {
+        where.OR = [
+          { isPrivate: false },
+          { userId: filter.userId },
+          { members: { some: { userId: filter.userId } } },
+        ];
+      }
     }
 
     return prisma.folder.findMany({
@@ -73,6 +80,12 @@ export class FoldersRepository {
             username: true,
           },
         },
+        members: filter.userId
+          ? {
+              where: { userId: filter.userId },
+              select: { permission: true },
+            }
+          : undefined,
       },
       orderBy: { createdAt: 'desc' },
     });
