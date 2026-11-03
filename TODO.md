@@ -23,6 +23,7 @@
 | **Fase 11** | Evolución Integral del Módulo de Tablas y Modularización Arquitectónica | ✅ Completado |
 | **Fase 12** | Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas | ✅ Completado |
 | **Fase 13** | Evolución Integral del Módulo de Carpetas (Edición, Protección de General y RBAC de Reasignación) | ✅ Completado |
+| **Fase 14** | Módulo de Chat Analítico sobre Tablas (RAG Tabular con Ficha Técnica, Gemini API y Widget Público) | ✅ Completado |
 
 ---
 
@@ -628,6 +629,66 @@
 
 ---
 
+## 🤖 FASE 14: Módulo de Chat Analítico sobre Tablas (RAG Tabular con Ficha Técnica, Gemini API y Widget Público)
+
+### 🎯 Objetivos de la Fase
+> 1. **Ficha Técnica de Tablas (`metadataCard` en `TableRegistry`):** Incorporar una tarjeta de metadatos por tabla que se autogenere en la subida (`entities`, `columnsMeta`, `hasSummaryRows`) y pueda enriquecerse manualmente vía `PATCH /api/v1/tables/:id/metadata` (`title`, `description`, `tags`, `unit`, `columnsMeta`).
+> 2. **Motor Analítico Determinista (`chat.engine.ts`):** Filtrar tablas por Ficha Técnica en 1 ms (sin abrir archivos irrelevantes), normalizar búsquedas con sinónimos demográficos, aplanar encabezados multinivel (`merges` + `headers` + `columnsMeta`) y pre-calcular sumas, promedios y porcentajes exactos en TypeScript sobre los artefactos `.data.json.gz`.
+> 3. **Conector IA Cloud Inteligente (`chat.provider.ts`):** Conectar con Google AI Studio (`gemini-2.5-flash` con rotación automática a `gemini-2.5-flash-lite` ante código 429 para alcanzar 3.000+ consultas gratuitas/día), caché LRU/TTL en memoria (5 min) para preguntas repetidas y Fallback Determinista Local en TypeScript si no hay `AI_API_KEY` o la red falla.
+> 4. **Cero Alucinaciones (Grounded Truth):** Si la entidad o tema consultado no existe en las Fichas Técnicas ni en los archivos permitidos, responder inmediatamente con `foundInSystem: false`, `sources: []` y `"La información solicitada no existe en los archivos registrados en este sistema."` sin gastar llamadas a la API externa.
+> 5. **Doble Contexto de Seguridad (Interno RBAC vs. Público Web Externa):**
+>    - `POST /api/v1/chat/ask`: Protegido con `authenticateUserOrApiKey` respetando estrictamente el RBAC de Fase 12/13 (`ADMIN`, `MANAGER`, `COLLABORATOR`).
+>    - `POST /api/v1/public/chat/ask` y `GET /api/v1/public/chat/suggestions`: Endpoints públicos con Rate Limiting para incrustar en páginas web externas, restringidos EXCLUSIVAMENTE a tablas dentro de carpetas públicas (`folder.isPrivate === false`).
+> 6. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos `< 300 LOC`, preservar intactos los 246 tests congelados existentes y sincronizar OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [x] **14.1 Modelo de Datos y Ficha Técnica en Tablas (`prisma/schema.prisma` y `src/modules/tables/`)**
+  - [x] `14.1.1` Agregar columna `metadataCard Json? @map("metadata_card")` en `TableRegistry` dentro de `prisma/schema.prisma` y ejecutar `npx prisma generate`.
+  - [x] `14.1.2` En `tables.parser.ts`: Autogenerar la `metadataCard` inicial durante la subida extrayendo entidades únicas de texto (`entities`), diccionario base de columnas (`columnsMeta` cruzado con `merges`/`headers`) y detección de fila de totales (`hasSummaryRows`).
+  - [x] `14.1.3` Implementar `PATCH /api/v1/tables/:id/metadata` (en `tables.routes.ts`, `tables.schemas.ts`, `tables.service.ts` y `tables.repository.ts`) validando permisos RBAC (`ADMIN`, `MANAGER` propietario o `COLLABORATOR` con permiso `EDIT` sobre la carpeta) para enriquecer `title`, `description`, `tags`, `unit`, `columnsMeta` y `hasSummaryRows`.
+
+- [x] **14.2 Motor Analítico Local y Pre-Calculadora (`src/modules/chat/chat.engine.ts`)**
+  - [x] `14.2.1` Implementar normalizador de texto (eliminación de tildes/diacríticos, minúsculas) y diccionario de sinónimos estadísticos/demográficos (`hombre/hombres <-> masculino/varones`, `mujer/mujeres <-> femenino`, `personas/habitantes <-> poblacion/total`).
+  - [x] `14.2.2` Implementar buscador rápido sobre `metadataCard` (`title`, `description`, `tags`, `entities`, `columnsMeta`) para descartar tablas irrelevantes antes de tocar disco.
+  - [x] `14.2.3` Implementar extractor de filas sobre `./storage/tables/${shortCode}.data.json.gz` con aplanado de encabezados (`Header Flattening`) combinando `headers`, `merges` y `columnsMeta`.
+  - [x] `14.2.4` Implementar `Math Scratchpad` en TypeScript: cálculo determinista de totales, promedios y distribución porcentual (`%`) de las filas filtradas (respetando `hasSummaryRows` para no duplicar totales) y generación de `chartData: { labels, values, percentages }`.
+
+- [x] **14.3 Proveedor de IA en la Nube con Rotación, Caché y Fallback (`src/modules/chat/chat.provider.ts`)**
+  - [x] `14.3.1` Declarar variables opcionales en `src/config/env.ts`: `AI_BASE_URL` (default compatible con Google AI Studio OpenAI endpoint), `AI_API_KEY`, `AI_MODEL` (default `gemini-2.5-flash`) y `AI_FALLBACK_MODEL` (default `gemini-2.5-flash-lite`).
+  - [x] `14.3.2` Implementar caché en memoria con TTL de 5 minutos indexada por hash de `(normalizedQuestion + tableIds + updatedAt)` para ahorrar cuota en preguntas repetidas.
+  - [x] `14.3.3` Implementar cliente HTTP (`fetch` nativo con timeout de 10s) con System Prompt estricto Anti-Alucinaciones y rotación automática de `gemini-2.5-flash` a `gemini-2.5-flash-lite` si recibe estado `429`.
+  - [x] `14.3.4` Implementar sintetizador determinista en TypeScript (Fallback Local) que redacte la respuesta en español usando los cálculos de `chat.engine.ts` y la `metadataCard` cuando `AI_API_KEY` no esté definida o los proveedores externos fallen.
+
+- [x] **14.4 Servicio de Orquestación, Seguridad RBAC y Rutas (`src/modules/chat/`)**
+  - [x] `14.4.1` Crear `src/modules/chat/chat.service.ts`:
+    - `askInternal(input, requester)`: Filtrar tablas accesibles según RBAC (`ADMIN` todas; `MANAGER` propias, públicas y compartidas; `COLLABORATOR` solo carpetas compartidas).
+    - `askPublic(input)`: Filtrar EXCLUSIVAMENTE tablas en carpetas públicas (`folder.isPrivate === false`), soportando filtros opcionales `folderId` o `shortCode`.
+    - `getPublicSuggestions(folderId?)`: Generar preguntas sugeridas dinámicas basadas en las `metadataCard` de las tablas públicas.
+    - Cortocircuito Anti-Alucinaciones: Si `chat.engine.ts` no halla datos en las tablas permitidas, retornar inmediatamente `foundInSystem: false`, `sources: []` y `"La información solicitada no existe en los archivos registrados en este sistema."`.
+  - [x] `14.4.2` Crear `src/modules/chat/chat.schemas.ts`: Esquemas OpenAPI 3.1 completos para `POST /api/v1/chat/ask`, `POST /api/v1/public/chat/ask` y `GET /api/v1/public/chat/suggestions`.
+  - [x] `14.4.3` Crear `src/modules/chat/chat.routes.ts` y registrar en `src/gateway/router.ts`:
+    - `POST /api/v1/chat/ask` con `authenticateUserOrApiKey`.
+    - `POST /api/v1/public/chat/ask` y `GET /api/v1/public/chat/suggestions` públicos con Rate Limit específico (30 req/min por IP).
+
+- [x] **14.5 Documentación Simultánea y Guía de Widget Web (Regla 3)**
+  - [x] `14.5.1` Actualizar `RUTAS.md` y `ENDPOINTS.md` con los 4 nuevos endpoints (`PATCH /api/v1/tables/:id/metadata`, `POST /api/v1/chat/ask`, `POST /api/v1/public/chat/ask`, `GET /api/v1/public/chat/suggestions`).
+  - [x] `14.5.2` Actualizar `docs/frontend-integration.md` documentando la Ficha Técnica de tablas, el consumo del chat interno, el ejemplo de integración del widget público para páginas web externas y la configuración de `AI_API_KEY` de Google AI Studio.
+  - [x] `14.5.3` Regenerar `openapi.json` con `npm run openapi:export`.
+
+- [x] **14.6 Cobertura de Pruebas Automatizadas y Protocolo Obligatorio (Reglas 1 y 2)**
+  - [x] `14.6.1` Pruebas unitarias en `tests/modules/chat/chat.engine.test.ts` y `tests/modules/chat/chat.service.test.ts`:
+    - Autogeneración y actualización de `metadataCard` con control de acceso RBAC.
+    - Cálculo exacto de conteos y porcentajes (ej. población de Brasil entre hombres y mujeres) desde `.data.json.gz`.
+    - Rechazo inmediato (`foundInSystem: false`) cuando se consulta por un país o dato inexistente en el sistema.
+    - Rotación de modelo ante error 429, funcionamiento del caché en memoria y Fallback Determinista sin API Key.
+  - [x] `14.6.2` Pruebas de integración HTTP en `tests/modules/chat/chat.routes.test.ts`:
+    - Aislamiento estricto en `/api/v1/public/chat/ask`: responde sobre tablas en carpetas públicas (`isPrivate: false`), pero jamás filtra ni lee tablas de carpetas privadas (`isPrivate: true`).
+    - Respeto de permisos RBAC para `MANAGER` y `COLLABORATOR` en `/api/v1/chat/ask`.
+  - [x] `14.6.3` Protocolo Obligatorio:
+    - Verificar que todos los archivos del repositorio se mantengan `< 300 LOC`.
+    - Ejecutar `npm test` (0 fallos, 282 tests aprobados), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
 ## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)
 
 > **Regla de Referencia:** [`.agents/rules/modular-refactoring-evolution.md`](.agents/rules/modular-refactoring-evolution.md)  
@@ -636,22 +697,28 @@
 ### 🟢 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
 - [x] **`src/modules/folders/folders.service.ts`**: 291 líneas.
 - [x] **`src/modules/users/users.schemas.ts`**: 274 líneas.
-- [x] **`src/modules/tables/tables.service.ts`**: 260 líneas.
+- [x] **`src/modules/tables/tables.service.ts`**: 261 líneas.
 - [x] **`src/modules/images/images.service.ts`**: 251 líneas.
 - [x] **`src/modules/folders/folders.schemas.ts`**: 246 líneas.
-- [x] **`src/modules/tables/tables.parser.ts`**: 238 líneas.
+- [x] **`src/modules/tables/tables.schemas.ts`**: 239 líneas.
+- [x] **`src/modules/tables/tables.parser.ts`**: 239 líneas.
 - [x] **`src/modules/images/images.schemas.ts`**: 233 líneas.
+- [x] **`src/modules/chat/chat.engine.ts`**: 230 líneas.
 - [x] **`src/modules/folders/folders.shares.routes.ts`**: 217 líneas.
 - [x] **`src/modules/folders/folders.repository.ts`**: 216 líneas.
-- [x] **`src/modules/tables/tables.schemas.ts`**: 199 líneas.
+- [x] **`src/modules/chat/chat.service.ts`**: 195 líneas.
 - [x] **`src/modules/users/users.routes.ts`**: 186 líneas.
 - [x] **`src/modules/users/users.service.ts`**: 181 líneas.
 - [x] **`src/app.ts`**: 169 líneas.
+- [x] **`src/modules/chat/chat.provider.ts`**: 168 líneas.
+- [x] **`src/modules/tables/tables.metadata.service.ts`**: 154 líneas.
 - [x] **`src/modules/images/images.routes.ts`**: 145 líneas.
+- [x] **`src/modules/tables/tables.routes.ts`**: 139 líneas.
 - [x] **`src/modules/folders/folders.routes.ts`**: 129 líneas.
+- [x] **`src/modules/tables/tables.repository.ts`**: 123 líneas.
+- [x] **`src/modules/chat/chat.schemas.ts`**: 118 líneas.
 - [x] **`src/modules/folders/folders.shares.service.ts`**: 107 líneas.
-- [x] **`src/modules/folders/folders.move.schemas.ts`**: 92 líneas.
-- [x] **`src/modules/folders/folders.validation.ts`**: 54 líneas.
+- [x] **`src/modules/chat/chat.routes.ts`**: 65 líneas.
 
 
 

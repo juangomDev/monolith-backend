@@ -48,6 +48,7 @@ model TableRegistry {
   tableName     String   @map("table_name")
   rowCount      Int      @default(0) @map("row_count")
   columnsSchema Json?    @map("columns_schema") @db.JsonB
+  metadataCard  Json?    @map("metadata_card") @db.JsonB
   sizeBytes     Int      @map("size_bytes")
   storagePath   String   @map("storage_path")
   folderId      String?  @map("folder_id") @db.Uuid

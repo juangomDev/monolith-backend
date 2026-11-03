@@ -431,3 +431,82 @@ Permite al `MANAGER` dueño de la carpeta (o `ADMIN`) compartirla con colaborado
    - Si se envía sin `folderId` o hacia una carpeta donde solo tiene permiso `READ`, el backend rechaza con `403 FORBIDDEN`.
    - Con permiso `EDIT`, la subida y modificación se procesan con normalidad.
 
+---
+
+## 🤖 14. Integración del Chat Analítico y Widget Público (Fase 14)
+
+### 14.1. Ficha Técnica de Tablas (`metadataCard`)
+Cada tabla dispone de una tarjeta de metadatos autogenerada en la subida y enriquecible por el usuario:
+```typescript
+// PATCH /api/v1/tables/:id/metadata
+const res = await api.patch(`/api/v1/tables/${tableId}/metadata`, {
+  title: 'Censo Sudamérica 2024',
+  description: 'Población oficial de países de América del Sur',
+  tags: ['demografia', 'censo', 'latam'],
+  unit: 'habitantes',
+  columnsMeta: {
+    Hombres: 'Población masculina',
+    Mujeres: 'Población femenina',
+    Total: 'Total de habitantes'
+  },
+  hasSummaryRows: true
+});
+```
+
+### 14.2. Chat Analítico Interno (`POST /api/v1/chat/ask`)
+Para usuarios autenticados dentro del gestor multimedia con control de acceso RBAC:
+```typescript
+const response = await fetch(`${API_URL}/api/v1/chat/ask`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    question: '¿Cuántos hombres hay en Brasil y qué porcentaje representan?',
+  }),
+});
+const data = await response.json();
+// data: { answer, foundInSystem, sources, chartData: { labels, values, percentages } }
+```
+
+### 14.3. Ejemplo de Widget Web Público para Sitios Externos
+Para incrustar un asistente analítico en páginas web externas sin requerir login:
+```html
+<div id="analytics-widget">
+  <div id="chat-messages"></div>
+  <div id="chat-suggestions"></div>
+  <input id="chat-input" placeholder="Pregunta sobre las tablas públicas..." />
+  <button id="chat-btn">Consultar</button>
+</div>
+
+<script>
+  const API_BASE = 'https://tu-backend.com';
+
+  // 1. Cargar sugerencias automáticas
+  fetch(`${API_BASE}/api/v1/public/chat/suggestions`)
+    .then(r => r.json())
+    .then(({ suggestions }) => {
+      const container = document.getElementById('chat-suggestions');
+      suggestions.forEach(q => {
+        const btn = document.createElement('button');
+        btn.innerText = q;
+        btn.onclick = () => askQuestion(q);
+        container.appendChild(btn);
+      });
+    });
+
+  // 2. Enviar consulta al widget público
+  async function askQuestion(question) {
+    const res = await fetch(`${API_BASE}/api/v1/public/chat/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    const result = await res.json();
+    console.log(result.answer, result.chartData);
+  }
+</script>
+```
+
+

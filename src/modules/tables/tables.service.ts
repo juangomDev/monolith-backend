@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { pipeline } from 'node:stream/promises';
 import type { MultipartFile } from '@fastify/multipart';
 import { tablesRepository, type FindTablesOptions } from './tables.repository.js';
-import { readTableRows, extractRichTableData } from './tables.parser.js';
+import { readTableRows, extractRichTableData, generateInitialMetadataCard } from './tables.parser.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../shared/errors.js';
 import { generateShortCode } from '../../shared/shortcode.js';
@@ -21,10 +21,7 @@ const gunzipAsync = promisify(zlib.gunzip);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface ListTablesQueryOptions {
-  page?: number;
-  limit?: number;
-  folderId?: string;
-  requester?: { id: string; role: Role };
+  page?: number; limit?: number; folderId?: string; requester?: { id: string; role: Role };
 }
 
 function formatTableItem(record: any) {
@@ -35,6 +32,7 @@ function formatTableItem(record: any) {
     urlWithVersion: `${env.BASE_URL}/t/${record.shortCode}?v=${new Date(updatedAt).getTime()}`,
     tableName: record.tableName, rowCount: record.rowCount,
     columns: record.columnsSchema, sizeBytes: record.sizeBytes,
+    metadataCard: record.metadataCard ?? null,
     folderId: record.folderId ?? null,
     createdAt: record.createdAt, updatedAt,
   };
@@ -111,11 +109,14 @@ export class TablesService {
       folderId = defaultFolder.id;
     }
 
+    const metadataCard = generateInitialMetadataCard(richData);
+
     const record = await tablesRepository.create({
       shortCode,
       tableName: part.filename || `table_${shortCode}${ext}`,
       rowCount: richData.rowCount,
       columnsSchema: richData.columns,
+      metadataCard: metadataCard as any,
       sizeBytes: stats.size,
       storagePath: targetPath,
       folderId,
@@ -132,6 +133,7 @@ export class TablesService {
         headers: richData.headers,
         merges: richData.merges,
         cellStyles: richData.cellStyles,
+        metadataCard,
         data: richData.rows,
         createdAt: record.createdAt,
         updatedAt: (record as any).updatedAt ?? record.createdAt,

@@ -98,6 +98,22 @@ export class TablesRepository {
     });
   }
 
+  async updateMetadata(id: string, metadataCard: any) {
+    return prisma.tableRegistry.update({
+      where: { id },
+      data: { metadataCard },
+      include: {
+        folder: {
+          select: {
+            id: true,
+            isPrivate: true,
+            userId: true,
+          },
+        },
+      },
+    });
+  }
+
   async deleteById(id: string) {
     return prisma.tableRegistry.delete({ where: { id } });
   }

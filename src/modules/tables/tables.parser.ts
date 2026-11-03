@@ -2,6 +2,7 @@ import * as csv from 'fast-csv';
 import ExcelJS from 'exceljs';
 import fs from 'node:fs';
 import { AppError } from '../../shared/errors.js';
+export { generateInitialMetadataCard, type TableMetadataCard } from './tables.metadata.service.js';
 
 export interface ParsedTableMetadata {
   columns: string[];

@@ -195,6 +195,47 @@ export const deleteTableRouteSchema: FastifySchema = {
   },
 };
 
+export const updateTableMetadataRouteSchema: FastifySchema = {
+  tags: ['Tables'],
+  summary: 'Actualizar Ficha Técnica (metadataCard) de un dataset',
+  description: 'Permite enriquecer título, descripción, etiquetas, unidad, metadatos semánticos de columnas y detección de filas de resumen.',
+  security: securityDualAuth,
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string', format: 'uuid', description: 'UUID de la tabla a actualizar' },
+    },
+  },
+  body: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 200, description: 'Título descriptivo de la tabla' },
+      description: { type: 'string', maxLength: 2000, description: 'Descripción detallada del contenido' },
+      tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas para búsqueda y categorización' },
+      unit: { type: 'string', maxLength: 100, description: 'Unidad de medida principal' },
+      columnsMeta: { type: 'object', additionalProperties: { type: 'string' }, description: 'Diccionario de significado por columna' },
+      hasSummaryRows: { type: 'boolean', description: 'Indica si incluye filas de total o resumen' },
+    },
+  },
+  response: {
+    200: {
+      description: 'Ficha Técnica actualizada exitosamente',
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        shortCode: { type: 'string', example: 'tab1234567' },
+        metadataCard: { type: 'object', additionalProperties: true },
+      },
+      required: ['id', 'shortCode', 'metadataCard'],
+    },
+    400: standardErrorResponses[400],
+    401: standardErrorResponses[401],
+    403: standardErrorResponses[403],
+    404: standardErrorResponses[404],
+  },
+};
+
 export function extractRequester(request: FastifyRequest): { id: string; role: Role } {
   if (request.user) {
     return { id: request.user.id, role: request.user.role };

@@ -44,6 +44,10 @@
 | **32** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
 | **33** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
 | **34** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
+| **35** | `PATCH` | `/api/v1/tables/:id/metadata` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza la Ficha Técnica (`metadataCard`) de la tabla. |
+| **36** | `POST` | `/api/v1/chat/ask` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Consulta analítica interna con control RBAC sobre tablas permitidas. |
+| **37** | `POST` | `/api/v1/public/chat/ask` | Public Chat | Pública (Rate Limit) | Anónimo | Widget público para páginas web externas (restringido a tablas públicas). |
+| **38** | `GET` | `/api/v1/public/chat/suggestions` | Public Chat | Pública (Rate Limit) | Anónimo | Sugerencias de preguntas dinámicas para el widget público. |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -763,6 +767,124 @@ Entrega de datos tabulares enriquecidos o descarga binaria del archivo original 
   }
   ```
 - **Errores:** `404 Not Found`.
+
+#### `PATCH /api/v1/tables/:id/metadata`
+Actualiza y enriquece la Ficha Técnica (`metadataCard`) de un dataset.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Control de Acceso Anti-IDOR:** Requiere rol `ADMIN`, propietario de la carpeta (`MANAGER`), o colaborador con permiso `EDIT` sobre la carpeta contenedora.
+- **Parámetros URL:** `id` (UUID de la tabla).
+- **Cuerpo JSON:**
+  ```json
+  {
+    "title": "Censo Sudamérica 2024",
+    "description": "Estadísticas demográficas oficiales de países de América del Sur",
+    "tags": ["demografia", "censo", "latam"],
+    "unit": "habitantes",
+    "columnsMeta": {
+      "Hombres": "Población masculina censada",
+      "Mujeres": "Población femenina censada",
+      "Total": "Total de población"
+    },
+    "hasSummaryRows": true
+  }
+  ```
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "id": "66666666-6666-6666-6666-666666666666",
+    "shortCode": "tab1234567",
+    "metadataCard": {
+      "title": "Censo Sudamérica 2024",
+      "description": "Estadísticas demográficas oficiales de países de América del Sur",
+      "tags": ["demografia", "censo", "latam"],
+      "unit": "habitantes",
+      "entities": ["Brasil", "Argentina", "Chile", "Colombia"],
+      "columnsMeta": {
+        "Hombres": "Población masculina censada",
+        "Mujeres": "Población femenina censada",
+        "Total": "Total de población"
+      },
+      "hasSummaryRows": true
+    }
+  }
+  ```
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
+
+---
+
+### Módulo de Chat Analítico y RAG Tabular (`/api/v1/chat` y `/api/v1/public/chat`)
+
+#### `POST /api/v1/chat/ask`
+Consulta analítica privada sobre tablas registradas con evaluación estricta de permisos jerárquicos RBAC.
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Visibilidad:** `ADMIN` consulta todas las tablas; `MANAGER` tablas propias, públicas y compartidas; `COLLABORATOR` únicamente carpetas compartidas.
+- **Cuerpo JSON:**
+  ```json
+  {
+    "question": "¿Cuántos hombres y mujeres hay en Brasil y qué porcentaje representan?",
+    "folderId": "uuid-opcional",
+    "shortCode": "short-opcional"
+  }
+  ```
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "answer": "En Brasil se registran 104.000.000 de hombres (48,82%) y 109.000.000 de mujeres (51,18%), para un total censado de 213.000.000 habitantes.",
+    "foundInSystem": true,
+    "sources": [
+      {
+        "tableId": "66666666-6666-6666-6666-666666666666",
+        "tableName": "censo_latam.csv",
+        "shortCode": "tab1234567",
+        "title": "Censo Sudamérica 2024"
+      }
+    ],
+    "chartData": {
+      "labels": ["Hombres", "Mujeres"],
+      "values": [104000000, 109000000],
+      "percentages": [48.82, 51.18]
+    }
+  }
+  ```
+- **Cortocircuito Anti-Alucinaciones:** Si los datos no existen en el sistema, responde en 2 ms con:
+  ```json
+  {
+    "answer": "La información solicitada no existe en los archivos registrados en este sistema.",
+    "foundInSystem": false,
+    "sources": [],
+    "chartData": null
+  }
+  ```
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`.
+
+#### `POST /api/v1/public/chat/ask` (Pública por Diseño / Widget Web)
+Endpoint sin autenticación con Rate Limiting estricto (30 req/min por IP) para widgets embebidos en páginas web externas. Restringido EXCLUSIVAMENTE a tablas dentro de carpetas públicas (`folder.isPrivate === false`).
+- **Autenticación:** Ninguna (Pública).
+- **Cuerpo JSON:**
+  ```json
+  {
+    "question": "¿Cuál es la tasa de aprobación escolar en 2024?",
+    "folderId": "uuid-opcional",
+    "shortCode": "short-opcional"
+  }
+  ```
+- **Respuesta 200 OK:** Misma estructura `ChatAnswer` que `/api/v1/chat/ask`.
+- **Errores:** `400 Bad Request`, `429 Too Many Requests`.
+
+#### `GET /api/v1/public/chat/suggestions` (Pública por Diseño)
+Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las tablas públicas disponibles.
+- **Autenticación:** Ninguna (Pública con Rate Limiting: 30 req/min por IP).
+- **Query Params:** `folderId` (UUID opcional para limitar sugerencias a una carpeta).
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "suggestions": [
+      "¿Cuál es el valor de Hombres para Brasil en Censo Sudamérica 2024?",
+      "¿Qué información hay sobre Argentina en Censo Sudamérica 2024?"
+    ]
+  }
+  ```
+- **Errores:** `429 Too Many Requests`.
 
 ---
 

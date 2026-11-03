@@ -17,6 +17,10 @@ export const envSchema = z
     ADMIN_USERNAME: z.string().min(3).default('admin'),
     ADMIN_PASSWORD: z.string().min(6).default('AdminPass123!'),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
+    AI_BASE_URL: z.string().url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
+    AI_API_KEY: z.string().optional(),
+    AI_MODEL: z.string().default('gemini-2.5-flash'),
+    AI_FALLBACK_MODEL: z.string().default('gemini-2.5-flash-lite'),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') {

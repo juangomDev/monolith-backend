@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { tablesService } from './tables.service.js';
+import { tablesMetadataService } from './tables.metadata.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -7,6 +8,7 @@ import {
   getTableByShortCodeRouteSchema,
   listTablesRouteSchema,
   uploadTableRouteSchema,
+  updateTableMetadataRouteSchema,
   deleteTableRouteSchema,
   extractRequester,
 } from './tables.schemas.js';
@@ -101,6 +103,22 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await tablesService.saveTable(file, folderId, requester);
       return reply.status(201).send(result);
+    }
+  );
+
+  // PATCH /api/v1/tables/:id/metadata (Actualización de Ficha Técnica)
+  fastify.patch(
+    '/api/v1/tables/:id/metadata',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: updateTableMetadataRouteSchema,
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const requester = extractRequester(request);
+      const result = await tablesMetadataService.updateMetadata(id, request.body, requester);
+      return reply.send(result);
     }
   );
 
