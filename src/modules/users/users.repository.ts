@@ -69,6 +69,22 @@ export class UsersRepository {
     });
   }
 
+  async getUserStoragePaths(userId: string): Promise<string[]> {
+    const folders = await prisma.folder.findMany({
+      where: { userId },
+      include: {
+        images: { select: { storagePath: true } },
+        tables: { select: { storagePath: true } },
+      },
+    });
+    const paths: string[] = [];
+    for (const folder of folders) {
+      for (const img of (folder.images ?? [])) paths.push(img.storagePath);
+      for (const tbl of (folder.tables ?? [])) paths.push(tbl.storagePath);
+    }
+    return paths;
+  }
+
   async incrementTokenVersion(id: string): Promise<User> {
     return prisma.user.update({
       where: { id },

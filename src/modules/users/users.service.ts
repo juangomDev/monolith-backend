@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { Role, type User } from '@prisma/client';
 import { usersRepository, type UsersRepository } from './users.repository.js';
@@ -213,7 +215,24 @@ export class UsersService {
       throw new AppError(403, 'No tienes permiso para eliminar usuarios', 'FORBIDDEN');
     }
 
+    const storagePaths = (await this.repo.getUserStoragePaths?.(targetUserId)) ?? [];
     await this.repo.deleteById(targetUserId);
+
+    if (storagePaths.length > 0) {
+      await Promise.allSettled(
+        storagePaths.flatMap((filePath) => {
+          const paths = [filePath];
+          const parsed = path.parse(filePath);
+          if (filePath.includes('tables')) {
+            paths.push(path.join(parsed.dir, `${parsed.name}.data.json.gz`));
+          } else if (filePath.includes('images')) {
+            paths.push(path.join(parsed.dir, 'thumbs', `${parsed.name}.webp`));
+          }
+          return paths.map((p) => fs.unlink(p).catch(() => {}));
+        })
+      );
+    }
+
     return { deleted: true };
   }
 }

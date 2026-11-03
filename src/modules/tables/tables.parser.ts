@@ -39,6 +39,14 @@ export function sanitizeFormulaCell(value: any): any {
   return value;
 }
 
+function sanitizeRow(row: Record<string, any>): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  for (const [k, v] of Object.entries(row)) {
+    sanitized[k] = sanitizeFormulaCell(v);
+  }
+  return sanitized;
+}
+
 /**
  * Extrae metadatos (columnas y número de filas) de un archivo CSV
  */
@@ -74,7 +82,9 @@ export async function readCsvRows(filePath: string, page: number, limit: number)
         columns = headers.filter((h) => typeof h === 'string' && h.trim().length > 0);
       })
       .on('data', (row: Record<string, any>) => {
-        if (currentIndex >= startIndex && currentIndex < endIndex) rows.push(row);
+        if (currentIndex >= startIndex && currentIndex < endIndex) {
+          rows.push(sanitizeRow(row));
+        }
         currentIndex++;
       })
       .on('end', () => resolve({ columns, rows }))
@@ -136,7 +146,7 @@ export async function readXlsxRows(filePath: string, page: number, limit: number
         const cell = row.getCell(index + 1);
         let val: any = cell.value;
         if (val && typeof val === 'object' && 'result' in val) val = (val as any).result;
-        rowData[colName] = val !== undefined ? val : null;
+        rowData[colName] = val !== undefined ? sanitizeFormulaCell(val) : null;
         if (val !== undefined && val !== null && val !== '') hasValue = true;
       });
 
@@ -198,7 +208,7 @@ export async function extractRichTableData(filePath: string, ext: string): Promi
         .on('headers', (headers: string[]) => {
           columns = headers.filter((h) => typeof h === 'string' && h.trim().length > 0);
         })
-        .on('data', (row: Record<string, any>) => { rows.push(row); })
+        .on('data', (row: Record<string, any>) => { rows.push(sanitizeRow(row)); })
         .on('end', () => resolve({ columns, rowCount: rows.length, headers: [columns], merges: [], rows }))
         .on('error', (err) => reject(new AppError(400, `Error procesando archivo CSV: ${err.message}`, 'PARSER_ERROR')));
     });
@@ -244,7 +254,7 @@ export async function extractRichTableData(filePath: string, ext: string): Promi
           const cell = row.getCell(colNumber);
           let val: any = cell.value;
           if (val && typeof val === 'object' && 'result' in val) val = (val as any).result;
-          rowData[colName] = val !== undefined ? val : null;
+          rowData[colName] = val !== undefined ? sanitizeFormulaCell(val) : null;
           if (val !== undefined && val !== null && val !== '') hasValue = true;
 
           const style = extractCellStyle(cell);

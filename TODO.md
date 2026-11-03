@@ -24,6 +24,10 @@
 | **Fase 12** | Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas | ✅ Completado |
 | **Fase 13** | Evolución Integral del Módulo de Carpetas (Edición, Protección de General y RBAC de Reasignación) | ✅ Completado |
 | **Fase 14** | Módulo de Chat Analítico sobre Tablas (RAG Tabular con Ficha Técnica, Gemini API y Widget Público) | ✅ Completado |
+| **Fase 15** | Paridad Total en Tablas (Hot-Swap, Renombrado), Búsqueda Global y Operaciones en Lote | ⏳ Pendiente |
+| **Fase 16** | Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento | ⏳ Pendiente |
+| **Fase 17** | Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once) | ⏳ Pendiente |
+| **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ⏳ Pendiente |
 
 ---
 
@@ -689,36 +693,286 @@
 
 ---
 
+## 📊 FASE 15: Paridad Total en Tablas (Hot-Swap, Renombrado), Búsqueda Global y Operaciones en Lote
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Reemplazo en Caliente Seguro de Tablas (`PUT /api/v1/tables/:id` - Hot-Swap):** Sustituir físicamente un archivo `.xlsx` o `.csv` conservando intactos su `id`, `shortCode`, `folderId` y URL pública (`/t/:short_code`). El reemplazo se ejecuta mediante archivo temporal (`temp_${shortCode}_...` -> rename atómico) para garantizar cero corrupción en caso de error, regenerando automáticamente el artefacto `.data.json.gz`, actualizando la `metadataCard`, sanitizando fórmulas CSV e invalidando la caché del Chat (`chatCache.clear()`).
+> 
+> 2. **Renombrado de Tablas (`PATCH /api/v1/tables/:id`):** Permitir modificar `tableName` sin tocar el almacenamiento físico ni cambiar el `shortCode`, igualando las capacidades del módulo de imágenes.
+> 
+> 3. **Buscador Filtrado SQL (`?search=`):** Añadir búsqueda insensible a mayúsculas/minúsculas en `GET /api/v1/images` (por `originalName` y `shortCode`) y en `GET /api/v1/tables` (por `tableName` y `shortCode`).
+> 
+> 4. **Operaciones Masivas en Lote (`Bulk Actions`):** Permitir eliminar o mover de carpeta múltiples imágenes o tablas en una sola petición (`POST /api/v1/images/bulk-delete`, `POST /api/v1/images/bulk-move`, `POST /api/v1/tables/bulk-delete`, `POST /api/v1/tables/bulk-move`) respetando el RBAC de cada carpeta y retornando reportes de ejecución resilientes (`{ totalRequested, successful, failed }`).
+> 
+> 5. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos `< 300 LOC` mediante servicios satélites (`tables.mutation.service.ts`, `images.bulk.service.ts` y `tables.bulk.service.ts`), preservar el 100% de los tests congelados previos (282 tests) y sincronizar OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [ ] **15.1 Mutación y Reemplazo en Caliente en Módulo de Tablas (`src/modules/tables/`)**
+  - [ ] `15.1.1` **Crear Servicio Satélite de Mutación (`src/modules/tables/tables.mutation.service.ts`)**:
+    - Centralizar renombrado y reemplazo en caliente en un servicio satélite dedicado para mantener `tables.service.ts` (299 LOC) estrictamente por debajo de 300 líneas.
+  - [ ] `15.1.2` **Renombrar Tabla (`PATCH /api/v1/tables/:id`)**:
+    - Validar con Zod `{ tableName: string }` (1-255 caracteres, sanitizado sin espacios redundantes).
+    - Validar permisos RBAC con `foldersSharesService.assertFolderAccess` (`EDIT`, propietario o `ADMIN`).
+    - Actualizar `tableName` y `updatedAt` en PostgreSQL y retornar el modelo con `urlWithVersion` (`?v=`).
+  - [ ] `15.1.3` **Reemplazo en Caliente de Dataset (`PUT /api/v1/tables/:id` - Hot-Swap)**:
+    - Aceptar nuevo archivo `.csv` o `.xlsx` vía `multipart/form-data` (máx. 100MB).
+    - Guardar primero en archivo temporal (`temp_${shortCode}_${Date.now()}.${ext}`) para resiliencia atómica; si falla validación o parseo, eliminar temporal sin tocar el archivo original.
+    - Validar estructura, magic bytes y sanitizar contra CSV Formula Injection (`=`, `+`, `-`, `@`).
+    - Conservar el **mismo** `id`, `shortCode` y `folderId`.
+    - Sobrescribir de forma segura el archivo fuente en `./storage/tables/` mediante rename y regenerar el artefacto comprimido `${shortCode}.data.json.gz`.
+    - Actualizar `columnsSchema`, `rowCount`, `sizeBytes`, `metadataCard` (conservando campos enriquecidos manualmente como `title`, `description`, `tags`) y `updatedAt` en PostgreSQL.
+    - Invalidar entradas asociadas en la caché en memoria del módulo de Chat (`chatCache.clear()` o invalidación por clave).
+  - [ ] `15.1.4` **Rutas Fastify y Esquemas OpenAPI**:
+    - Agregar esquemas Zod en `tables.schemas.ts` y registrar `PATCH /api/v1/tables/:id` y `PUT /api/v1/tables/:id` en `tables.routes.ts` con middleware `authenticateUserOrApiKey`.
+
+- [ ] **15.2 Búsqueda por Texto (`?search=`) en Imágenes y Tablas**
+  - [ ] `15.2.1` Actualizar `imagesRepository.findAll` e `images.schemas.ts` para admitir query param opcional `search?: string` filtrando con `contains` (`mode: 'insensitive'`) sobre `originalName` y `shortCode`.
+  - [ ] `15.2.2` Actualizar `tablesRepository.findAll` y `tables.schemas.ts` para admitir query param opcional `search?: string` filtrando con `contains` (`mode: 'insensitive'`) sobre `tableName` y `shortCode`.
+
+- [ ] **15.3 Operaciones en Lote (`Bulk Delete` y `Bulk Move`)**
+  - [ ] `15.3.1` **Crear Servicios Satélites de Operaciones Masivas**:
+    - Implementar `src/modules/images/images.bulk.service.ts` y `src/modules/tables/tables.bulk.service.ts` para aislar la lógica en lote y blindar `images.service.ts` (296 LOC) y `tables.service.ts` (299 LOC) `< 300 LOC`.
+  - [ ] `15.3.2` **Implementar `POST /api/v1/images/bulk-delete` y `POST /api/v1/tables/bulk-delete`**:
+    - Body: `{ ids: string[] }` (máx. 50 IDs por petición).
+    - Verificar permisos de edición/propiedad sobre cada recurso individual con RBAC (`ADMIN`, propietario o colaborador con `EDIT`).
+    - Borrado seguro en base de datos y limpieza física completa en disco: archivo original, miniaturas WebP (`.webp`) y artefactos (`.data.json.gz`) usando `Promise.allSettled`.
+    - Respuesta con balance resiliente: `{ totalRequested, successful: string[], failed: { id: string, reason: string }[] }`.
+  - [ ] `15.3.3` **Implementar `POST /api/v1/images/bulk-move` y `POST /api/v1/tables/bulk-move`**:
+    - Body: `{ ids: string[], targetFolderId: string }` (máx. 50 IDs).
+    - Verificar coincidencia de tipo (`FolderType.IMAGE` o `FolderType.TABLE`).
+    - Validar permisos `EDIT` tanto en la carpeta origen de cada recurso como en la carpeta destino (`targetFolderId`).
+    - Mover recursos en PostgreSQL y retornar reporte de ejecución `{ totalRequested, successful: string[], failed: { id: string, reason: string }[] }`.
+  - [ ] `15.3.4` **Esquemas OpenAPI y Rutas en Fastify**:
+    - Registrar las 4 nuevas rutas en `images.routes.ts` y `tables.routes.ts` con protección `authenticateUserOrApiKey`.
+
+- [ ] **15.4 Documentación y Pruebas Automatizadas (Reglas 1, 2 y 3)**
+  - [ ] `15.4.1` Crear pruebas unitarias e integradas para `PATCH /api/v1/tables/:id`, `PUT /api/v1/tables/:id`, `?search=` y endpoints `bulk-*` (incluyendo rechazos `403 FORBIDDEN` cuando un colaborador solo tiene `READ`).
+  - [ ] `15.4.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json` con `npm run openapi:export`.
+  - [ ] `15.4.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (100% pasando, 0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 🛡️ FASE 16: Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Trazabilidad y Auditoría (`AuditLog`):** Registrar quién (`userId`), cuándo y desde qué IP ejecutó acciones críticas (subidas, borrados, reemplazos hot-swap, cambios de permisos `FolderMember` y gestión de usuarios) de forma no bloqueante (`fire-and-forget`) con consulta filtrada y paginada para `ADMIN` y `MANAGER`.
+> 
+> 2. **Gestión Dinámica de `ApiClient` (`/api/v1/api-keys`):** Permitir al `ADMIN` crear, listar y revocar llaves `X-API-Key` desde la interfaz sin tocar la base de datos manualmente.
+> 
+> 3. **Monitor de Cuotas y Salud de Disco (`GET /api/v1/stats/storage`):** Exponer métricas en tiempo real del peso ocupado en `./storage/images` y `./storage/tables`, conteo de archivos y desglose por carpeta/usuario, cubriendo el gatillo del Riesgo 1 de la Fase 9.2 con alertas preventivas.
+> 
+> 4. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos `< 300 LOC`, preservar el 100% de los tests congelados previos y sincronizar OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [ ] **16.1 Historial de Auditoría (`src/modules/audit/`)**
+  - [ ] `16.1.1` **Modelo `AuditLog` en `prisma/schema.prisma`**:
+    - Definir modelo `AuditLog`: `id`, `actorId`, `actorUsername`, `action`, `resourceType`, `resourceId`, `folderId?`, `metadata Json?`, `ipAddress?`, `createdAt`.
+    - Índices de alto rendimiento: `@@index([actorId])`, `@@index([folderId])`, `@@index([resourceType, resourceId])`, `@@index([createdAt(sort: Desc)])`.
+    - Ejecutar migración o `npx prisma generate`.
+  - [ ] `16.1.2` **Servicio No Bloqueante (`src/modules/audit/audit.service.ts`)**:
+    - Implementar método `recordLog(...)` no bloqueante (`fire-and-forget`) para que jamás incremente la latencia de las peticiones HTTP principales ni interrumpa transacciones exitosas.
+    - Integrar llamadas a `recordLog` en mutaciones clave: usuarios (`USER_CREATE`, `USER_ROLE_CHANGE`), carpetas (`FOLDER_SHARE`, `FOLDER_REVOKE`), imágenes (`IMAGE_UPLOAD`, `IMAGE_DELETE`, `IMAGE_HOTSWAP`, `IMAGE_RENAME`, `IMAGE_BULK_DELETE`, `IMAGE_BULK_MOVE`) y tablas (`TABLE_UPLOAD`, `TABLE_DELETE`, `TABLE_HOTSWAP`, `TABLE_RENAME`, `TABLE_BULK_DELETE`, `TABLE_BULK_MOVE`).
+  - [ ] `16.1.3` **Endpoint `GET /api/v1/audit-logs`**:
+    - Query params: `page`, `limit`, `action`, `resourceType`, `folderId`.
+    - Control de Acceso RBAC:
+      - `ADMIN`: visualiza todos los eventos del sistema.
+      - `MANAGER`: visualiza eventos ocurridos sobre sus carpetas propias y acciones ejecutadas por sus colaboradores vinculados (`createdById`).
+      - `COLLABORATOR`: denegado con `403 FORBIDDEN`.
+
+- [ ] **16.2 Administración Dinámica de API Keys (`src/modules/api-keys/`)**
+  - [ ] `16.2.1` **Crear API Key (`POST /api/v1/api-keys`) - Exclusivo `ADMIN`**:
+    - Recibe `{ name: string, description?: string }`.
+    - Genera llave criptográfica con prefijo `mk_live_` + nanoid(32), almacena el hash seguro en `ApiClient` y retorna el secreto en texto plano por única vez (`201 Created`).
+  - [ ] `16.2.2` **Listar y Revocar API Keys (`GET /api/v1/api-keys` y `DELETE /api/v1/api-keys/:id`) - Exclusivo `ADMIN`**:
+    - `GET /api/v1/api-keys`: lista llaves ocultando el secreto (mostrando `id`, `name`, `description`, prefijo `mk_live_...`, `createdAt`, `lastUsedAt`, `isActive`).
+    - `DELETE /api/v1/api-keys/:id`: revocación/eliminación inmediata de la llave.
+
+- [ ] **16.3 Estadísticas y Monitoreo de Almacenamiento (`GET /api/v1/stats/storage`)**
+  - [ ] `16.3.1` **Cálculo Agregado en Base de Datos y Disco Físico**:
+    - Consultas agregadas en PostgreSQL (`SUM(sizeBytes)`, `COUNT(*)`) para `ImageRegistry` y `TableRegistry`.
+    - Verificación física del volumen `./storage` (espacio consumido por `./storage/images` incluyendo miniaturas WebP y `./storage/tables` incluyendo `.data.json.gz`).
+    - Desglose por carpetas más pesadas.
+  - [ ] `16.3.2` **Exponer `GET /api/v1/stats/storage` (Protegido `ADMIN` y `MANAGER`)**:
+    - `ADMIN`: estadísticas globales del sistema y estado de salud de disco.
+    - `MANAGER`: estadísticas restringidas a sus carpetas y recursos propios.
+    - Alerta preventiva (`warning: true`, mensaje de alerta) si el espacio en disco físico o cuota estimada supera el umbral configurado (ej. 80%).
+
+- [ ] **16.4 Documentación y Pruebas Automatizadas (Reglas 1, 2 y 3)**
+  - [ ] `16.4.1` Crear suites de pruebas en `tests/modules/audit/`, `tests/modules/api-keys/` y `tests/modules/stats/`.
+  - [ ] `16.4.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json`.
+  - [ ] `16.4.3` Verificar `< 300 LOC` por archivo, `npm test` (100% pasando), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 📝 FASE 17: Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Desacoplamiento Total de PDFs (Backend Ciego a PDFs):** `monolith-backend` NO genera ni almacena archivos PDF ni conoce cómo se construyen. Su única responsabilidad al respecto es enviar el JSON estructurado de la fila (`entryPayload` + `resolutionPayload`) al sistema externo encargado de las respuestas/PDFs.
+> 
+> 2. **Esquema Dual de Columnas Customizable por Formulario:** Cada formulario (`FormDefinition`) define dos grupos de columnas para su tabla vinculada (`TableRegistry`):
+>    - `entryFieldsSchema`: Campos que llena el usuario al enviar el formulario (ej. nombre, correo, consulta).
+>    - `resolutionFieldsSchema`: Campos exclusivos de respuesta que nacen vacíos (`null`) y solo se completan al responder al usuario (ej. dictamen, texto de respuesta, código de oficio).
+> 
+> 3. **Dos Endpoints de Escritura con Regla de Inmutabilidad (Write-Once):**
+>    - **Endpoint 1 (Crear Entrada - `POST /api/v1/public/forms/:slug/entries`):** Guarda los datos iniciales del usuario, asigna `status = "NEW"` y deja vacías las columnas de respuesta en la base de datos y en la tabla `.data.json.gz`.
+>    - **Endpoint 2 (Completar Respuesta Una Sola Vez - `PATCH /api/v1/forms/entries/:id/resolve`):** Completa los campos de `resolutionFieldsSchema` y cambia el `status` de `"NEW"` a `"VALID"` o `"INVALID"` (según el enum/configuración del formulario), sellando `resolvedAt`. **Solo puede ejecutarse una única vez por fila:** cualquier intento posterior de volver a llamar a este endpoint sobre una fila que ya no esté en `"NEW"` se rechaza con `409 CONFLICT` (`ENTRY_ALREADY_RESOLVED`).
+> 
+> 4. **Re-envío Bajo Demanda sin Guardar Archivos (`POST /api/v1/forms/entries/:id/dispatch`):** Si se requiere volver a generar el documento de una fila ya respondida N veces en el futuro, este endpoint de solo lectura reenvía los datos sellados de esa fila al sistema externo sin alterar la base de datos ni usar disco.
+> 
+> 5. **Sincronización con Tablas Vivas y Descarga Mensual:** Todas las filas (con sus columnas de entrada y de respuesta) se sincronizan en el `.data.json.gz` de su `TableRegistry` y pueden descargarse en `.xlsx` o `.csv` filtradas por mes (`?month=YYYY-MM`) o estado (`?status=NEW|VALID|INVALID`).
+> 
+> 6. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos `< 300 LOC`, preservar el 100% de los tests congelados previos y documentar en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [ ] **17.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
+  - [ ] `17.1.1` Crear modelo `FormDefinition` (`id`, `slug`, `title`, `entryFieldsSchema Json`, `resolutionFieldsSchema Json`, `allowedResolutionStates String[]` por defecto `["VALID", "INVALID"]`, `autoResolveWithAi Boolean @default(false)`, `externalTargetUrl String?`, `folderId`, `linkedTableId?`).
+  - [ ] `17.1.2` Crear modelo `FormEntry` (`id`, `formId`, `entryPayload Json`, `status String @default("NEW")`, `resolutionPayload Json?`, `resolvedById String?`, `resolvedAt DateTime?`, `createdAt DateTime @default(now())`).
+  - [ ] `17.1.3` Ejecutar `npx prisma generate` y sincronizar esquema en PostgreSQL.
+
+- [ ] **17.2 Validador de Esquema Dual e Inmutabilidad Write-Once (`src/modules/forms/forms.validator.ts`)**
+  - [ ] `17.2.1` Implementar validación dinámica de `entryPayload` contra `entryFieldsSchema` para la creación de entradas.
+  - [ ] `17.2.2` Implementar guardia `assertCanResolveEntry(entry, newStatus, allowedStates, resolutionPayload, resolutionFieldsSchema)`:
+    - Si `entry.status !== 'NEW'` o `entry.resolvedAt !== null`, lanzar error RFC 7807 `409 CONFLICT` (`ENTRY_ALREADY_RESOLVED`).
+    - Verificar que `newStatus` pertenezca a `allowedResolutionStates` (ej. `"VALID"` o `"INVALID"`, impidiendo quedarse en `"NEW"` o pasar a un estado inexistente con `400 BAD_REQUEST`).
+    - Validar `resolutionPayload` contra `resolutionFieldsSchema`.
+
+- [ ] **17.3 Sincronizador de Tabla Viva y Exportador Mensual (`src/modules/forms/forms.table-sync.ts`)**
+  - [ ] `17.3.1` Al crear el formulario, crear su `TableRegistry` con las columnas combinadas (`[...entryColumns, 'status', ...resolutionColumns, 'createdAt', 'resolvedAt']`).
+  - [ ] `17.3.2` Actualizar el artefacto `.data.json.gz` tanto al crear una entrada en el Endpoint 1 (con las columnas de respuesta en `null`) como al sellar la respuesta en el Endpoint 2.
+  - [ ] `17.3.3` Implementar `GET /api/v1/forms/:id/export?month=YYYY-MM&status=&format=xlsx|csv` para exportar las filas a Excel o CSV.
+
+- [ ] **17.4 Endpoints de Ciclo de Vida y Envío de Datos al Sistema Externo (`src/modules/forms/forms.service.ts` y `forms.routes.ts`)**
+  - [ ] `17.4.1` `POST /api/v1/forms` y `GET /api/v1/forms`: Crear y listar formularios customizables respetando el RBAC de carpetas.
+  - [ ] `17.4.2` **Endpoint 1 — Crear Entrada (`POST /api/v1/public/forms/:slug/entries`)**: Ruta pública con Rate Limit. Guarda `entryPayload` con `status: "NEW"` y sincroniza la tabla viva. (Si `autoResolveWithAi` está activo y `chatService.askPublic()` encuentra respuesta exacta, puede ejecutar automáticamente el paso de resolución y envío).
+  - [ ] `17.4.3` **Endpoint 2 — Completar Respuesta Única (`PATCH /api/v1/forms/entries/:id/resolve`)**: Ruta protegida (`ADMIN`, `MANAGER` o `COLLABORATOR` con permiso `EDIT`). Valida que la fila esté en `"NEW"`, sella por única vez `status` (`VALID` | `INVALID`), `resolutionPayload` y `resolvedAt`, actualiza el `.data.json.gz` y envía los datos unificados de la fila al sistema externo (`externalTargetUrl`).
+  - [ ] `17.4.4` **Reenvío / Consulta para Sistema Externo (`POST /api/v1/forms/entries/:id/dispatch` y `GET /api/v1/forms/:id/entries`)**: Permite listar las entradas (filtradas por mes y estado) y volver a disparar el envío del JSON de cualquier fila ya resuelta hacia el sistema encargado de los PDFs cuantas veces se necesite sin tocar el disco ni permitir reeditar la fila.
+
+- [ ] **17.5 Documentación y Pruebas Automatizadas (Reglas 1, 2 y 3)**
+  - [ ] `17.5.1` Crear suites de pruebas en `tests/modules/forms/` verificando:
+    - Creación de entrada en `POST /api/v1/public/forms/:slug/entries` naciendo en estado `NEW` con campos de respuesta vacíos.
+    - Resolución exitosa en `PATCH /api/v1/forms/entries/:id/resolve` pasando de `NEW` a `VALID` o `INVALID`, completando las columnas de respuesta en la tabla y enviando el JSON al sistema externo.
+    - Rechazo estricto con `409 CONFLICT` (`ENTRY_ALREADY_RESOLVED`) al intentar llamar por segunda vez a `PATCH .../resolve` sobre una entrada que ya fue respondida (`VALID` o `INVALID`).
+    - Reenvío repetible en `POST .../dispatch` entregando los mismos datos al sistema externo con 0 archivos creados en `./storage`.
+  - [ ] `17.5.2` Actualizar esquemas OpenAPI 3.1, regenerar `openapi.json` y actualizar `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+  - [ ] `17.5.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 📄 FASE 18: Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Alojamiento y Capability URL Pública (`/p/:short_code`):** Subir, organizar en carpetas (`FolderType.PDF`), reemplazar en caliente (`PUT` Hot-Swap) y servir documentos PDF mediante enlaces cortos opacos: visualización directa en navegador (`inline`), descarga forzada (`?download=true`) y lectura instantánea del texto extraído (`?format=text`).
+> 
+> 2. **Patrón de Doble Artefacto en PDFs (0% CPU en Lecturas y RAG):** Al subir un PDF, guardar el binario original intacto en `./storage/pdfs/${shortCode}.pdf` y extraer en ese único momento su texto por página usando `unpdf`, comprimiéndolo en `./storage/pdfs/${shortCode}.text.json.gz` junto con su `pageCount` y su Ficha Técnica (`metadataCard`).
+> 
+> 3. **Blindaje de Seguridad (`file-guard.ts`):** Validar magic bytes reales (`%PDF-`, hex `25 50 44 46 2D`) y escaneo anti-scripts bloqueando con `400 MALICIOUS_PAYLOAD` cualquier PDF que contenga acciones ejecutables incrustadas (`/JavaScript`, `/JS`, `/Launch`, `/SubmitForm`).
+> 
+> 4. **Sinergia Total con el Chat Analítico (Fase 14 - RAG Documental + Tabular):** Conectar `chat.engine.ts` para que el Chat (interno con RBAC y público para web externa) consulte simultáneamente Tablas (`.data.json.gz`) y PDFs (`.text.json.gz`), respondiendo preguntas conceptuales o metodológicas y citando el documento y el número de página exacto (`pages: [4, 5]`).
+> 
+> 5. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos estrictamente `< 300 LOC`, preservar intactos el 100% de los tests congelados previos y documentar simultáneamente en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [ ] **18.1 Modelo de Datos en Prisma y Soporte de Carpetas (`prisma/schema.prisma`)**
+  - [ ] `18.1.1` Ampliar enum `FolderType` a `IMAGE`, `TABLE`, `PDF`.
+  - [ ] `18.1.2` Crear modelo `PdfRegistry` (`@@map("pdf_registry")`):
+    - `id` (UUID, PK), `shortCode` (String único, 10 chars Base58).
+    - `originalName` (String), `storagePath` (String), `textArtifactPath` (String).
+    - `sizeBytes` (Int), `pageCount` (Int), `isScanned` (Boolean `@default(false)` para identificar PDFs de solo imagen sin texto seleccionable).
+    - `metadataCard` (Json? `@map("metadata_card")`: `title`, `description`, `tags`, `keywords`, `summary`).
+    - `folderId` (UUID, FK a `Folder` con `onDelete: Cascade`).
+    - `createdAt` y `updatedAt`.
+  - [ ] `18.1.3` Instalar dependencia ligera `unpdf` (extracción de texto por página en TypeScript puro sin binarios pesados de sistema) y ejecutar `npx prisma generate`.
+
+- [ ] **18.2 Seguridad de Archivos y Extractor de Doble Artefacto (`src/gateway/file-guard.ts` y `src/modules/pdfs/pdfs.parser.ts`)**
+  - [ ] `18.2.1` En `src/gateway/file-guard.ts`: Añadir validador de magic bytes para `application/pdf` (`%PDF-`) e inspector de buffer que rechace con `400 MALICIOUS_PAYLOAD` diccionarios PDF peligrosos (`/JS`, `/JavaScript`, `/Launch`).
+  - [ ] `18.2.2` Crear `src/modules/pdfs/pdfs.parser.ts`:
+    - Extraer el texto página por página (`pages: [{ pageNumber: 1, text: "..." }, ...]`) y el conteo total `pageCount`.
+    - Si el texto total extraído es vacío (< 20 caracteres), marcar `isScanned: true` sin fallar la subida.
+    - Autogenerar la `metadataCard` inicial extrayendo título del documento, palabras clave más frecuentes (`keywords`) y vista previa de las primeras páginas.
+    - Comprimir la estructura con `zlib.gzipSync` y guardarla en `./storage/pdfs/${shortCode}.text.json.gz`.
+
+- [ ] **18.3 Repositorio, Almacenamiento y Servicio de PDFs (`src/modules/pdfs/`)**
+  - [ ] `18.3.1` Crear `src/modules/pdfs/pdfs.storage.ts` y `pdfs.repository.ts` siguiendo el patrón modular `< 300 LOC`: guardado/borrado de `.pdf` + `.text.json.gz`, paginación SQL (`page`, `limit`, `folderId`, `search`) y filtros de privacidad/RBAC.
+  - [ ] `18.3.2` Crear `src/modules/pdfs/pdfs.service.ts`:
+    - `uploadPdf`: Auto-asignación a carpeta 'General' (tipo PDF) si no se envía `folderId`, o verificación de permiso `EDIT` si es `COLLABORATOR`.
+    - `renamePdf` (`PATCH /api/v1/pdfs/:id`): Modificar `originalName` validando acceso RBAC.
+    - `replacePdf` (`PUT /api/v1/pdfs/:id` - Hot-Swap): Reemplazar el archivo `.pdf` físico y regenerar su `.text.json.gz` conservando el mismo `id`, `shortCode` y URL pública con `?v=timestamp`.
+    - `updateMetadataCard` (`PATCH /api/v1/pdfs/:id/metadata`): Enriquecer `title`, `description` y `tags` para el buscador y el Chat.
+    - `deletePdf` (`DELETE /api/v1/pdfs/:id`): Eliminar registro en BD y destruir en disco tanto el `.pdf` como el `.text.json.gz`.
+  - [ ] `18.3.3` En `folders.movement.service.ts` y `folders.service.ts`: Habilitar movimiento de PDFs entre carpetas de tipo PDF respetando RBAC (`EDIT`) y la eliminación física en disco ante borrado de carpeta o usuario.
+
+- [ ] **18.4 Rutas HTTP y Capability URL Pública (`src/modules/pdfs/pdfs.routes.ts` y `pdfs.schemas.ts`)**
+  - [ ] `18.4.1` Endpoints protegidos con `authenticateUserOrApiKey`:
+    - `GET /api/v1/pdfs` (`?page=&limit=&folderId=&search=`)
+    - `POST /api/v1/pdfs` (`multipart/form-data`, máx. 50MB)
+    - `PATCH /api/v1/pdfs/:id` (renombrar)
+    - `PUT /api/v1/pdfs/:id` (reemplazo en caliente Hot-Swap)
+    - `PATCH /api/v1/pdfs/:id/metadata` (editar Ficha Técnica)
+    - `DELETE /api/v1/pdfs/:id`
+  - [ ] `18.4.2` Endpoint Público de Entrega `GET /p/:short_code`:
+    - Por defecto: sirve el stream binario con `Content-Type: application/pdf`, `Content-Disposition: inline; filename="..."`, `Cache-Control: public, max-age=31536000, immutable` y `Content-Security-Policy: sandbox`.
+    - Con `?download=true`: fuerza descarga con `Content-Disposition: attachment`.
+    - Con `?format=text` (y `?page=N` opcional): transmite en ~2 ms el contenido de `${shortCode}.text.json.gz`.
+
+- [ ] **18.5 Conexión con el Motor de Chat Analítico (`src/modules/chat/chat.engine.ts`)**
+  - [ ] `18.5.1` Ampliar el buscador de Fichas Técnicas de `chat.engine.ts` para consultar también registros de `PdfRegistry` accesibles según el contexto (RBAC en `/api/v1/chat/ask` o solo carpetas públicas `isPrivate: false` en `/api/v1/public/chat/ask`).
+  - [ ] `18.5.2` Cuando una pregunta coincida con un PDF, descomprimir en memoria su `.text.json.gz`, seleccionar los fragmentos/páginas más relevantes para la consulta y enviarlos al proveedor LLM indicando el número de página (`[Página X]`).
+  - [ ] `18.5.3` Incluir en el arreglo `sources` de la respuesta del Chat el tipo de fuente (`type: 'TABLE' | 'PDF'`), `shortCode`, `url` (`/p/:short_code`) y las páginas citadas (`pages: number[]`).
+
+- [ ] **18.6 Documentación Simultánea y Pruebas Automatizadas (Reglas 1, 2 y 3)**
+  - [ ] `18.6.1` Crear suites de pruebas en `tests/modules/pdfs/` (`pdfs.parser.test.ts`, `pdfs.service.test.ts`, `pdfs.routes.test.ts`):
+    - Subida de PDF válido, generación de `.text.json.gz` y conteo de páginas.
+    - Rechazo con `400 MALICIOUS_PAYLOAD` ante PDF con `/JavaScript` inyectado y `415` ante magic bytes falsos.
+    - Hot-Swap (`PUT`), renombrado (`PATCH`), entrega en `/p/:short_code` (inline, `?download=true`, `?format=text`) y borrado físico en cascada.
+    - Consulta desde el Chat respondiendo con el contenido del PDF y citando la página correspondiente.
+  - [ ] `18.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json` con `npm run openapi:export`.
+  - [ ] `18.6.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
 ## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)
 
 > **Regla de Referencia:** [`.agents/rules/modular-refactoring-evolution.md`](.agents/rules/modular-refactoring-evolution.md)  
 > **Umbrales:** Etapa 1 (>300 LOC / I/O técnico) · Etapa 2 (>450 LOC / >6 métodos) · Etapa 3 (Clean Arch / Puertos) · Etapa 4 (Workers asíncronos >25-30MB).
 
-### 🟢 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
-- [x] **`src/modules/folders/folders.service.ts`**: 291 líneas.
-- [x] **`src/modules/users/users.schemas.ts`**: 274 líneas.
-- [x] **`src/modules/tables/tables.service.ts`**: 261 líneas.
-- [x] **`src/modules/images/images.service.ts`**: 251 líneas.
-- [x] **`src/modules/folders/folders.schemas.ts`**: 246 líneas.
-- [x] **`src/modules/tables/tables.schemas.ts`**: 239 líneas.
-- [x] **`src/modules/tables/tables.parser.ts`**: 239 líneas.
-- [x] **`src/modules/images/images.schemas.ts`**: 233 líneas.
-- [x] **`src/modules/chat/chat.engine.ts`**: 230 líneas.
-- [x] **`src/modules/folders/folders.shares.routes.ts`**: 217 líneas.
-- [x] **`src/modules/folders/folders.repository.ts`**: 216 líneas.
-- [x] **`src/modules/chat/chat.service.ts`**: 195 líneas.
-- [x] **`src/modules/users/users.routes.ts`**: 186 líneas.
-- [x] **`src/modules/users/users.service.ts`**: 181 líneas.
+### 🟢 Refactorizaciones Modulares Completadas (Etapa 1: Umbral < 300 LOC)
+- [x] **Refactorización de `src/modules/folders/folders.service.ts` (341 LOC -> 267 LOC)**:
+  - **Resolución:** Métodos `moveImageToFolder` y `moveTableToFolder` extraídos a `src/modules/folders/folders.movement.service.ts` (115 LOC) y delegados desde `folders.service.ts` con 100% de compatibilidad hacia atrás.
+
+### 🟡 Tareas Futuras de Endurecimiento y Seguridad (Post-Lanzamiento)
+- [ ] **Endurecimiento Preventivo de CORS para subdominios públicos (*.sslip.io)**:
+  - **Causa:** Permitir `*.sslip.io` con `credentials: true` es útil para prototipado rápido en Dokploy, pero en producción un dominio libre podría permitir peticiones cruzadas.
+  - **Solución futura:** Restringir `DOKPLOY_SSLIP_REGEX` en `src/gateway/cors.ts` para que opere exclusivamente cuando `process.env.NODE_ENV !== 'production'` o comparar contra el subdominio específico asignado al contenedor.
+
+### 📊 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
+- [x] **`src/modules/tables/tables.service.ts`**: 299 líneas (Blindado: nuevos métodos delegados a `tables.mutation.service.ts` y `tables.bulk.service.ts`).
+- [x] **`src/modules/images/images.service.ts`**: 296 líneas (Blindado: nuevos métodos delegados a `images.bulk.service.ts`).
+- [x] **`src/modules/users/users.schemas.ts`**: 294 líneas.
+- [x] **`src/modules/tables/tables.parser.ts`**: 286 líneas.
+- [x] **`src/scripts/smoke-test.ts`**: 272 líneas.
+- [x] **`src/modules/folders/folders.service.ts`**: 267 líneas (Reducido desde 341 LOC).
+- [x] **`src/modules/chat/chat.engine.ts`**: 263 líneas.
+- [x] **`src/modules/folders/folders.schemas.ts`**: 257 líneas.
+- [x] **`src/modules/tables/tables.schemas.ts`**: 248 líneas.
+- [x] **`src/modules/folders/folders.repository.ts`**: 246 líneas.
+- [x] **`src/modules/images/images.schemas.ts`**: 245 líneas.
+- [x] **`src/modules/users/users.service.ts`**: 241 líneas.
+- [x] **`src/modules/folders/folders.shares.routes.ts`**: 226 líneas.
+- [x] **`src/modules/chat/chat.service.ts`**: 219 líneas.
+- [x] **`src/modules/users/users.routes.ts`**: 210 líneas.
+- [x] **`src/modules/chat/chat.provider.ts`**: 171 líneas.
 - [x] **`src/app.ts`**: 169 líneas.
-- [x] **`src/modules/chat/chat.provider.ts`**: 168 líneas.
 - [x] **`src/modules/tables/tables.metadata.service.ts`**: 154 líneas.
 - [x] **`src/modules/images/images.routes.ts`**: 145 líneas.
 - [x] **`src/modules/tables/tables.routes.ts`**: 139 líneas.
 - [x] **`src/modules/folders/folders.routes.ts`**: 129 líneas.
 - [x] **`src/modules/tables/tables.repository.ts`**: 123 líneas.
 - [x] **`src/modules/chat/chat.schemas.ts`**: 118 líneas.
+- [x] **`src/modules/folders/folders.movement.service.ts`**: 115 líneas.
 - [x] **`src/modules/folders/folders.shares.service.ts`**: 107 líneas.
+- [x] **`src/modules/users/users.repository.ts`**: 99 líneas.
 - [x] **`src/modules/chat/chat.routes.ts`**: 65 líneas.
+
 
 
 

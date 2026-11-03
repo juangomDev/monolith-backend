@@ -60,10 +60,10 @@ export async function buildApp() {
   // Rate Limiting anti-DDoS y saturación global
   await app.register(rateLimitPlugin);
 
-  // Streaming de subidas de archivos (límite 50MB)
+  // Streaming de subidas de archivos (límite 100MB)
   await app.register(multipart, {
     limits: {
-      fileSize: 50 * 1024 * 1024,
+      fileSize: 100 * 1024 * 1024,
       files: 1,
     },
   });

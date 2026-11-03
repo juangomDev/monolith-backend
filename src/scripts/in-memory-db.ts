@@ -73,8 +73,9 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
   };
   (prisma.folder as any).findFirst = async ({ where }: any) =>
     state.folders.find((f) => (!where?.userId || f.userId === where.userId) && (!where?.type || f.type === where.type) && (!where?.name || f.name === where.name)) || null;
-  (prisma.folder as any).findMany = async ({ where, skip, take }: any) => {
+  (prisma.folder as any).findMany = async ({ where, skip, take, include }: any) => {
     let list = state.folders.filter((f) => {
+      if (where?.userId && f.userId !== where.userId) return false;
       if (where?.type && f.type !== where.type) return false;
       if (where?.name?.contains && !f.name.toLowerCase().includes(where.name.contains.toLowerCase())) return false;
       if (where?.members?.some?.userId) return state.folderMembers.some((m) => m.folderId === f.id && m.userId === where.members.some.userId);
@@ -85,7 +86,12 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
     });
     if (skip) list = list.slice(skip);
     if (take) list = list.slice(0, take);
-    return list.map((f) => fmtFolder(f, where?.members?.where?.userId));
+    return list.map((f) => {
+      const res = fmtFolder(f, where?.members?.where?.userId);
+      if (include?.images) res.images = state.images.filter((i) => i.folderId === f.id);
+      if (include?.tables) res.tables = state.tables.filter((t) => t.folderId === f.id);
+      return res;
+    });
   };
   (prisma.folder as any).count = async () => state.folders.length;
   (prisma.folder as any).create = async ({ data }: any) => {
