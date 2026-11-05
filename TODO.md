@@ -23,7 +23,7 @@
 | **Fase 11** | Evolución Integral del Módulo de Tablas y Modularización Arquitectónica | ✅ Completado |
 | **Fase 12** | Sistema Jerárquico de Roles (ADMIN, MANAGER, COLLABORATOR) y RBAC de Carpetas | ✅ Completado |
 | **Fase 13** | Evolución Integral del Módulo de Carpetas (Edición, Protección de General y RBAC de Reasignación) | ✅ Completado |
-| **Fase 14** | Módulo de Chat Analítico sobre Tablas (RAG Tabular con Ficha Técnica, Gemini API y Widget Público) | ✅ Completado |
+| **Fase 14** | Módulo de Chat Analítico sobre Tablas (RAG Tabular, Ficha Técnica y Hardening con ai_manager) | 🔄 Hardening (14.7) |
 | **Fase 15** | Paridad Total en Tablas (Hot-Swap, Renombrado), Búsqueda Global y Operaciones en Lote | ⏳ Pendiente |
 | **Fase 16** | Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento | ⏳ Pendiente |
 | **Fase 17** | Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once) | ⏳ Pendiente |
@@ -690,6 +690,26 @@
   - [x] `14.6.3` Protocolo Obligatorio:
     - Verificar que todos los archivos del repositorio se mantengan `< 300 LOC`.
     - Ejecutar `npm test` (0 fallos, 282 tests aprobados), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+- [ ] **14.7 Hardening de Publicación para IA: Cuentas de Servicio (`ai_manager`) e Interruptor por Compartición (`FolderMember`)**
+  - [ ] `14.7.1` **Semilla y Blindaje de Cuentas Estructurales del Sistema (`prisma/seed.ts` y `src/modules/users/`)**:
+    - Además de `admin` (`Role.ADMIN`), sembrar en `prisma/seed.ts` la cuenta fija de servicio `ai_manager` con rol `Role.MANAGER` (usando `AI_MANAGER_USERNAME` y `AI_MANAGER_PASSWORD` en `.env` con fallback `'ai_manager'`).
+    - Blindar en `users.service.ts`: rechazar con `400 BAD_REQUEST` (`CANNOT_DELETE_SYSTEM_USER` / `SYSTEM_USER_PROTECTED`) cualquier intento de eliminar (`DELETE /api/v1/users/:id`) o desactivar (`PATCH /api/v1/users/:id/status` con `isActive: false`) las cuentas estructurales del sistema (`admin` y `ai_manager`).
+  - [ ] `14.7.2` **Directorio de Usuarios para Compartición y Compatibilidad Horizontal (`src/modules/users/`)**:
+    - En `users.service.ts` (`listUsers`): cuando un `MANAGER` consulte `GET /api/v1/users`, retornar sus colaboradores creados (`createdById === caller.id`) MÁS las cuentas estructurales de servicio activas (como `ai_manager`) para que aparezcan en el selector de usuarios del frontend al compartir carpetas.
+    - Confirmar que `POST /api/v1/folders/:id/shares` admita compartir carpetas con `ai_manager` con permiso `READ` o `EDIT` tanto para `ADMIN` como para cualquier `MANAGER` propietario.
+  - [ ] `14.7.3` **Visibilidad de la IA Pública basada en la Bóveda de `ai_manager` (`src/modules/chat/chat.service.ts`)**:
+    - En `askPublic` (`POST /api/v1/public/chat/ask`) y `getPublicSuggestions` (`GET /api/v1/public/chat/suggestions`): sustituir la consulta genérica `folder.isPrivate === false` por la consulta delegada a la identidad de `ai_manager`.
+    - La IA pública consultará EXCLUSIVAMENTE las tablas (y PDFs en Fase 18) en carpetas que pertenezcan a `ai_manager` o que otros `MANAGER` hayan compartido explícitamente con `ai_manager` vía `FolderMember`.
+    - Implementar resolución eficiente con caché en memoria del ID de `ai_manager` para evitar consultas redundantes de resolución de usuario en cada petición HTTP.
+    - Manejo resiliente: si `ai_manager` aún no existe o no tiene carpetas compartidas, responder limpiamente con `foundInSystem: false` sin fallar con 500.
+  - [ ] `14.7.4` **Sincronización de Contratos y Documentación (Regla 3)**:
+    - Actualizar `docs/frontend-integration.md` documentando el "Interruptor de Publicación para IA": compartir carpeta con `ai_manager` publica inmediatamente los datos en el Chat Web público, y revocar el permiso los despublica al instante.
+    - Actualizar `RUTAS.md` y `ENDPOINTS.md` documentando la visibilidad de `POST /api/v1/public/chat/ask` vinculada a `ai_manager` y la exposición de cuentas de servicio en `GET /api/v1/users`.
+  - [ ] `14.7.5` **Pruebas Automatizadas y Protocolo Obligatorio (Reglas 1 y 2)**:
+    - Crear `tests/modules/users/users.system-protection.test.ts`: verificar bloqueo 400 ante eliminación/desactivación de cuentas protegidas y verificar que `GET /api/v1/users` para un `MANAGER` incluye a `ai_manager`.
+    - Pruebas en `tests/modules/chat/chat.routes.test.ts`: verificar que el Chat Público responde únicamente con tablas compartidas con `ai_manager` e ignora carpetas `isPrivate: false` no compartidas.
+    - Protocolo Obligatorio: `npm test` (0 fallos), `npm run build` (código 0), `npm audit` (0 vulnerabilidades) y todos los archivos estrictamente `< 300 LOC`.
 
 ---
 
