@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx --env-file=.env watch src/main.ts",
     "build": "tsc",
-    "start": "node dist/scripts/migrate-legacy-roles.js && npx prisma db push --accept-data-loss && node dist/main.js",
+    "start": "npx prisma db push && node dist/main.js",
     "test": "tsx --env-file=.env --test tests/**/*.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
