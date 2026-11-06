@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
+import { ensureInitialSystemSeed } from './config/bootstrap.js';
 
 async function start() {
   const app = await buildApp();
@@ -9,6 +10,12 @@ async function start() {
     // Conectar base de datos
     await connectDB();
     app.log.info('Conexión con PostgreSQL establecida.');
+
+    // Garantizar existencia de cuenta ADMIN inicial y API Key base
+    const { adminCreated } = await ensureInitialSystemSeed();
+    if (adminCreated) {
+      app.log.info(`Cuenta Administrador inicial ('${env.ADMIN_USERNAME}') creada automáticamente.`);
+    }
 
     // Arrancar listener Fastify
     await app.listen({
