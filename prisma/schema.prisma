@@ -107,6 +107,8 @@ model User {
   folders           Folder[]
   folderMemberships FolderMember[]
   resolvedEntries   FormEntry[]    @relation("ResolvedEntries")
+  formSubscriptions FormSubscription[]
+  notifications     Notification[]
 
   @@index([username])
   @@index([createdById])
@@ -200,6 +202,7 @@ model FormDefinition {
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @default(now()) @updatedAt @map("updated_at")
   entries                 FormEntry[]
+  subscriptions           FormSubscription[]
 
   @@index([slug])
   @@index([folderId])
@@ -223,4 +226,39 @@ model FormEntry {
   @@index([status])
   @@index([createdAt])
   @@map("form_entries")
+}
+
+// 9. Suscripciones y Notificaciones en Vivo
+model FormSubscription {
+  id                 String         @id @default(uuid()) @db.Uuid
+  userId             String         @map("user_id") @db.Uuid
+  formId             String         @map("form_id") @db.Uuid
+  notifyOnNewEntry   Boolean        @default(true) @map("notify_on_new_entry")
+  notifyOnResolution Boolean        @default(false) @map("notify_on_resolution")
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  form FormDefinition @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, formId])
+  @@index([userId])
+  @@index([formId])
+  @@map("form_subscriptions")
+}
+
+model Notification {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  title      String   @db.VarChar(120)
+  message    String   @db.Text
+  type       String   @db.VarChar(50)
+  resourceId String?  @map("resource_id") @db.VarChar(80)
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }

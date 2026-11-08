@@ -900,6 +900,111 @@ Cuando los usuarios realizan preguntas en el Chat interno o público (`/api/v1/c
 El frontend puede renderizar directamente enlaces como:
 `<a href="${source.url}#page=${source.pages[0]}" target="_blank">${source.name} (Pág. ${source.pages.join(', ')})</a>`
 
+---
+
+## 19. 🔔 Módulo de Notificaciones en Vivo (SSE), Bandeja In-App y Suscripciones a Tablas Abiertas
+
+Permite al frontend mostrar una campana de notificaciones con conteo de no leídas, bandeja interactiva y recepción de alertas en tiempo real sin polling cuando se registran nuevas respuestas en los formularios a los que el usuario tiene acceso y está suscrito.
+
+### 19.1. Conexión en Vivo mediante Server-Sent Events (SSE)
+
+Para recibir alertas instantáneas sin recargar la página:
+
+```typescript
+// En React / Vue / Vanilla JS:
+const eventSource = new EventSource(`${API_URL}/api/v1/notifications/stream?token=${accessToken}`);
+
+// O si tu cliente HTTP soporta cabeceras en streaming (fetch-event-source):
+import { fetchEventSource } from '@microsoft/fetch-event-source';
+
+fetchEventSource(`${API_URL}/api/v1/notifications/stream`, {
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+  },
+  onmessage(event) {
+    if (event.event === 'notification') {
+      const notification = JSON.parse(event.data);
+      console.log('Nueva alerta recibida:', notification);
+      // Actualizar badge de la campana y mostrar toast en pantalla:
+      // toast.info(notification.title, notification.message);
+    }
+  },
+  onerror(err) {
+    console.error('Error de conexión SSE:', err);
+  },
+});
+```
+
+### 19.2. Badge de No Leídas y Bandeja Paginada
+
+```typescript
+// 1. Obtener conteo para el badge numérico de la campana
+const countRes = await fetch(`${API_URL}/api/v1/notifications/unread-count`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { unreadCount } = await countRes.json();
+
+// 2. Abrir bandeja de notificaciones (primeras 20)
+const listRes = await fetch(`${API_URL}/api/v1/notifications?page=1&limit=20&unreadOnly=false`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { data, meta } = await listRes.json();
+// data: [ { id, title, message, type, resourceId, read, createdAt }, ... ]
+```
+
+### 19.3. Marcar como Leídas y Limpieza
+
+```typescript
+// Marcar una notificación específica al hacer clic
+await fetch(`${API_URL}/api/v1/notifications/${notification.id}/read`, {
+  method: 'PATCH',
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+
+// Botón "Marcar todas como leídas"
+await fetch(`${API_URL}/api/v1/notifications/read-all`, {
+  method: 'PATCH',
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+
+// Eliminar una notificación
+await fetch(`${API_URL}/api/v1/notifications/${notification.id}`, {
+  method: 'DELETE',
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
+### 19.4. Suscribirse a Alertas de una Tabla Abierta / Formulario
+
+Permite que el operador o manager decida qué formularios desea monitorear activamente:
+
+```typescript
+// 1. Consultar si el usuario actual ya está suscrito
+const subRes = await fetch(`${API_URL}/api/v1/forms/${formId}/subscription`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { subscribed, subscription } = await subRes.json();
+
+// 2. Alternar o guardar suscripción (Activar alertas de nueva respuesta)
+await fetch(`${API_URL}/api/v1/forms/${formId}/subscribe`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    notifyOnNewEntry: true,
+    notifyOnResolution: false,
+  }),
+});
+
+// 3. Silenciar alertas de este formulario
+await fetch(`${API_URL}/api/v1/forms/${formId}/subscribe`, {
+  method: 'DELETE',
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
 
 
 

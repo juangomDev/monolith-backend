@@ -13,6 +13,7 @@ import { registerGatewayRoutes } from './gateway/router.js';
 import { AppError } from './shared/errors.js';
 import { rateLimitPlugin } from './gateway/rate-limit.plugin.js';
 import { corsOriginValidator } from './gateway/cors.js';
+import { notificationsListener } from './modules/notifications/notifications.listener.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -161,6 +162,7 @@ export async function buildApp() {
         { name: 'Stats', description: 'Métricas de cuota, salud y monitor de almacenamiento' },
         { name: 'Forms', description: 'Formularios customizables, tablas abiertas y resolución única Write-Once' },
         { name: 'Pdfs', description: 'Alojamiento, capability URLs (/p/:short_code), doble artefacto y Chat RAG de PDFs' },
+        { name: 'Notifications', description: 'Bandeja de notificaciones in-app, stream SSE en tiempo real y suscripciones' },
         { name: 'Health', description: 'Comprobación de salud del sistema, PostgreSQL y almacenamiento' },
       ],
     },
@@ -185,8 +187,11 @@ export async function buildApp() {
     return reply.status(200).send(app.swagger());
   });
 
-  // Registro de rutas (Health, Imágenes, Tablas, Usuarios, Carpetas)
+  // Registro de rutas (Health, Imágenes, Tablas, Usuarios, Carpetas, Notificaciones)
   await registerGatewayRoutes(app);
+
+  // Inicialización de escuchadores de eventos
+  notificationsListener.registerListeners();
 
   return app;
 }

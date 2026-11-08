@@ -75,6 +75,15 @@
 | **63** | `PATCH` | `/api/v1/pdfs/:id/metadata` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Actualizar ficha técnica (`metadataCard`: category, summary, keywords, custom). |
 | **64** | `DELETE` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación de PDF en base de datos y borrado físico de sus 2 artefactos en disco. |
 | **65** | `PATCH` | `/api/v1/pdfs/:id/folder` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Mover documento PDF a otra carpeta verificando que sea de tipo `PDF`. |
+| **66** | `GET` | `/api/v1/notifications` | Notifications | Dual (JWT / Key) | Autenticado | Listado paginado de notificaciones del usuario (`?page=&limit=&unreadOnly=`). |
+| **67** | `GET` | `/api/v1/notifications/unread-count` | Notifications | Dual (JWT / Key) | Autenticado | Conteo rápido de notificaciones pendientes (badge de campana). |
+| **68** | `PATCH` | `/api/v1/notifications/:id/read` | Notifications | Dual (JWT / Key) | Autenticado | Marcar una notificación individual como leída. |
+| **69** | `PATCH` | `/api/v1/notifications/read-all` | Notifications | Dual (JWT / Key) | Autenticado | Marcar todas las notificaciones de la bandeja como leídas. |
+| **70** | `DELETE` | `/api/v1/notifications/:id` | Notifications | Dual (JWT / Key) | Autenticado | Eliminar una notificación de la bandeja. |
+| **71** | `GET` | `/api/v1/notifications/stream` | Notifications | Dual (JWT / Key) | Autenticado | Conexión Server-Sent Events (SSE) para recepción de alertas en vivo. |
+| **72** | `POST` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Suscribirse o actualizar alertas de nuevas entradas/resoluciones de un formulario. |
+| **73** | `DELETE` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Cancelar suscripción a las alertas de un formulario. |
+| **74** | `GET` | `/api/v1/forms/:id/subscription` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Consultar el estado de suscripción del usuario en un formulario. |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -1030,6 +1039,48 @@ Elimina el registro en PostgreSQL / Prisma y borra físicamente de `./storage/pd
 Mueve el PDF a otra carpeta del sistema, validando estrictamente que la carpeta destino sea de tipo `FolderType.PDF`.
 - **Cuerpo JSON:** `{ "targetFolderId": "uuid-carpeta-pdf" }`.
 - **Respuesta 200 OK:** Registro actualizado.
+
+---
+
+### 3.10 Módulo de Notificaciones en Vivo, Eventos Desacoplados y Suscripciones (SSE)
+
+El módulo de notificaciones opera mediante un bus de eventos en memoria (`AppEventBus`), desacoplando por completo los formularios y mutaciones de tablas del sistema de alertas.
+
+#### `GET /api/v1/notifications` (Protegida)
+Consulta la bandeja de notificaciones del usuario autenticado de forma paginada (`?page=1&limit=20`), con soporte para filtro de solo alertas no leídas (`?unreadOnly=true`).
+- **Respuesta 200 OK:** `{ "data": [...], "meta": { "total": N, "page": 1, "limit": 20, "totalPages": N } }`.
+
+#### `GET /api/v1/notifications/unread-count` (Protegida)
+Retorna rápidamente la cantidad de alertas no leídas del usuario para alimentar el badge numérico de la campana en el frontend.
+- **Respuesta 200 OK:** `{ "unreadCount": 3 }`.
+
+#### `PATCH /api/v1/notifications/:id/read` (Protegida)
+Marca una notificación específica del usuario como leída (`read: true`).
+- **Respuesta 200 OK:** Registro de la notificación actualizado.
+
+#### `PATCH /api/v1/notifications/read-all` (Protegida)
+Marca todas las notificaciones pendientes del usuario como leídas.
+- **Respuesta 200 OK:** `{ "updatedCount": 5 }`.
+
+#### `DELETE /api/v1/notifications/:id` (Protegida)
+Elimina una notificación de la bandeja personal del usuario.
+- **Respuesta 200 OK:** `{ "success": true }`.
+
+#### `GET /api/v1/notifications/stream` (Protegida - Server-Sent Events SSE)
+Establece una conexión persistente unidireccional de baja latencia (`text/event-stream`) con reconexión automática y heartbeats de keep-alive cada 25 segundos. Empuja eventos `event: notification` en tiempo real a los clientes conectados tan pronto se registran nuevas respuestas o resoluciones.
+
+#### `POST /api/v1/forms/:id/subscribe` (Protegida)
+Suscribe al usuario autenticado a las alertas de un formulario específico (validando que tenga al menos acceso `READ` en la carpeta donde reside).
+- **Cuerpo JSON:** `{ "notifyOnNewEntry": true, "notifyOnResolution": false }`.
+- **Respuesta 200 OK:** Objeto `FormSubscription`.
+
+#### `DELETE /api/v1/forms/:id/subscribe` (Protegida)
+Cancela la suscripción a las alertas del formulario.
+- **Respuesta 200 OK:** `{ "success": true }`.
+
+#### `GET /api/v1/forms/:id/subscription` (Protegida)
+Consulta si el usuario actual está suscrito al formulario y sus preferencias de alerta activas.
+- **Respuesta 200 OK:** `{ "subscribed": true, "subscription": { ... } }`.
 
 ---
 

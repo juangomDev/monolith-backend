@@ -28,6 +28,7 @@
 | **Fase 16** | Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento | ✅ Completado |
 | **Fase 17** | Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once) | ✅ Completado |
 | **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ✅ Completado |
+| **Fase 19** | Sistema de Eventos Desacoplados y Notificaciones en Vivo (Tablas Abiertas, Bandeja In-App y SSE) | ✅ Completado |
 
 ---
 
@@ -947,6 +948,56 @@
     - Consulta desde el Chat respondiendo con el contenido del PDF y citando la página correspondiente.
   - [x] `18.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json` con `npm run openapi:export`.
   - [x] `18.6.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 🔔 FASE 19: Sistema de Eventos Desacoplados y Notificaciones en Vivo (Tablas Abiertas, Bandeja In-App y SSE)
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Desacoplamiento Absoluto por Eventos (Pub/Sub en Memoria):** Crear un `EventBus` tipado nativo en Node.js que permita emitir eventos de negocio (`form.entry.created`, `form.entry.resolved`, etc.) sin acoplar los servicios de formularios ni mutaciones de tablas a la capa de mensajería o sockets.
+> 
+> 2. **Suscripción Granular por Formulario / Tabla Abierta (`FormSubscription`):** Permitir a los usuarios (con acceso verificado por RBAC a la carpeta correspondiente) suscribirse a alertas de un formulario específico, evitando notificaciones spam a usuarios de otras áreas o departamentos.
+> 
+> 3. **Bandeja de Entrada In-App Persistente (`Notification`):** Guardar notificaciones en PostgreSQL con seguimiento de lectura (`read: boolean`), conteo de no leídas y enlace al recurso afectado (`resourceId`).
+> 
+> 4. **Entrega en Tiempo Real mediante Server-Sent Events (SSE):** Endpoint HTTP nativo `GET /api/v1/notifications/stream` para que el frontend (`gestor-multimedia`) actualice la campanita de notificaciones al instante sin polling y con reconexión automática.
+> 
+> 5. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos estrictamente `< 300 LOC`, preservar el 100% de los 383 tests previos congelados y documentar en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [x] **19.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
+  - [x] `19.1.1` Crear modelo `FormSubscription` (`id`, `userId`, `formId`, `notifyOnNewEntry: Boolean @default(true)`, `notifyOnResolution: Boolean @default(false)`, `createdAt`). Índices únicos en `[userId, formId]` y relaciones en cascada.
+  - [x] `19.1.2` Crear modelo `Notification` (`id`, `userId`, `title`, `message`, `type`, `resourceId?`, `read: Boolean @default(false)`, `createdAt`). Índices en `[userId, read]` y `[userId, createdAt]`.
+  - [x] `19.1.3` Ejecutar `npx prisma generate` y actualizar base de datos en Dokploy / Docker.
+
+- [x] **19.2 Bus de Eventos Tipado y Desacoplado (`src/shared/event-bus.ts`)**
+  - [x] `19.2.1` Crear singleton `AppEventBus` basado en `EventEmitter` nativo con tipado estricto para eventos:
+    - `form.entry.created`: `{ formId, formSlug, formTitle, entryId, entryPayload, createdAt }`
+    - `form.entry.resolved`: `{ formId, formSlug, formTitle, entryId, status, resolvedById, resolvedAt }`
+  - [x] `19.2.2` En `src/modules/forms/forms.service.ts`: Emitir eventos al crear entrada y al resolver sin añadir lógica de notificaciones en el servicio de formularios.
+
+- [x] **19.3 Módulo de Notificaciones: Repositorio, Servicio y Stream SSE (`src/modules/notifications/`)**
+  - [x] `19.3.1` Crear `notifications.repository.ts` (< 300 LOC): Consultas de bandeja paginada, conteo de no leídas, marcado como leída (`markAsRead`, `markAllAsRead`) y eliminación.
+  - [x] `19.3.2` Crear `notifications.sse.ts` (< 150 LOC): Gestor de conexiones activas SSE con envío de eventos en formato `text/event-stream` y heartbeat de keep-alive.
+  - [x] `19.3.3` Crear `notifications.listener.ts` (< 200 LOC): Suscriptor al `eventBus` que resuelve qué usuarios tienen suscripción activa y permiso en la carpeta del formulario, persiste los registros `Notification` y los difunde por SSE.
+  - [x] `19.3.4` Crear `notifications.service.ts` (< 250 LOC): Métodos de consulta de bandeja, suscripción/desuscripción y puente con SSE.
+
+- [x] **19.4 Rutas HTTP y Contratos OpenAPI 3.1 (`src/modules/notifications/`)**
+  - [x] `19.4.1` Crear `notifications.schemas.ts` con esquemas OpenAPI 3.1.
+  - [x] `19.4.2` Crear `notifications.routes.ts`:
+    - `GET /api/v1/notifications` (`?page=&limit=&unreadOnly=`): Bandeja de usuario.
+    - `GET /api/v1/notifications/unread-count`: Conteo rápido para badge de campana.
+    - `PATCH /api/v1/notifications/:id/read`: Marcar una notificación individual como leída.
+    - `PATCH /api/v1/notifications/read-all`: Marcar todas como leídas.
+    - `DELETE /api/v1/notifications/:id`: Eliminar una notificación.
+    - `GET /api/v1/notifications/stream`: Conexión Server-Sent Events en tiempo real.
+    - `POST /api/v1/forms/:id/subscribe`: Alternar suscripción del usuario a un formulario específico.
+    - `GET /api/v1/forms/:id/subscription`: Obtener el estado de suscripción del usuario actual en un formulario.
+
+- [x] **19.5 Pruebas Automatizadas y Documentación Simultánea (Reglas 1, 2 y 3)**
+  - [x] `19.5.1` Pruebas unitarias de `event-bus.ts`, `notifications.service.test.ts` y pruebas integradas de rutas `notifications.routes.test.ts`.
+  - [x] `19.5.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y exportar `openapi.json` con `npm run openapi:export`.
+  - [x] `19.5.3` Verificar 100% de tests pasando (383+ tests), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
 
 ---
 

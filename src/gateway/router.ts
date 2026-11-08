@@ -11,6 +11,7 @@ import { apiKeysRoutes } from '../modules/api-keys/api-keys.routes.js';
 import { statsRoutes } from '../modules/stats/stats.routes.js';
 import { formsRoutes } from '../modules/forms/forms.routes.js';
 import { pdfsRoutes } from '../modules/pdfs/pdfs.routes.js';
+import { notificationsRoutes } from '../modules/notifications/notifications.routes.js';
 
 export async function registerGatewayRoutes(fastify: FastifyInstance): Promise<void> {
   // Verificación de estado del contenedor en Dokploy
@@ -28,4 +29,5 @@ export async function registerGatewayRoutes(fastify: FastifyInstance): Promise<v
   await fastify.register(statsRoutes);
   await fastify.register(formsRoutes);
   await fastify.register(pdfsRoutes);
+  await fastify.register(notificationsRoutes);
 }

@@ -3,6 +3,7 @@ import { formsRepository, type FormsRepository, type ListFormsOptions, type List
 import { formsTableSync, type FormsTableSync } from './forms.table-sync.js';
 import { foldersSharesService, type FoldersSharesService } from '../folders/folders.shares.service.js';
 import { auditService } from '../audit/audit.service.js';
+import { eventBus } from '../../shared/event-bus.js';
 import { AppError } from '../../shared/errors.js';
 import {
   validatePayloadAgainstSchema,
@@ -141,6 +142,16 @@ export class FormsService {
       ipAddress,
     });
 
+    eventBus.emitEvent('form.entry.created', {
+      formId: form.id,
+      formSlug: form.slug,
+      formTitle: form.title,
+      folderId: form.folderId,
+      entryId: entry.id,
+      entryPayload: entry.entryPayload as Record<string, any>,
+      createdAt: entry.createdAt,
+    });
+
     return { id: entry.id, status: entry.status, createdAt: entry.createdAt };
   }
 
@@ -189,6 +200,18 @@ export class FormsService {
       resourceId: updated.id,
       folderId: entry.form.folderId,
       ipAddress,
+    });
+
+    eventBus.emitEvent('form.entry.resolved', {
+      formId: entry.form.id,
+      formSlug: entry.form.slug,
+      formTitle: entry.form.title,
+      folderId: entry.form.folderId,
+      entryId: updated.id,
+      status: updated.status,
+      resolutionPayload: (updated.resolutionPayload as Record<string, any>) || undefined,
+      resolvedById: caller.id,
+      resolvedAt: updated.resolvedAt!,
     });
 
     return updated;
