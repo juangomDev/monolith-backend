@@ -77,8 +77,8 @@ export class FormsService {
     try {
       await this.tableSync.initializeLinkedTable(form);
     } catch (err: any) {
-      // Si falla la inicialización de la tabla viva, se reporta
-      console.error('[FormsService] Error inicializando tabla viva:', err);
+      // Si falla la inicialización de la tabla abierta, se reporta
+      console.error('[FormsService] Error inicializando tabla abierta:', err);
     }
 
     auditService.recordLog({
@@ -126,9 +126,9 @@ export class FormsService {
       status: 'NEW',
     });
 
-    // Sincronización asíncrona de tabla viva (.data.json.gz)
+    // Sincronización asíncrona de tabla abierta (.data.json.gz)
     await this.tableSync.syncEntryToTable(form, entry, false).catch((err) => {
-      console.error('[FormsService] Error sincronizando entrada a tabla viva:', err);
+      console.error('[FormsService] Error sincronizando entrada a tabla abierta:', err);
     });
 
     auditService.recordLog({
@@ -166,7 +166,7 @@ export class FormsService {
     });
 
     await this.tableSync.syncEntryToTable(entry.form, updated, true).catch((err) => {
-      console.error('[FormsService] Error sincronizando resolución a tabla viva:', err);
+      console.error('[FormsService] Error sincronizando resolución a tabla abierta:', err);
     });
 
     if (entry.form.externalTargetUrl) {

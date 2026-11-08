@@ -26,7 +26,7 @@
 | **Fase 14** | Módulo de Chat Analítico sobre Tablas (RAG Tabular, Ficha Técnica y Hardening con ai_manager) | ✅ Completado |
 | **Fase 15** | Paridad Total en Tablas (Hot-Swap, Renombrado), Búsqueda Global y Operaciones en Lote | ✅ Completado |
 | **Fase 16** | Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento | ✅ Completado |
-| **Fase 17** | Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once) | ✅ Completado |
+| **Fase 17** | Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once) | ✅ Completado |
 | **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ✅ Completado |
 
 ---
@@ -824,7 +824,7 @@
 
 ---
 
-## 📝 FASE 17: Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+## 📝 FASE 17: Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once)
 
 ### 🎯 Objetivos de la Fase
 
@@ -840,7 +840,7 @@
 > 
 > 4. **Re-envío Bajo Demanda sin Guardar Archivos (`POST /api/v1/forms/entries/:id/dispatch`):** Si se requiere volver a generar el documento de una fila ya respondida N veces en el futuro, este endpoint de solo lectura reenvía los datos sellados de esa fila al sistema externo sin alterar la base de datos ni usar disco.
 > 
-> 5. **Sincronización con Tablas Vivas y Descarga Mensual:** Todas las filas (con sus columnas de entrada y de respuesta) se sincronizan en el `.data.json.gz` de su `TableRegistry` y pueden descargarse en `.xlsx` o `.csv` filtradas por mes (`?month=YYYY-MM`) o estado (`?status=NEW|VALID|INVALID`).
+> 5. **Sincronización con Tablas Abiertas y Descarga Mensual:** Todas las filas (con sus columnas de entrada y de respuesta) se sincronizan en el `.data.json.gz` de su `TableRegistry` y pueden descargarse en `.xlsx` o `.csv` filtradas por mes (`?month=YYYY-MM`) o estado (`?status=NEW|VALID|INVALID`).
 > 
 > 6. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos `< 300 LOC`, preservar el 100% de los tests congelados previos y documentar en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
 
@@ -856,14 +856,14 @@
     - Verificar que `newStatus` pertenezca a `allowedResolutionStates` (ej. `"VALID"` o `"INVALID"`, impidiendo quedarse en `"NEW"` o pasar a un estado inexistente con `400 BAD_REQUEST`).
     - Validar `resolutionPayload` contra `resolutionFieldsSchema`.
 
-- [x] **17.3 Sincronizador de Tabla Viva y Exportador Mensual (`src/modules/forms/forms.table-sync.ts`)**
+- [x] **17.3 Sincronizador de Tabla Abierta y Exportador Mensual (`src/modules/forms/forms.table-sync.ts`)**
   - [x] `17.3.1` Al crear el formulario, crear su `TableRegistry` con las columnas combinadas (`[...entryColumns, 'status', ...resolutionColumns, 'createdAt', 'resolvedAt']`).
   - [x] `17.3.2` Actualizar el artefacto `.data.json.gz` tanto al crear una entrada en el Endpoint 1 (con las columnas de respuesta en `null`) como al sellar la respuesta en el Endpoint 2.
   - [x] `17.3.3` Implementar `GET /api/v1/forms/:id/export?month=YYYY-MM&status=&format=xlsx|csv` para exportar las filas a Excel o CSV.
 
 - [x] **17.4 Endpoints de Ciclo de Vida y Envío de Datos al Sistema Externo (`src/modules/forms/forms.service.ts` y `forms.routes.ts`)**
   - [x] `17.4.1` `POST /api/v1/forms` y `GET /api/v1/forms`: Crear y listar formularios customizables respetando el RBAC de carpetas.
-  - [x] `17.4.2` **Endpoint 1 — Crear Entrada (`POST /api/v1/public/forms/:slug/entries`)**: Ruta pública con Rate Limit. Guarda `entryPayload` con `status: "NEW"` y sincroniza la tabla viva. (Si `autoResolveWithAi` está activo y `chatService.askPublic()` encuentra respuesta exacta, puede ejecutar automáticamente el paso de resolución y envío).
+  - [x] `17.4.2` **Endpoint 1 — Crear Entrada (`POST /api/v1/public/forms/:slug/entries`)**: Ruta pública con Rate Limit. Guarda `entryPayload` con `status: "NEW"` y sincroniza la tabla abierta. (Si `autoResolveWithAi` está activo y `chatService.askPublic()` encuentra respuesta exacta, puede ejecutar automáticamente el paso de resolución y envío).
   - [x] `17.4.3` **Endpoint 2 — Completar Respuesta Única (`PATCH /api/v1/forms/entries/:id/resolve`)**: Ruta protegida (`ADMIN`, `MANAGER` o `COLLABORATOR` con permiso `EDIT`). Valida que la fila esté en `"NEW"`, sella por única vez `status` (`VALID` | `INVALID`), `resolutionPayload` y `resolvedAt`, actualiza el `.data.json.gz` y envía los datos unificados de la fila al sistema externo (`externalTargetUrl`).
   - [x] `17.4.4` **Reenvío / Consulta para Sistema Externo (`POST /api/v1/forms/entries/:id/dispatch` y `GET /api/v1/forms/:id/entries`)**: Permite listar las entradas (filtradas por mes y estado) y volver a disparar el envío del JSON de cualquier fila ya resuelta hacia el sistema encargado de los PDFs cuantas veces se necesite sin tocar el disco ni permitir reeditar la fila.
 

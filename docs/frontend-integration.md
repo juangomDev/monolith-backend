@@ -691,11 +691,11 @@ const stats = await statsRes.json();
 
 ---
 
-## 17. 📝 Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+## 17. 📝 Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once)
 
-Este módulo desacopla la generación de PDFs del backend: `monolith-backend` administra esquemas dinámicos, tablas vivas sincronizadas en formato comprimido `.data.json.gz`, inmutabilidad estricta Write-Once al responder y reenvío bajo demanda al servicio externo encargado de los PDFs.
+Este módulo desacopla la generación de PDFs del backend: `monolith-backend` administra esquemas dinámicos, tablas abiertas sincronizadas en formato comprimido `.data.json.gz`, inmutabilidad estricta Write-Once al responder y reenvío bajo demanda al servicio externo encargado de los PDFs.
 
-### 17.1. Crear Formulario y Tabla Viva (`POST /api/v1/forms`)
+### 17.1. Crear Formulario y Tabla Abierta (`POST /api/v1/forms`)
 Permite a usuarios autorizados (`MANAGER`, `ADMIN` o `COLLABORATOR` con `EDIT`) crear un formulario en una carpeta:
 
 ```typescript
@@ -742,7 +742,7 @@ const submitRes = await fetch(`${API_URL}/api/v1/public/forms/contacto-ciudadano
 const entry = await submitRes.json();
 // entry: { id: "uuid-entrada", status: "NEW", createdAt: "2026-03-01T..." }
 ```
-*Las columnas de respuesta exclusiva (`resolutionFieldsSchema`) quedan automáticamente en `null` tanto en la base de datos como en la tabla viva vinculada `.data.json.gz`.*
+*Las columnas de respuesta exclusiva (`resolutionFieldsSchema`) quedan automáticamente en `null` tanto en la base de datos como en la tabla abierta vinculada `.data.json.gz`.*
 
 ### 17.3. Endpoint 2: Resolución Única Inmutable (`PATCH /api/v1/forms/entries/:id/resolve`)
 Permite a los operadores completar los campos de resolución y sellar la fila a `VALID` o `INVALID`:
@@ -782,7 +782,7 @@ const dispatchResult = await dispatchRes.json();
 // dispatchResult: { dispatched: true, targetUrl: "...", entryId: "...", dispatchedAt: "..." }
 ```
 
-### 17.5. Descarga Mensual y Tablas Vivas (`GET /api/v1/forms/:id/export`)
+### 17.5. Descarga Mensual y Tablas Abiertas (`GET /api/v1/forms/:id/export`)
 Descarga todas las respuestas filtradas por mes y estado en Excel (`.xlsx`) o CSV (`.csv`):
 
 ```typescript

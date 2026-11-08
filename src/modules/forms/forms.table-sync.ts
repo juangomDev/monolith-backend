@@ -47,7 +47,7 @@ export class FormsTableSync {
       rowCount: 0,
       columnsSchema: combinedCols,
       metadataCard: {
-        title: `Tabla Viva: ${form.title}`,
+        title: `Tabla Abierta: ${form.title}`,
         description: `Respuestas sincronizadas en tiempo real del formulario ${form.slug}`,
         tags: ['form', 'respuestas', form.slug],
       } as any,

@@ -27,7 +27,7 @@ describe('Módulo Formularios: FormsService (Casos de Uso)', () => {
     updatedAt: new Date(),
   };
 
-  it('createForm: crea formulario exitosamente e inicializa tabla viva', async () => {
+  it('createForm: crea formulario exitosamente e inicializa tabla abierta', async () => {
     let initializedTable = false;
     const mockRepo: any = {
       findFormBySlug: async () => null,
@@ -72,7 +72,7 @@ describe('Módulo Formularios: FormsService (Casos de Uso)', () => {
     );
   });
 
-  it('submitEntry: registra entrada pública en estado NEW y sincroniza tabla viva', async () => {
+  it('submitEntry: registra entrada pública en estado NEW y sincroniza tabla abierta', async () => {
     let synced = false;
     const mockRepo: any = {
       findFormBySlug: async () => fakeForm,

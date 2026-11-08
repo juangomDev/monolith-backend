@@ -60,7 +60,7 @@
 | **48** | `DELETE` | `/api/v1/api-keys/:id` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Revocar y destruir una API Key inmediatamente. |
 | **49** | `GET` | `/api/v1/stats/storage` | Stats | Dual (JWT / Key) | `MANAGER`* | Métricas de cuota, salud de disco físico (`ADMIN`) y desglose de carpetas. |
 | **50** | `POST` | `/api/v1/public/forms/:slug/entries` | Forms | Pública (Rate Limit) | Anónimo | Envío público de datos de formulario (Endpoint 1: status NEW). |
-| **51** | `POST` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Crea formulario customizable y genera tabla viva vinculada. |
+| **51** | `POST` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Crea formulario customizable y genera tabla abierta vinculada. |
 | **52** | `GET` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR` | Lista formularios accesibles con conteo de respuestas y tabla. |
 | **53** | `GET` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene el detalle de un formulario por ID o slug. |
 | **54** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID o INVALID). |
@@ -915,10 +915,10 @@ Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las tabla
 
 ---
 
-### 3.8. Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+### 3.8. Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once)
 
 #### `POST /api/v1/public/forms/:slug/entries` (Pública con Rate Limiting - Endpoint 1)
-Envío público de formularios web. Guarda `entryPayload` en estado `"NEW"`, dejando vacías las columnas de respuesta exclusiva en la base de datos y en la tabla viva vinculada `.data.json.gz`.
+Envío público de formularios web. Guarda `entryPayload` en estado `"NEW"`, dejando vacías las columnas de respuesta exclusiva en la base de datos y en la tabla abierta vinculada `.data.json.gz`.
 - **Autenticación:** Ninguna (Pública, 60 req/min por IP).
 - **Parámetros URL:** `slug` (identificador único del formulario).
 - **Cuerpo JSON:** Diccionario dinámico acorde al `entryFieldsSchema`.
@@ -958,7 +958,7 @@ Crea una definición de formulario y genera automáticamente un `TableRegistry` 
 - **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `409 Conflict` (slug duplicado).
 
 #### `GET /api/v1/forms` y `GET /api/v1/forms/:id` (Protegida)
-Consulta el catálogo de formularios accesibles con sus esquemas, tabla viva asociada y conteo de respuestas.
+Consulta el catálogo de formularios accesibles con sus esquemas, tabla abierta asociada y conteo de respuestas.
 
 #### `PATCH /api/v1/forms/entries/:id/resolve` (Protegida - Endpoint 2: Regla Write-Once)
 Completa los campos de `resolutionFieldsSchema` y transiciona el estado de `"NEW"` a `"VALID"` o `"INVALID"`.

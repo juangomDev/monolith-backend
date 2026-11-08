@@ -159,7 +159,7 @@ export async function buildApp() {
         { name: 'Audit', description: 'Trazabilidad y registro cronológico de acciones críticas' },
         { name: 'ApiKeys', description: 'Gestión dinámica y revocación de API Keys (exclusivo ADMIN)' },
         { name: 'Stats', description: 'Métricas de cuota, salud y monitor de almacenamiento' },
-        { name: 'Forms', description: 'Formularios customizables, tablas vivas y resolución única Write-Once' },
+        { name: 'Forms', description: 'Formularios customizables, tablas abiertas y resolución única Write-Once' },
         { name: 'Pdfs', description: 'Alojamiento, capability URLs (/p/:short_code), doble artefacto y Chat RAG de PDFs' },
         { name: 'Health', description: 'Comprobación de salud del sistema, PostgreSQL y almacenamiento' },
       ],

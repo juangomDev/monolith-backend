@@ -13076,7 +13076,7 @@
         "tags": [
           "Forms"
         ],
-        "description": "Ruta pública rate-limited. Guarda entryPayload en status NEW y sincroniza la tabla viva en tiempo real.",
+        "description": "Ruta pública rate-limited. Guarda entryPayload en status NEW y sincroniza la tabla abierta en tiempo real.",
         "requestBody": {
           "required": true,
           "content": {
@@ -13319,7 +13319,7 @@
     },
     "/api/v1/forms": {
       "post": {
-        "summary": "Crea un nuevo formulario customizable y genera su tabla viva vinculada",
+        "summary": "Crea un nuevo formulario customizable y genera su tabla abierta vinculada",
         "tags": [
           "Forms"
         ],
@@ -18090,7 +18090,7 @@
     },
     {
       "name": "Forms",
-      "description": "Formularios customizables, tablas vivas y resolución única Write-Once"
+      "description": "Formularios customizables, tablas abiertas y resolución única Write-Once"
     },
     {
       "name": "Pdfs",

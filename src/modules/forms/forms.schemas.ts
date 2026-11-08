@@ -39,7 +39,7 @@ const formResponseProperties = {
 
 export const createFormRouteSchema: FastifySchema = {
   tags: ['Forms'],
-  summary: 'Crea un nuevo formulario customizable y genera su tabla viva vinculada',
+  summary: 'Crea un nuevo formulario customizable y genera su tabla abierta vinculada',
   description: 'Esquema dual: campos de entrada y campos de respuesta exclusiva. Genera TableRegistry con .data.json.gz sincronizado.',
   security: securityDualAuth,
   body: {
@@ -119,7 +119,7 @@ export const getFormRouteSchema: FastifySchema = {
 export const submitEntryRouteSchema: FastifySchema = {
   tags: ['Forms'],
   summary: 'Endpoint 1: Envío público de datos para un formulario',
-  description: 'Ruta pública rate-limited. Guarda entryPayload en status NEW y sincroniza la tabla viva en tiempo real.',
+  description: 'Ruta pública rate-limited. Guarda entryPayload en status NEW y sincroniza la tabla abierta en tiempo real.',
   params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } },
   body: { type: 'object', additionalProperties: true },
   response: {
