@@ -9,13 +9,15 @@ generator client {
 
 // 1. Clientes con acceso a la API
 model ApiClient {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  keyPrefix String   @map("key_prefix") @db.VarChar(16)
-  keyHash   String   @unique @map("key_hash") // HMAC-SHA256
-  rateLimit Int      @default(100) @map("rate_limit")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  keyPrefix   String    @map("key_prefix") @db.VarChar(16)
+  keyHash     String    @unique @map("key_hash") // HMAC-SHA256
+  rateLimit   Int       @default(100) @map("rate_limit")
+  isActive    Boolean   @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([keyHash])
   @@map("api_clients")
@@ -52,8 +54,9 @@ model TableRegistry {
   sizeBytes     Int      @map("size_bytes")
   storagePath   String   @map("storage_path")
   folderId      String?  @map("folder_id") @db.Uuid
-  folder        Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now()) @map("created_at")
+  folder        Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  formDefinition FormDefinition?
+  createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([shortCode])
@@ -82,6 +85,7 @@ model User {
   createdUsers      User[]         @relation("CreatedUsers")
   folders           Folder[]
   folderMemberships FolderMember[]
+  resolvedEntries   FormEntry[]    @relation("ResolvedEntries")
 
   @@index([username])
   @@index([createdById])
@@ -110,6 +114,7 @@ model Folder {
   createdAt DateTime        @default(now()) @map("created_at")
   images    ImageRegistry[]
   tables    TableRegistry[]
+  forms     FormDefinition[]
   members   FolderMember[]
 
   @@index([type])
@@ -133,4 +138,66 @@ model FolderMember {
   @@index([folderId])
   @@index([userId])
   @@map("folder_members")
+}
+
+// 7. Historial y Trazabilidad de Auditoría
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  actorId       String?  @map("actor_id") @db.Uuid
+  actorUsername String   @map("actor_username") @db.VarChar(50)
+  action        String   @db.VarChar(60)
+  resourceType  String   @map("resource_type") @db.VarChar(40)
+  resourceId    String?  @map("resource_id") @db.VarChar(80)
+  folderId      String?  @map("folder_id") @db.Uuid
+  metadata      Json?    @db.JsonB
+  ipAddress     String?  @map("ip_address") @db.VarChar(60)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([actorId])
+  @@index([folderId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// 8. Módulo de Formularios Customizables y Tablas Vivas
+model FormDefinition {
+  id                      String         @id @default(uuid()) @db.Uuid
+  slug                    String         @unique @db.VarChar(80)
+  title                   String         @db.VarChar(120)
+  entryFieldsSchema       Json           @map("entry_fields_schema") @db.JsonB
+  resolutionFieldsSchema  Json           @map("resolution_fields_schema") @db.JsonB
+  allowedResolutionStates String[]       @default(["VALID", "INVALID"]) @map("allowed_resolution_states")
+  autoResolveWithAi       Boolean        @default(false) @map("auto_resolve_with_ai")
+  externalTargetUrl       String?        @map("external_target_url")
+  folderId                String         @map("folder_id") @db.Uuid
+  folder                  Folder         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  linkedTableId           String?        @unique @map("linked_table_id") @db.Uuid
+  linkedTable             TableRegistry? @relation(fields: [linkedTableId], references: [id], onDelete: SetNull)
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @default(now()) @updatedAt @map("updated_at")
+  entries                 FormEntry[]
+
+  @@index([slug])
+  @@index([folderId])
+  @@map("form_definitions")
+}
+
+model FormEntry {
+  id                String         @id @default(uuid()) @db.Uuid
+  formId            String         @map("form_id") @db.Uuid
+  form              FormDefinition @relation(fields: [formId], references: [id], onDelete: Cascade)
+  entryPayload      Json           @map("entry_payload") @db.JsonB
+  status            String         @default("NEW") @db.VarChar(50)
+  resolutionPayload Json?          @map("resolution_payload") @db.JsonB
+  resolvedById      String?        @map("resolved_by_id") @db.Uuid
+  resolvedBy        User?          @relation("ResolvedEntries", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt        DateTime?      @map("resolved_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  @@index([formId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("form_entries")
 }

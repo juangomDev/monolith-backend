@@ -55,6 +55,32 @@ async function main() {
   } else {
     console.log(`ℹ️ Administrador '${adminUsername}' ya existe en la base de datos.`);
   }
+
+  // 3. Cuenta de Servicio de IA (ai_manager)
+  const aiManagerUsername = process.env.AI_MANAGER_USERNAME || 'ai_manager';
+  const aiManagerPassword = process.env.AI_MANAGER_PASSWORD || 'AiManagerPass123!';
+
+  const existingAiManager = await prisma.user.findUnique({
+    where: { username: aiManagerUsername },
+  });
+
+  if (!existingAiManager) {
+    const aiPasswordHash = await hashPassword(aiManagerPassword);
+    const aiManager = await prisma.user.create({
+      data: {
+        username: aiManagerUsername,
+        passwordHash: aiPasswordHash,
+        role: Role.MANAGER,
+        isActive: true,
+      },
+    });
+    console.log('✅ Cuenta de Servicio IA creada:');
+    console.log(`   ID: ${aiManager.id}`);
+    console.log(`   Username: ${aiManager.username}`);
+    console.log(`   Rol: ${aiManager.role}`);
+  } else {
+    console.log(`ℹ️ Cuenta de Servicio '${aiManagerUsername}' ya existe en la base de datos.`);
+  }
 }
 
 main()

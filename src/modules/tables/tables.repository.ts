@@ -7,6 +7,38 @@ export interface FindTablesOptions {
   folderId?: string;
   userId?: string;
   isAdmin?: boolean;
+  search?: string;
+}
+
+function buildTableWhere(options?: FindTablesOptions): Prisma.TableRegistryWhereInput {
+  const conditions: Prisma.TableRegistryWhereInput[] = [];
+
+  if (options?.folderId) {
+    conditions.push({ folderId: options.folderId });
+  }
+
+  if (options && !options.isAdmin) {
+    conditions.push({
+      OR: [
+        { folderId: null },
+        { folder: { isPrivate: false } },
+        { folder: { userId: options.userId } },
+      ],
+    });
+  }
+
+  if (options?.search) {
+    conditions.push({
+      OR: [
+        { tableName: { contains: options.search, mode: 'insensitive' } },
+        { shortCode: { contains: options.search, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  if (conditions.length === 0) return {};
+  if (conditions.length === 1) return conditions[0];
+  return { AND: conditions };
 }
 
 export class TablesRepository {
@@ -15,19 +47,7 @@ export class TablesRepository {
   }
 
   async findAll(options?: FindTablesOptions) {
-    const where: Prisma.TableRegistryWhereInput = {};
-
-    if (options?.folderId) {
-      where.folderId = options.folderId;
-    }
-
-    if (options && !options.isAdmin) {
-      where.OR = [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-      ];
-    }
+    const where = buildTableWhere(options);
 
     const page = options?.page && options.page > 0 ? options.page : 1;
     const limit = options?.limit && options.limit > 0 ? options.limit : (options ? 50 : undefined);
@@ -51,19 +71,7 @@ export class TablesRepository {
   }
 
   async count(options?: FindTablesOptions) {
-    const where: Prisma.TableRegistryWhereInput = {};
-
-    if (options?.folderId) {
-      where.folderId = options.folderId;
-    }
-
-    if (options && !options.isAdmin) {
-      where.OR = [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-      ];
-    }
+    const where = buildTableWhere(options);
 
     return prisma.tableRegistry.count({ where });
   }
@@ -102,6 +110,22 @@ export class TablesRepository {
     return prisma.tableRegistry.update({
       where: { id },
       data: { metadataCard },
+      include: {
+        folder: {
+          select: {
+            id: true,
+            isPrivate: true,
+            userId: true,
+          },
+        },
+      },
+    });
+  }
+
+  async update(id: string, data: Prisma.TableRegistryUpdateInput) {
+    return prisma.tableRegistry.update({
+      where: { id },
+      data,
       include: {
         folder: {
           select: {

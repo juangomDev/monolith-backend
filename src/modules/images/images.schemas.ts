@@ -90,6 +90,7 @@ export const listImagesRouteSchema: FastifySchema = {
       page: { type: 'integer', default: 1, description: 'Número de página a consultar' },
       limit: { type: 'integer', default: 50, maximum: 100, description: 'Cantidad de registros por página' },
       folderId: { type: 'string', format: 'uuid', description: 'UUID de carpeta para filtrar' },
+      search: { type: 'string', description: 'Buscar por nombre original o shortCode' },
     },
   },
   response: {

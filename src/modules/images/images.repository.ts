@@ -7,6 +7,38 @@ export interface FindImagesOptions {
   folderId?: string;
   userId?: string;
   isAdmin?: boolean;
+  search?: string;
+}
+
+function buildImageWhere(options?: FindImagesOptions): Prisma.ImageRegistryWhereInput {
+  const conditions: Prisma.ImageRegistryWhereInput[] = [];
+
+  if (options?.folderId) {
+    conditions.push({ folderId: options.folderId });
+  }
+
+  if (options && !options.isAdmin) {
+    conditions.push({
+      OR: [
+        { folderId: null },
+        { folder: { isPrivate: false } },
+        { folder: { userId: options.userId } },
+      ],
+    });
+  }
+
+  if (options?.search) {
+    conditions.push({
+      OR: [
+        { originalName: { contains: options.search, mode: 'insensitive' } },
+        { shortCode: { contains: options.search, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  if (conditions.length === 0) return {};
+  if (conditions.length === 1) return conditions[0];
+  return { AND: conditions };
 }
 
 export class ImagesRepository {
@@ -15,19 +47,7 @@ export class ImagesRepository {
   }
 
   async findAll(options?: FindImagesOptions) {
-    const where: Prisma.ImageRegistryWhereInput = {};
-
-    if (options?.folderId) {
-      where.folderId = options.folderId;
-    }
-
-    if (options && !options.isAdmin) {
-      where.OR = [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-      ];
-    }
+    const where = buildImageWhere(options);
 
     const page = options?.page && options.page > 0 ? options.page : 1;
     const limit = options?.limit && options.limit > 0 ? options.limit : (options ? 50 : undefined);
@@ -51,19 +71,7 @@ export class ImagesRepository {
   }
 
   async count(options?: FindImagesOptions) {
-    const where: Prisma.ImageRegistryWhereInput = {};
-
-    if (options?.folderId) {
-      where.folderId = options.folderId;
-    }
-
-    if (options && !options.isAdmin) {
-      where.OR = [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-      ];
-    }
+    const where = buildImageWhere(options);
 
     return prisma.imageRegistry.count({ where });
   }

@@ -15,26 +15,24 @@ import { FolderType, Role, FolderPermission } from '@prisma/client';
 import { foldersRepository } from '../folders/folders.repository.js';
 import { foldersSharesService } from '../folders/folders.shares.service.js';
 import type { RequesterContext } from '../folders/folders.service.js';
+import { auditService } from '../audit/audit.service.js';
 
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface ListTablesQueryOptions {
-  page?: number; limit?: number; folderId?: string; requester?: { id: string; role: Role };
+  page?: number; limit?: number; folderId?: string; requester?: { id: string; role: Role }; search?: string;
 }
 
-function formatTableItem(record: any) {
+export function formatTableItem(record: any) {
   const updatedAt = record.updatedAt ?? record.createdAt;
   return {
-    id: record.id, shortCode: record.shortCode,
-    url: `${env.BASE_URL}/t/${record.shortCode}`,
+    id: record.id, shortCode: record.shortCode, url: `${env.BASE_URL}/t/${record.shortCode}`,
     urlWithVersion: `${env.BASE_URL}/t/${record.shortCode}?v=${new Date(updatedAt).getTime()}`,
-    tableName: record.tableName, rowCount: record.rowCount,
-    columns: record.columnsSchema, sizeBytes: record.sizeBytes,
-    metadataCard: record.metadataCard ?? null,
-    folderId: record.folderId ?? null,
-    createdAt: record.createdAt, updatedAt,
+    tableName: record.tableName, rowCount: record.rowCount, columns: record.columnsSchema,
+    sizeBytes: record.sizeBytes, metadataCard: record.metadataCard ?? null,
+    folderId: record.folderId ?? null, createdAt: record.createdAt, updatedAt,
   };
 }
 
@@ -142,6 +140,7 @@ export class TablesService {
       await fs.writeFile(path.join(tablesDir, `${shortCode}.data.json.gz`), gzBuffer);
     } catch {}
 
+    auditService.recordLog({ actorId: requesterCtx?.id, actorUsername: requesterCtx?.role || 'system', action: 'TABLE_UPLOAD', resourceType: 'TABLE', resourceId: record.id, folderId });
     return formatTableItem(record);
   }
 
@@ -164,11 +163,9 @@ export class TablesService {
     const limit = options.limit && options.limit > 0 ? options.limit : (options.page ? 50 : undefined);
 
     const findOptions: FindTablesOptions = {
-      page,
-      limit,
-      folderId: options.folderId,
-      userId: requester?.id,
-      isAdmin: requester?.role === Role.ADMIN,
+      page, limit, folderId: options.folderId,
+      userId: requester?.id, isAdmin: requester?.role === Role.ADMIN,
+      search: options.search,
     };
 
     const records = await tablesRepository.findAll(findOptions);
@@ -291,6 +288,7 @@ export class TablesService {
     await tablesRepository.deleteById(id);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
     await Promise.allSettled([fs.unlink(gzPath), fs.unlink(record.storagePath)]);
+    auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'TABLE_DELETE', resourceType: 'TABLE', resourceId: id });
     return { deleted: true };
   }
 }

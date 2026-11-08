@@ -19,8 +19,8 @@
 | **7** | `GET` | `/api/v1/auth/me` | Auth | Bearer JWT | `COLLABORATOR` | Retorna los datos de sesión activa del usuario autenticado. |
 | **8** | `PATCH` | `/api/v1/auth/password` | Auth | Bearer JWT | `COLLABORATOR` | Permite al usuario cambiar su propia contraseña. |
 | **9** | `POST` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Registro de nuevos usuarios respetando jerarquía (`ADMIN > MANAGER > COLLABORATOR`). |
-| **10** | `GET` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Listado de usuarios (`ADMIN` ve todos; `MANAGER` solo sus colaboradores). |
-| **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario e invalida sus sesiones. |
+| **10** | `GET` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Listado de usuarios (`ADMIN` ve todos; `MANAGER` sus colaboradores + `ai_manager`). |
+| **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario (protege cuentas del sistema). |
 | **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico. |
 | **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos. |
 | **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso (`?type=&search=&page=&limit=`). |
@@ -32,22 +32,41 @@
 | **20** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
 | **21** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
 | **22** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
-| **23** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=`). |
+| **23** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=&search=`). |
 | **24** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
 | **25** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
 | **26** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
 | **27** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
 | **28** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
-| **29** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
-| **30** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados. |
-| **31** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
-| **32** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
-| **33** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
-| **34** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
-| **35** | `PATCH` | `/api/v1/tables/:id/metadata` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza la Ficha Técnica (`metadataCard`) de la tabla. |
-| **36** | `POST` | `/api/v1/chat/ask` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Consulta analítica interna con control RBAC sobre tablas permitidas. |
-| **37** | `POST` | `/api/v1/public/chat/ask` | Public Chat | Pública (Rate Limit) | Anónimo | Widget público para páginas web externas (restringido a tablas públicas). |
-| **38** | `GET` | `/api/v1/public/chat/suggestions` | Public Chat | Pública (Rate Limit) | Anónimo | Sugerencias de preguntas dinámicas para el widget público. |
+| **29** | `POST` | `/api/v1/images/bulk-delete` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de imágenes (máx. 50 IDs). |
+| **30** | `POST` | `/api/v1/images/bulk-move` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de imágenes a otra carpeta de tipo `IMAGE`. |
+| **31** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
+| **32** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados (`?page=&limit=&folderId=&search=`). |
+| **33** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
+| **34** | `PATCH` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `tableName` validando permiso de edición. |
+| **35** | `PUT` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente (Hot-Swap) preservando shortCode, folderId y URL pública. |
+| **36** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
+| **37** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
+| **38** | `POST` | `/api/v1/tables/bulk-delete` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de datasets tabulares (máx. 50 IDs). |
+| **39** | `POST` | `/api/v1/tables/bulk-move` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de tablas a otra carpeta de tipo `TABLE`. |
+| **40** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
+| **41** | `PATCH` | `/api/v1/tables/:id/metadata` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza la Ficha Técnica (`metadataCard`) de la tabla. |
+| **42** | `POST` | `/api/v1/chat/ask` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Consulta analítica interna con control RBAC sobre tablas permitidas. |
+| **43** | `POST` | `/api/v1/public/chat/ask` | Public Chat | Pública (Rate Limit) | Anónimo | Widget público para páginas web externas (restringido a bóveda de `ai_manager`). |
+| **44** | `GET` | `/api/v1/public/chat/suggestions` | Public Chat | Pública (Rate Limit) | Anónimo | Sugerencias de preguntas dinámicas basadas en bóveda de `ai_manager`. |
+| **45** | `GET` | `/api/v1/audit-logs` | Audit | Dual (JWT / Key) | `MANAGER`* | Consultar historial de auditoría (`ADMIN` global, `MANAGER` carpetas/colaboradores). |
+| **46** | `POST` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Crear una nueva API Key de integración (retorna secreto plano una sola vez). |
+| **47** | `GET` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Listar API Keys autorizadas (oculta secretos criptográficos). |
+| **48** | `DELETE` | `/api/v1/api-keys/:id` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Revocar y destruir una API Key inmediatamente. |
+| **49** | `GET` | `/api/v1/stats/storage` | Stats | Dual (JWT / Key) | `MANAGER`* | Métricas de cuota, salud de disco físico (`ADMIN`) y desglose de carpetas. |
+| **50** | `POST` | `/api/v1/public/forms/:slug/entries` | Forms | Pública (Rate Limit) | Anónimo | Envío público de datos de formulario (Endpoint 1: status NEW). |
+| **51** | `POST` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Crea formulario customizable y genera tabla viva vinculada. |
+| **52** | `GET` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR` | Lista formularios accesibles con conteo de respuestas y tabla. |
+| **53** | `GET` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene el detalle de un formulario por ID o slug. |
+| **54** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID o INVALID). |
+| **55** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
+| **56** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista las entradas de un formulario (`?month=YYYY-MM&status=`). |
+| **57** | `GET` | `/api/v1/forms/:id/export` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Exporta respuestas a Excel (.xlsx) o CSV (.csv) con filtro mensual. |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -885,6 +904,68 @@ Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las tabla
   }
   ```
 - **Errores:** `429 Too Many Requests`.
+
+---
+
+### 3.8. Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+
+#### `POST /api/v1/public/forms/:slug/entries` (Pública con Rate Limiting - Endpoint 1)
+Envío público de formularios web. Guarda `entryPayload` en estado `"NEW"`, dejando vacías las columnas de respuesta exclusiva en la base de datos y en la tabla viva vinculada `.data.json.gz`.
+- **Autenticación:** Ninguna (Pública, 60 req/min por IP).
+- **Parámetros URL:** `slug` (identificador único del formulario).
+- **Cuerpo JSON:** Diccionario dinámico acorde al `entryFieldsSchema`.
+- **Respuesta 201 Created:**
+  ```json
+  {
+    "id": "uuid-de-la-entrada",
+    "status": "NEW",
+    "createdAt": "2026-03-01T14:00:00.000Z"
+  }
+  ```
+- **Errores:** `400 Bad Request` (campos requeridos faltantes o tipo inválido), `404 Not Found`, `429 Too Many Requests`.
+
+#### `POST /api/v1/forms` (Protegida)
+Crea una definición de formulario y genera automáticamente un `TableRegistry` vinculado (`.data.json.gz`) que sincroniza en tiempo real las respuestas entrantes y las resoluciones.
+- **Autenticación:** Bearer JWT o X-API-Key (`COLLABORATOR` con `EDIT` en `folderId`, `MANAGER` o `ADMIN`).
+- **Cuerpo JSON:**
+  ```json
+  {
+    "slug": "consulta-ciudadana",
+    "title": "Formulario de Consulta Ciudadana",
+    "folderId": "uuid-de-carpeta-tipo-table",
+    "entryFieldsSchema": [
+      { "name": "nombre", "type": "string", "required": true, "label": "Nombre Completo" },
+      { "name": "correo", "type": "string", "required": true, "label": "Correo Electrónico" },
+      { "name": "mensaje", "type": "string", "required": true, "label": "Mensaje o Solicitud" }
+    ],
+    "resolutionFieldsSchema": [
+      { "name": "dictamen", "type": "string", "required": true, "label": "Dictamen Oficial" },
+      { "name": "codigoOficio", "type": "string", "required": true, "label": "Nro. de Oficio" }
+    ],
+    "allowedResolutionStates": ["VALID", "INVALID"],
+    "externalTargetUrl": "https://servicio-externo.gob/api/v1/generar-documento"
+  }
+  ```
+- **Respuesta 201 Created:** Formulario creado con su `linkedTableId`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `409 Conflict` (slug duplicado).
+
+#### `GET /api/v1/forms` y `GET /api/v1/forms/:id` (Protegida)
+Consulta el catálogo de formularios accesibles con sus esquemas, tabla viva asociada y conteo de respuestas.
+
+#### `PATCH /api/v1/forms/entries/:id/resolve` (Protegida - Endpoint 2: Regla Write-Once)
+Completa los campos de `resolutionFieldsSchema` y transiciona el estado de `"NEW"` a `"VALID"` o `"INVALID"`.
+- **Inmutabilidad Absoluta (Write-Once):** Solo puede ejecutarse **UNA SOLA VEZ por fila**. Cualquier intento posterior de volver a resolver una fila ya sellada se rechaza con `409 CONFLICT` (`ENTRY_ALREADY_RESOLVED`).
+- **Despacho Externo:** Si el formulario tiene `externalTargetUrl`, reenvía automáticamente el JSON unificado de la fila al sistema externo sin generar PDFs localmente.
+- **Respuesta 200 OK:** Registro actualizado con `status`, `resolvedAt` y `resolvedById`.
+- **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict`.
+
+#### `POST /api/v1/forms/entries/:id/dispatch` (Protegida)
+Reenvío bajo demanda de los datos sellados de una fila ya resuelta hacia `externalTargetUrl` tantas veces como se requiera en el futuro, con **0 archivos PDF guardados en disco** y sin modificar la base de datos.
+- **Respuesta 200 OK:** `{ "dispatched": true, "targetUrl": "...", "entryId": "...", "dispatchedAt": "..." }`.
+
+#### `GET /api/v1/forms/:id/entries` y `GET /api/v1/forms/:id/export` (Protegida)
+- `GET /api/v1/forms/:id/entries?month=YYYY-MM&status=VALID`: Consulta paginada filtrada.
+- `GET /api/v1/forms/:id/export?month=YYYY-MM&status=&format=xlsx|csv`: Descarga consolidada de respuestas del mes en formato Excel o CSV.
 
 ---
 

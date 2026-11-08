@@ -11,31 +11,22 @@ import { imagesStorage } from './images.storage.js';
 import { foldersRepository } from '../folders/folders.repository.js';
 import { foldersSharesService } from '../folders/folders.shares.service.js';
 import type { RequesterContext } from '../folders/folders.service.js';
+import { auditService } from '../audit/audit.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface ListImagesQueryOptions {
-  page?: number;
-  limit?: number;
-  folderId?: string;
-  requester?: RequesterContext;
+  page?: number; limit?: number; folderId?: string; requester?: RequesterContext; search?: string;
 }
 
-function formatImageItem(record: any) {
+export function formatImageItem(record: any) {
   const dateForVersion = record.updatedAt ? new Date(record.updatedAt) : (record.createdAt ? new Date(record.createdAt) : new Date());
   return {
-    id: record.id,
-    shortCode: record.shortCode,
-    url: `${env.BASE_URL}/i/${record.shortCode}`,
+    id: record.id, shortCode: record.shortCode, url: `${env.BASE_URL}/i/${record.shortCode}`,
     urlWithVersion: `${env.BASE_URL}/i/${record.shortCode}?v=${dateForVersion.getTime()}`,
-    originalName: record.originalName,
-    mimeType: record.mimeType,
-    sizeBytes: record.sizeBytes,
-    width: record.width ?? null,
-    height: record.height ?? null,
-    folderId: (record as any).folderId ?? null,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt ?? record.createdAt,
+    originalName: record.originalName, mimeType: record.mimeType, sizeBytes: record.sizeBytes,
+    width: record.width ?? null, height: record.height ?? null, folderId: (record as any).folderId ?? null,
+    createdAt: record.createdAt, updatedAt: record.updatedAt ?? record.createdAt,
   };
 }
 
@@ -107,6 +98,15 @@ export class ImagesService {
       folderId,
     });
 
+    auditService.recordLog({
+      actorId: requesterCtx?.id,
+      actorUsername: requesterCtx?.role || 'system',
+      action: 'IMAGE_UPLOAD',
+      resourceType: 'IMAGE',
+      resourceId: record.id,
+      folderId,
+    });
+
     return formatImageItem(record);
   }
 
@@ -119,11 +119,10 @@ export class ImagesService {
     const effectiveRequester = requester ?? options?.requester;
 
     const findOptions = {
-      page,
-      limit,
-      folderId: options?.folderId,
+      page, limit, folderId: options?.folderId,
       userId: effectiveRequester?.id,
       isAdmin: effectiveRequester?.role === Role.ADMIN,
+      search: options?.search,
     };
 
     const records = await imagesRepository.findAll(findOptions);
@@ -216,6 +215,7 @@ export class ImagesService {
     await this.checkImageAccess(record, requester);
 
     const updated = await imagesRepository.update(id, { originalName: trimmed });
+    auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'IMAGE_RENAME', resourceType: 'IMAGE', resourceId: id, metadata: { originalName: trimmed } });
     return formatImageItem(updated);
   }
 
@@ -275,6 +275,7 @@ export class ImagesService {
       width,
       height,
     });
+    auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'IMAGE_HOTSWAP', resourceType: 'IMAGE', resourceId: id });
 
     return formatImageItem(updated);
   }
@@ -288,6 +289,7 @@ export class ImagesService {
     await imagesRepository.deleteById(id);
     await imagesStorage.deleteFile(record.storagePath);
     await imagesProcessor.deleteThumbnail(record.shortCode);
+    auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'IMAGE_DELETE', resourceType: 'IMAGE', resourceId: id });
     return { deleted: true };
   }
 }

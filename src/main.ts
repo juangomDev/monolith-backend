@@ -11,10 +11,13 @@ async function start() {
     await connectDB();
     app.log.info('Conexión con PostgreSQL establecida.');
 
-    // Garantizar existencia de cuenta ADMIN inicial y API Key base
-    const { adminCreated } = await ensureInitialSystemSeed();
+    // Garantizar existencia de cuenta ADMIN inicial, ai_manager y API Key base
+    const { adminCreated, aiManagerCreated } = await ensureInitialSystemSeed();
     if (adminCreated) {
       app.log.info(`Cuenta Administrador inicial ('${env.ADMIN_USERNAME}') creada automáticamente.`);
+    }
+    if (aiManagerCreated) {
+      app.log.info(`Cuenta de Servicio IA ('${env.AI_MANAGER_USERNAME}') creada automáticamente.`);
     }
 
     // Arrancar listener Fastify

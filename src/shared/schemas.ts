@@ -59,6 +59,7 @@ export const standardErrorResponses = {
   401: createErrorResponse(401, 'No autenticado o token/API Key inválido o revocado', 'UNAUTHORIZED'),
   403: createErrorResponse(403, 'Acceso prohibido o permisos insuficientes', 'FORBIDDEN'),
   404: createErrorResponse(404, 'Recurso no encontrado', 'NOT_FOUND'),
+  409: createErrorResponse(409, 'Conflicto de estado o recurso ya resuelto', 'CONFLICT'),
   413: createErrorResponse(413, 'Carga útil excede el tamaño límite permitido (50MB)', 'PAYLOAD_TOO_LARGE'),
   415: createErrorResponse(415, 'Tipo de medio no soportado o magic bytes falsificados', 'UNSUPPORTED_MEDIA_TYPE'),
   429: createErrorResponse(429, 'Demasiadas solicitudes (Rate Limit o protección anti-fuerza bruta)', 'RATE_LIMIT_EXCEEDED'),

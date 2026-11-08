@@ -173,4 +173,21 @@ describe('Módulo Chat: Rutas HTTP (/api/v1/chat y /api/v1/public/chat)', () => 
     assert.ok(Array.isArray(body.suggestions));
     assert.strictEqual(body.suggestions.length, 1);
   });
+
+  // 5. Hardening 14.7: Verificación de visibilidad restringida a la bóveda de ai_manager
+  it('askPublic: circuito cerrado responde foundInSystem=false si no hay carpetas compartidas con ai_manager', async () => {
+    // Si la BD no tiene ai_manager o no tiene tablas compartidas con él
+    const realAskPublic = chatService.askPublic.bind(chatService);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/public/chat/ask',
+      payload: { question: '¿Cuál es el censo?' },
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    assert.strictEqual(body.foundInSystem, false);
+    assert.ok(body.answer.includes('no existe'));
+  });
 });

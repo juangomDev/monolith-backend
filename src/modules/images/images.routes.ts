@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { imagesService } from './images.service.js';
+import { imagesBulkService } from './images.bulk.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -13,6 +14,7 @@ import {
   renameImageBodySchema,
   extractRequester,
 } from './images.schemas.js';
+import { bulkDeleteImagesRouteSchema, bulkMoveImagesRouteSchema } from './images.bulk.schemas.js';
 
 export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /i/:short_code (Entrega pública con capability URL y soporte de miniaturas)
@@ -51,12 +53,14 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
       const page = query.page !== undefined ? parseInt(String(query.page), 10) : undefined;
       const limit = query.limit !== undefined ? parseInt(String(query.limit), 10) : undefined;
       const folderId = query.folderId ? String(query.folderId) : undefined;
+      const search = query.search ? String(query.search).trim() : undefined;
 
       const result = await imagesService.listImages(
         {
           page: page !== undefined && !isNaN(page) ? page : undefined,
           limit: limit !== undefined && !isNaN(limit) ? limit : undefined,
           folderId,
+          search,
         },
         requester
       );
@@ -154,6 +158,38 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
       const requester = await extractRequester(request);
       await imagesService.deleteImage(id, requester);
       return reply.status(204).send();
+    }
+  );
+
+  // POST /api/v1/images/bulk-delete (Eliminación masiva en lote)
+  fastify.post(
+    '/api/v1/images/bulk-delete',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: bulkDeleteImagesRouteSchema,
+    },
+    async (request, reply) => {
+      const { ids } = request.body as { ids: string[] };
+      const requester = await extractRequester(request);
+      const result = await imagesBulkService.bulkDelete(ids, requester);
+      return reply.send(result);
+    }
+  );
+
+  // POST /api/v1/images/bulk-move (Movimiento masivo a otra carpeta)
+  fastify.post(
+    '/api/v1/images/bulk-move',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: bulkMoveImagesRouteSchema,
+    },
+    async (request, reply) => {
+      const { ids, targetFolderId } = request.body as { ids: string[]; targetFolderId: string };
+      const requester = await extractRequester(request);
+      const result = await imagesBulkService.bulkMove(ids, targetFolderId, requester);
+      return reply.send(result);
     }
   );
 };

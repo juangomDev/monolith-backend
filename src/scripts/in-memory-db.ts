@@ -32,7 +32,12 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
   (prisma.user as any).findFirst = async ({ where }: any) =>
     state.users.find((u) => (!where?.role || u.role === where.role) && (where?.isActive === undefined || u.isActive === where.isActive)) || null;
   (prisma.user as any).findMany = async ({ where }: any) =>
-    state.users.filter((u) => (!where?.createdById || u.createdById === where.createdById) && (!where?.role || u.role === where.role));
+    state.users.filter((u) => {
+      if (where?.OR) {
+        return where.OR.some((c: any) => (c.createdById && u.createdById === c.createdById) || (c.username && u.username === c.username));
+      }
+      return (!where?.createdById || u.createdById === where.createdById) && (!where?.role || u.role === where.role);
+    });
   (prisma.user as any).create = async ({ data }: any) => {
     const user = { id: data.id || crypto.randomUUID(), username: data.username, passwordHash: data.passwordHash, role: data.role || Role.MANAGER, isActive: data.isActive ?? true, tokenVersion: 0, createdById: data.createdById || null, createdAt: new Date() };
     state.users.push(user);

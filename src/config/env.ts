@@ -16,6 +16,8 @@ export const envSchema = z
       .default('development_jwt_secret_must_be_long_and_safe_32_chars'),
     ADMIN_USERNAME: z.string().min(3).default('admin'),
     ADMIN_PASSWORD: z.string().min(6).default('AdminPass123!'),
+    AI_MANAGER_USERNAME: z.string().min(3).default('ai_manager'),
+    AI_MANAGER_PASSWORD: z.string().min(6).default('AiManagerPass123!'),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
     AI_BASE_URL: z.string().url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
     AI_API_KEY: z.string().optional(),

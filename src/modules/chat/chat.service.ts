@@ -39,6 +39,32 @@ const CIRCUIT_BREAKER_ANSWER: ChatAnswerResponse = {
   chartData: null,
 };
 
+let cachedAiManagerId: string | null = null;
+let lastAiManagerLookup = 0;
+const AI_MANAGER_CACHE_TTL = 60 * 1000; // 1 minuto
+
+async function resolveAiManagerId(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedAiManagerId && now - lastAiManagerLookup < AI_MANAGER_CACHE_TTL) {
+    return cachedAiManagerId;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username: 'ai_manager' },
+      select: { id: true, isActive: true },
+    });
+    if (user && user.isActive) {
+      cachedAiManagerId = user.id;
+      lastAiManagerLookup = now;
+      return user.id;
+    }
+  } catch {
+    // Si la BD no está disponible o la tabla no existe, retorno resiliente sin lanzar 500
+  }
+  cachedAiManagerId = null;
+  return null;
+}
+
 export class ChatService {
   async askInternal(input: ChatAskInput, requester: RequesterContext): Promise<ChatAnswerResponse> {
     const question = input.question?.trim();
@@ -90,9 +116,19 @@ export class ChatService {
       throw new AppError(400, 'La pregunta debe contener al menos 3 caracteres', 'BAD_REQUEST');
     }
 
-    // Restricción matemática: ÚNICAMENTE tablas en carpetas públicas
+    // Visibilidad IA: Bóveda de ai_manager (carpetas de ai_manager o compartidas con ai_manager)
+    const aiManagerId = await resolveAiManagerId();
+    if (!aiManagerId) {
+      return CIRCUIT_BREAKER_ANSWER;
+    }
+
     const where: any = {
-      folder: { isPrivate: false },
+      folder: {
+        OR: [
+          { userId: aiManagerId },
+          { members: { some: { userId: aiManagerId } } },
+        ],
+      },
     };
 
     if (input.folderId) where.folderId = input.folderId;
@@ -114,8 +150,18 @@ export class ChatService {
   }
 
   async getPublicSuggestions(folderId?: string): Promise<{ suggestions: string[] }> {
+    const aiManagerId = await resolveAiManagerId();
+    if (!aiManagerId) {
+      return { suggestions: ['¿Cuáles son los datos más relevantes de las tablas públicas?'] };
+    }
+
     const where: any = {
-      folder: { isPrivate: false },
+      folder: {
+        OR: [
+          { userId: aiManagerId },
+          { members: { some: { userId: aiManagerId } } },
+        ],
+      },
     };
     if (folderId) where.folderId = folderId;
 

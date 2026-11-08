@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { tablesService } from './tables.service.js';
 import { tablesMetadataService } from './tables.metadata.service.js';
+import { tablesMutationService } from './tables.mutation.service.js';
+import { tablesBulkService } from './tables.bulk.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -12,6 +14,8 @@ import {
   deleteTableRouteSchema,
   extractRequester,
 } from './tables.schemas.js';
+import { renameTableRouteSchema, replaceTableRouteSchema } from './tables.mutation.schemas.js';
+import { bulkDeleteTablesRouteSchema, bulkMoveTablesRouteSchema } from './tables.bulk.schemas.js';
 
 export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /t/:short_code (Consulta paginada o descarga directa)
@@ -69,12 +73,13 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const requester = request.user ? { id: request.user.id, role: request.user.role } : undefined;
-      const query = request.query as { page?: string; limit?: string; folderId?: string };
+      const query = request.query as { page?: string; limit?: string; folderId?: string; search?: string };
       const page = query?.page ? parseInt(query.page, 10) : undefined;
       const limit = query?.limit ? parseInt(query.limit, 10) : undefined;
       const folderId = query?.folderId;
+      const search = query?.search ? query.search.trim() : undefined;
 
-      const result = await tablesService.listTables({ page, limit, folderId, requester });
+      const result = await tablesService.listTables({ page, limit, folderId, requester, search });
       return reply.send(result);
     }
   );
@@ -135,6 +140,78 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
       const requester = extractRequester(request);
       await tablesService.deleteTable(id, requester);
       return reply.status(204).send();
+    }
+  );
+
+  // PATCH /api/v1/tables/:id (Renombrar dataset)
+  fastify.patch(
+    '/api/v1/tables/:id',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: renameTableRouteSchema,
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tableName } = request.body as { tableName: string };
+      const requester = extractRequester(request);
+      const result = await tablesMutationService.renameTable(id, tableName, requester);
+      return reply.send(result);
+    }
+  );
+
+  // PUT /api/v1/tables/:id (Reemplazo en caliente - Hot-Swap)
+  fastify.put(
+    '/api/v1/tables/:id',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: replaceTableRouteSchema,
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const requester = extractRequester(request);
+      if (!request.isMultipart()) {
+        throw new AppError(400, 'Debe adjuntar un archivo en el campo multipart', 'BAD_REQUEST');
+      }
+      const file = await request.file();
+      if (!file) {
+        throw new AppError(400, 'No se recibió ningún archivo para el reemplazo', 'BAD_REQUEST');
+      }
+      const result = await tablesMutationService.replaceTableFile(id, file, requester);
+      return reply.send(result);
+    }
+  );
+
+  // POST /api/v1/tables/bulk-delete (Eliminación masiva en lote)
+  fastify.post(
+    '/api/v1/tables/bulk-delete',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: bulkDeleteTablesRouteSchema,
+    },
+    async (request, reply) => {
+      const { ids } = request.body as { ids: string[] };
+      const requester = extractRequester(request);
+      const result = await tablesBulkService.bulkDelete(ids, requester);
+      return reply.send(result);
+    }
+  );
+
+  // POST /api/v1/tables/bulk-move (Movimiento masivo a otra carpeta)
+  fastify.post(
+    '/api/v1/tables/bulk-move',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: bulkMoveTablesRouteSchema,
+    },
+    async (request, reply) => {
+      const { ids, targetFolderId } = request.body as { ids: string[]; targetFolderId: string };
+      const requester = extractRequester(request);
+      const result = await tablesBulkService.bulkMove(ids, targetFolderId, requester);
+      return reply.send(result);
     }
   );
 };

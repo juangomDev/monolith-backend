@@ -20,12 +20,21 @@ export interface SeedPrismaClient {
  */
 export async function ensureInitialSystemSeed(
   dbClient: SeedPrismaClient = prisma,
-  config = {
-    pepper: env.API_KEY_PEPPER,
-    adminUsername: env.ADMIN_USERNAME,
-    adminPassword: env.ADMIN_PASSWORD,
+  customConfig?: {
+    pepper?: string;
+    adminUsername?: string;
+    adminPassword?: string;
+    aiManagerUsername?: string;
+    aiManagerPassword?: string;
   }
-): Promise<{ adminCreated: boolean }> {
+): Promise<{ adminCreated: boolean; aiManagerCreated: boolean }> {
+  const config = {
+    pepper: customConfig?.pepper ?? env.API_KEY_PEPPER,
+    adminUsername: customConfig?.adminUsername ?? env.ADMIN_USERNAME,
+    adminPassword: customConfig?.adminPassword ?? env.ADMIN_PASSWORD,
+    aiManagerUsername: customConfig?.aiManagerUsername ?? env.AI_MANAGER_USERNAME,
+    aiManagerPassword: customConfig?.aiManagerPassword ?? env.AI_MANAGER_PASSWORD,
+  };
   const rawKey = 'mk_live_dev_test_api_key_12345';
   const keyPrefix = rawKey.slice(0, 16);
   const keyHash = crypto.createHmac('sha256', config.pepper).update(rawKey).digest('hex');
@@ -42,6 +51,9 @@ export async function ensureInitialSystemSeed(
     },
   });
 
+  let adminCreated = false;
+  let aiManagerCreated = false;
+
   const existingAdmin = await dbClient.user.findUnique({
     where: { username: config.adminUsername },
   });
@@ -56,9 +68,26 @@ export async function ensureInitialSystemSeed(
         isActive: true,
       },
     });
-    return { adminCreated: true };
+    adminCreated = true;
   }
 
-  return { adminCreated: false };
+  const existingAiManager = await dbClient.user.findUnique({
+    where: { username: config.aiManagerUsername },
+  });
+
+  if (!existingAiManager) {
+    const aiPasswordHash = await hashPassword(config.aiManagerPassword);
+    await dbClient.user.create({
+      data: {
+        username: config.aiManagerUsername,
+        passwordHash: aiPasswordHash,
+        role: Role.MANAGER,
+        isActive: true,
+      },
+    });
+    aiManagerCreated = true;
+  }
+
+  return { adminCreated, aiManagerCreated };
 }
 

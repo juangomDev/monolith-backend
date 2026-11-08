@@ -509,4 +509,290 @@ Para incrustar un asistente analítico en páginas web externas sin requerir log
 </script>
 ```
 
+### 14.4. Interruptor de Publicación para IA (`ai_manager` y Membresías de Carpetas)
+A partir de la Fase 14.7, el Chat Web público (`POST /api/v1/public/chat/ask` y `GET /api/v1/public/chat/suggestions`) opera bajo un modelo de **publicación explícita mediante compartición**:
+1. **Cuenta Estructural `ai_manager`:** El sistema inicializa automáticamente la cuenta fija de servicio `ai_manager` (con rol `MANAGER`). Esta cuenta no puede eliminarse ni desactivarse.
+2. **Exposición en Selector de Usuarios:** Al listar usuarios con `GET /api/v1/users`, cualquier `MANAGER` o `ADMIN` verá a `ai_manager` en la lista para poder compartir carpetas.
+3. **Interruptor de Publicación Instantáneo:**
+   - **Publicar en Chat Web:** Comparte la carpeta con el usuario `ai_manager` (`POST /api/v1/folders/:id/shares` con `{ "userId": "<id_de_ai_manager>", "permission": "READ" }`). Sus tablas quedarán inmediatamente accesibles para responder preguntas en el widget público web.
+   - **Despublicar del Chat Web:** Revoca el acceso a `ai_manager` (`DELETE /api/v1/folders/:id/shares/<id_de_ai_manager>`). Las tablas desaparecerán de inmediato de las respuestas del widget público.
+
+---
+
+## 15. Paridad en Tablas, Búsqueda Global y Operaciones en Lote (Fase 15)
+
+### 15.1. Renombrado de Tablas (`PATCH /api/v1/tables/:id`)
+Permite cambiar el nombre lógico del dataset sin alterar el archivo físico ni cambiar el `shortCode`.
+```typescript
+const res = await fetch(`${API_URL}/api/v1/tables/${tableId}`, {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({ tableName: 'ventas_consolidadas_2026.csv' }),
+});
+const table = await res.json();
+```
+
+### 15.2. Reemplazo en Caliente de Tablas (`PUT /api/v1/tables/:id` - Hot-Swap)
+Sobrescribe físicamente el archivo `.csv` o `.xlsx` conservando intactos el `id`, `shortCode`, `folderId` y URL pública (`/t/:short_code`). Regenera el artefacto `.data.json.gz`, actualiza estadísticas y limpia la caché del chat analítico.
+```typescript
+const formData = new FormData();
+formData.append('file', fileBlob, 'nuevo_dataset.csv');
+
+const res = await fetch(`${API_URL}/api/v1/tables/${tableId}`, {
+  method: 'PUT',
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: formData,
+});
+const updated = await res.json();
+// updated.urlWithVersion incluye timestamp ?v= para invalidar caché en el navegador
+```
+
+### 15.3. Búsqueda Filtrada SQL (`?search=`)
+Permite filtrar imágenes por `originalName` o `shortCode`, y tablas por `tableName` o `shortCode` (búsqueda insensible a mayúsculas/minúsculas):
+```typescript
+// Buscar imágenes
+const imagesRes = await fetch(`${API_URL}/api/v1/images?search=logo&page=1&limit=20`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+
+// Buscar tablas
+const tablesRes = await fetch(`${API_URL}/api/v1/tables?search=2026&folderId=${folderId}`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
+### 15.4. Operaciones en Lote (`Bulk Actions`)
+Permite eliminar o mover de carpeta múltiples recursos en una sola petición (máximo 50 IDs por lote) con reporte resiliente:
+
+#### Eliminación en Lote
+```typescript
+// Eliminar múltiples imágenes
+const delImages = await fetch(`${API_URL}/api/v1/images/bulk-delete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+  body: JSON.stringify({ ids: ['id-1', 'id-2'] }),
+});
+const delReport = await delImages.json();
+// delReport: { totalRequested: 2, successful: ['id-1', 'id-2'], failed: [] }
+
+// Eliminar múltiples tablas
+const delTables = await fetch(`${API_URL}/api/v1/tables/bulk-delete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+  body: JSON.stringify({ ids: ['id-1', 'id-2'] }),
+});
+```
+
+#### Movimiento en Lote a otra Carpeta
+```typescript
+// Mover imágenes a una carpeta de tipo IMAGE
+const moveImages = await fetch(`${API_URL}/api/v1/images/bulk-move`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+  body: JSON.stringify({
+    ids: ['id-1', 'id-2'],
+    targetFolderId: 'uuid-carpeta-destino',
+  }),
+});
+
+// Mover tablas a una carpeta de tipo TABLE
+const moveTables = await fetch(`${API_URL}/api/v1/tables/bulk-move`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+  body: JSON.stringify({
+    ids: ['id-1', 'id-2'],
+    targetFolderId: 'uuid-carpeta-destino',
+  }),
+});
+```
+
+---
+
+## 16. Auditoría, Gestión de API Keys y Monitor de Almacenamiento (Fase 16)
+
+### 16.1. Historial de Auditoría (`GET /api/v1/audit-logs`)
+Permite consultar el registro cronológico inmutable de acciones críticas (subidas, eliminaciones, hot-swaps, compartición de carpetas y gestión de usuarios).
+- `ADMIN`: Visualiza todos los eventos del sistema.
+- `MANAGER`: Visualiza eventos ocurridos sobre sus carpetas propias y acciones ejecutadas por sus colaboradores vinculados.
+- `COLLABORATOR`: Denegado con `403 FORBIDDEN`.
+
+```typescript
+// Consultar auditoría con filtros y paginación
+const res = await fetch(`${API_URL}/api/v1/audit-logs?page=1&limit=20&action=TABLE_UPLOAD`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { logs, total, page, limit, totalPages } = await res.json();
+// logs: [{ id, actorId, actorUsername, action, resourceType, resourceId, folderId, metadata, ipAddress, createdAt }]
+```
+
+### 16.2. Gestión Dinámica de API Keys (`/api/v1/api-keys` - Exclusivo ADMIN)
+Permite al Administrador General crear, listar y revocar llaves de integración sin tocar la base de datos:
+
+#### Crear API Key (Retorna el secreto plano por única vez)
+```typescript
+const res = await fetch(`${API_URL}/api/v1/api-keys`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${adminToken}`,
+  },
+  body: JSON.stringify({
+    name: 'Integración Webhook Dokploy',
+    description: 'Servicio de sincronización continua',
+    rateLimit: 120,
+  }),
+});
+const newKey = await res.json();
+// newKey: { id, name, keyPrefix, key: "mk_live_...", rateLimit, createdAt }
+// IMPORTANTE: 'key' solo se entrega en la respuesta del POST de creación.
+```
+
+#### Listar API Keys Activas
+```typescript
+const listRes = await fetch(`${API_URL}/api/v1/api-keys`, {
+  headers: { Authorization: `Bearer ${adminToken}` },
+});
+const { keys } = await listRes.json();
+// keys: [{ id, name, description, keyPrefix, rateLimit, isActive, lastUsedAt, createdAt }]
+```
+
+#### Revocar API Key
+```typescript
+await fetch(`${API_URL}/api/v1/api-keys/${keyId}`, {
+  method: 'DELETE',
+  headers: { Authorization: `Bearer ${adminToken}` },
+});
+```
+
+### 16.3. Monitor de Cuotas y Salud de Almacenamiento (`GET /api/v1/stats/storage`)
+Expone métricas agregadas de imágenes y tablas en PostgreSQL, desglose de carpetas más pesadas y estado del disco físico:
+- `ADMIN`: Acceso a métricas globales y salud del disco (`disk: { imagesBytes, tablesBytes, totalBytes }`), con indicador preventivo `warning: true` si se supera el umbral operativo.
+- `MANAGER`: Acceso restringido a sus propias carpetas y datasets (campo `disk: null`).
+
+```typescript
+const statsRes = await fetch(`${API_URL}/api/v1/stats/storage`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const stats = await statsRes.json();
+// stats: {
+//   isAdmin: true,
+//   database: { images: { count, sizeBytes }, tables: { count, sizeBytes }, totalCount, totalSizeBytes },
+//   disk: { imagesBytes, tablesBytes, totalBytes, totalFilesCount },
+//   topFolders: [{ id, name, type, totalBytes, itemsCount }],
+//   warning: false,
+//   warningMessage: null
+// }
+```
+
+---
+
+## 17. 📝 Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once)
+
+Este módulo desacopla la generación de PDFs del backend: `monolith-backend` administra esquemas dinámicos, tablas vivas sincronizadas en formato comprimido `.data.json.gz`, inmutabilidad estricta Write-Once al responder y reenvío bajo demanda al servicio externo encargado de los PDFs.
+
+### 17.1. Crear Formulario y Tabla Viva (`POST /api/v1/forms`)
+Permite a usuarios autorizados (`MANAGER`, `ADMIN` o `COLLABORATOR` con `EDIT`) crear un formulario en una carpeta:
+
+```typescript
+const res = await fetch(`${API_URL}/api/v1/forms`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    slug: 'contacto-ciudadano',
+    title: 'Buzón de Sugerencias y Consultas',
+    folderId: 'uuid-carpeta-tipo-table',
+    entryFieldsSchema: [
+      { name: 'nombre', type: 'string', required: true, label: 'Nombre Completo' },
+      { name: 'correo', type: 'string', required: true, label: 'Correo' },
+      { name: 'mensaje', type: 'string', required: true, label: 'Mensaje' }
+    ],
+    resolutionFieldsSchema: [
+      { name: 'dictamen', type: 'string', required: true, label: 'Dictamen Oficial' },
+      { name: 'numeroOficio', type: 'string', required: true, label: 'N° Oficio' }
+    ],
+    allowedResolutionStates: ['VALID', 'INVALID'],
+    externalTargetUrl: 'https://servicio-externo-pdf.empresa.local/webhook/notificar'
+  }),
+});
+const form = await res.json();
+// form: { id, slug, title, linkedTableId, ... }
+```
+
+### 17.2. Endpoint 1: Envío Público de Datos (`POST /api/v1/public/forms/:slug/entries`)
+Ruta pública rate-limited (60 req/min por IP) para recolectar respuestas desde formularios web:
+
+```typescript
+const submitRes = await fetch(`${API_URL}/api/v1/public/forms/contacto-ciudadano/entries`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: 'Ana Perez',
+    correo: 'ana@example.com',
+    mensaje: 'Solicito copia del informe financiero'
+  }),
+});
+const entry = await submitRes.json();
+// entry: { id: "uuid-entrada", status: "NEW", createdAt: "2026-03-01T..." }
+```
+*Las columnas de respuesta exclusiva (`resolutionFieldsSchema`) quedan automáticamente en `null` tanto en la base de datos como en la tabla viva vinculada `.data.json.gz`.*
+
+### 17.3. Endpoint 2: Resolución Única Inmutable (`PATCH /api/v1/forms/entries/:id/resolve`)
+Permite a los operadores completar los campos de resolución y sellar la fila a `VALID` o `INVALID`:
+
+```typescript
+const resolveRes = await fetch(`${API_URL}/api/v1/forms/entries/${entry.id}/resolve`, {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    status: 'VALID',
+    resolutionPayload: {
+      dictamen: 'Aprobado formalmente y remitido a finanzas',
+      numeroOficio: 'OF-2026-0042'
+    }
+  }),
+});
+const resolved = await resolveRes.json();
+// resolved: { id, status: "VALID", entryPayload, resolutionPayload, resolvedAt, ... }
+```
+
+> [!CAUTION]
+> **Regla de Inmutabilidad (Write-Once):**
+> Este endpoint solo puede invocarse **UNA SOLA VEZ por fila**. Cualquier llamada posterior sobre una fila ya resuelta retornará error `409 CONFLICT` con código `ENTRY_ALREADY_RESOLVED`.
+
+### 17.4. Reenvío Bajo Demanda sin Archivos (`POST /api/v1/forms/entries/:id/dispatch`)
+Si en el futuro se necesita volver a generar el PDF o reenviar la respuesta al sistema externo, este endpoint despacha el JSON sellado sin generar archivos ni usar almacenamiento en disco:
+
+```typescript
+const dispatchRes = await fetch(`${API_URL}/api/v1/forms/entries/${entry.id}/dispatch`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const dispatchResult = await dispatchRes.json();
+// dispatchResult: { dispatched: true, targetUrl: "...", entryId: "...", dispatchedAt: "..." }
+```
+
+### 17.5. Descarga Mensual y Tablas Vivas (`GET /api/v1/forms/:id/export`)
+Descarga todas las respuestas filtradas por mes y estado en Excel (`.xlsx`) o CSV (`.csv`):
+
+```typescript
+// Descarga el reporte consolidado de marzo 2026 en Excel
+window.open(`${API_URL}/api/v1/forms/${form.id}/export?month=2026-03&format=xlsx`, '_blank');
+```
+
+
+
+
+
+
 

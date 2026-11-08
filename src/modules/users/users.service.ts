@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { Role, type User } from '@prisma/client';
 import { usersRepository, type UsersRepository } from './users.repository.js';
 import { AppError } from '../../shared/errors.js';
+import { auditService } from '../audit/audit.service.js';
 
 const scryptAsync = promisify(crypto.scrypt);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -141,6 +142,15 @@ export class UsersService {
       createdById: callerId,
     });
 
+    auditService.recordLog({
+      actorId: callerId,
+      actorUsername: callerRole || 'system',
+      action: 'USER_CREATE',
+      resourceType: 'USER',
+      resourceId: newUser.id,
+      metadata: { username: newUser.username, role: newUser.role },
+    });
+
     const { passwordHash: _, ...safeUser } = newUser;
     return safeUser;
   }
@@ -162,6 +172,9 @@ export class UsersService {
     const targetUser = await this.repo.findById(targetUserId);
     if (!targetUser) throw new AppError(404, 'Usuario no encontrado', 'NOT_FOUND');
     if (targetUser.role === Role.ADMIN) throw new AppError(403, 'No se puede modificar el estado del Administrador General', 'FORBIDDEN');
+    if (!isActive && targetUser.username === 'ai_manager') {
+      throw new AppError(400, 'No se puede desactivar la cuenta estructural de servicio de IA', 'SYSTEM_USER_PROTECTED');
+    }
 
     if (caller.role === Role.MANAGER && targetUser.createdById !== caller.id) {
       throw new AppError(403, 'No tienes permiso para modificar este colaborador', 'FORBIDDEN');
@@ -174,6 +187,14 @@ export class UsersService {
     if (!isActive) {
       await this.repo.incrementTokenVersion(targetUserId);
     }
+    auditService.recordLog({
+      actorId: caller.id,
+      actorUsername: caller.role,
+      action: 'USER_STATUS_CHANGE',
+      resourceType: 'USER',
+      resourceId: targetUserId,
+      metadata: { isActive },
+    });
     const { passwordHash: _, ...safeUser } = updated;
     return safeUser;
   }
@@ -207,6 +228,9 @@ export class UsersService {
     const targetUser = await this.repo.findById(targetUserId);
     if (!targetUser) throw new AppError(404, 'Usuario no encontrado', 'NOT_FOUND');
     if (targetUser.role === Role.ADMIN) throw new AppError(403, 'No se puede eliminar al Administrador General', 'FORBIDDEN');
+    if (targetUser.username === 'ai_manager' || targetUser.username === 'admin') {
+      throw new AppError(400, 'No se pueden eliminar las cuentas estructurales del sistema', 'CANNOT_DELETE_SYSTEM_USER');
+    }
 
     if (caller.role === Role.MANAGER && targetUser.createdById !== caller.id) {
       throw new AppError(403, 'No tienes permiso para eliminar este colaborador', 'FORBIDDEN');
@@ -217,6 +241,15 @@ export class UsersService {
 
     const storagePaths = (await this.repo.getUserStoragePaths?.(targetUserId)) ?? [];
     await this.repo.deleteById(targetUserId);
+
+    auditService.recordLog({
+      actorId: caller.id,
+      actorUsername: caller.role,
+      action: 'USER_DELETE',
+      resourceType: 'USER',
+      resourceId: targetUserId,
+      metadata: { targetUsername: targetUser.username },
+    });
 
     if (storagePaths.length > 0) {
       await Promise.allSettled(

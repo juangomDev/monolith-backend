@@ -3,6 +3,7 @@ import { foldersSharesRepository, type FoldersSharesRepository, type FolderMembe
 import { foldersRepository, type FoldersRepository } from './folders.repository.js';
 import { usersRepository, type UsersRepository } from '../users/users.repository.js';
 import { AppError } from '../../shared/errors.js';
+import { auditService } from '../audit/audit.service.js';
 import type { RequesterContext } from './folders.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -88,7 +89,18 @@ export class FoldersSharesService {
     const targetUser = await this.usersRepo.findById(targetUserId);
     if (!targetUser) throw new AppError(404, 'El usuario colaborador no existe', 'USER_NOT_FOUND');
 
-    return this.sharesRepo.addOrUpdateMember(folderId, targetUserId, permission);
+    const member = await this.sharesRepo.addOrUpdateMember(folderId, targetUserId, permission);
+
+    auditService.recordLog({
+      actorId: caller.id,
+      actorUsername: caller.role,
+      action: 'FOLDER_SHARE',
+      resourceType: 'FOLDER',
+      folderId,
+      metadata: { targetUserId, permission },
+    });
+
+    return member;
   }
 
   async listShares(folderId: string, caller: RequesterContext): Promise<FolderMemberWithUser[]> {
@@ -129,6 +141,16 @@ export class FoldersSharesService {
     if (!member) throw new AppError(404, 'El colaborador no tiene acceso a esta carpeta', 'MEMBER_NOT_FOUND');
 
     await this.sharesRepo.removeMember(folderId, targetUserId);
+
+    auditService.recordLog({
+      actorId: caller.id,
+      actorUsername: caller.role,
+      action: 'FOLDER_REVOKE',
+      resourceType: 'FOLDER',
+      folderId,
+      metadata: { targetUserId },
+    });
+
     return { revoked: true };
   }
 }

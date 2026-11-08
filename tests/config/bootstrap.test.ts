@@ -11,7 +11,7 @@ describe('Config: Bootstrap y Siembra Automática Inicial (bootstrap.ts)', () =>
   };
 
   it('debe crear automáticamente el usuario ADMIN y el ApiClient cuando la base de datos está vacía', async () => {
-    let createdUser: any = null;
+    const createdUsers: any[] = [];
     let upsertedClient: any = null;
 
     const mockDb: SeedPrismaClient = {
@@ -24,8 +24,8 @@ describe('Config: Bootstrap y Siembra Automática Inicial (bootstrap.ts)', () =>
       user: {
         findUnique: async () => null,
         create: async (args: any) => {
-          createdUser = args.data;
-          return { id: 'admin-1', ...args.data };
+          createdUsers.push(args.data);
+          return { id: `user-${createdUsers.length}`, ...args.data };
         },
       },
     };
@@ -33,12 +33,21 @@ describe('Config: Bootstrap y Siembra Automática Inicial (bootstrap.ts)', () =>
     const result = await ensureInitialSystemSeed(mockDb, testConfig);
 
     assert.strictEqual(result.adminCreated, true);
+    assert.strictEqual(result.aiManagerCreated, true);
     assert.ok(upsertedClient);
-    assert.ok(createdUser);
-    assert.strictEqual(createdUser.username, 'admin');
-    assert.strictEqual(createdUser.role, Role.ADMIN);
-    assert.strictEqual(createdUser.isActive, true);
-    assert.ok(createdUser.passwordHash.includes(':'));
+    assert.strictEqual(createdUsers.length, 2);
+    
+    const adminUser = createdUsers.find((u) => u.username === 'admin');
+    assert.ok(adminUser);
+    assert.strictEqual(adminUser.role, Role.ADMIN);
+    assert.strictEqual(adminUser.isActive, true);
+    assert.ok(adminUser.passwordHash.includes(':'));
+
+    const aiUser = createdUsers.find((u) => u.username === 'ai_manager');
+    assert.ok(aiUser);
+    assert.strictEqual(aiUser.role, Role.MANAGER);
+    assert.strictEqual(aiUser.isActive, true);
+    assert.ok(aiUser.passwordHash.includes(':'));
   });
 
   it('no debe duplicar el usuario ADMIN si ya existe en la base de datos (idempotencia)', async () => {

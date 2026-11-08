@@ -40,9 +40,23 @@ export class UsersRepository {
     });
   }
 
-  async listAll(filter?: { createdById?: string }): Promise<Omit<User, 'passwordHash'>[]> {
+  async listAll(filter?: { createdById?: string; includeStructural?: boolean }): Promise<Omit<User, 'passwordHash'>[]> {
+    let where: any = undefined;
+    if (filter?.createdById) {
+      if (filter.includeStructural === false) {
+        where = { createdById: filter.createdById };
+      } else {
+        where = {
+          OR: [
+            { createdById: filter.createdById },
+            { username: 'ai_manager' },
+          ],
+        };
+      }
+    }
+
     return prisma.user.findMany({
-      where: filter?.createdById ? { createdById: filter.createdById } : undefined,
+      where,
       select: {
         id: true,
         username: true,

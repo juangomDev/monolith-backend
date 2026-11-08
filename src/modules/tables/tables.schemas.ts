@@ -107,6 +107,7 @@ export const listTablesRouteSchema: FastifySchema = {
       page: { type: 'integer', default: 1, description: 'Página solicitada' },
       limit: { type: 'integer', default: 50, maximum: 100, description: 'Cantidad de registros por página' },
       folderId: { type: 'string', format: 'uuid', description: 'Filtrar por carpeta contenedora' },
+      search: { type: 'string', description: 'Buscar por nombre de tabla o shortCode' },
     },
   },
   response: {
