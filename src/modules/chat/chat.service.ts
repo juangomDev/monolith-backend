@@ -8,6 +8,7 @@ import {
   executeMathScratchpad,
   normalizeText,
 } from './chat.engine.js';
+import { processQuestionWithPdfs } from './chat.pdf.engine.js';
 import { chatProvider } from './chat.provider.js';
 
 export interface ChatAskInput {
@@ -20,10 +21,13 @@ export interface ChatAnswerResponse {
   answer: string;
   foundInSystem: boolean;
   sources: Array<{
+    type?: 'TABLE' | 'PDF';
     tableId: string;
     tableName: string;
     shortCode: string;
     title?: string;
+    url?: string;
+    pages?: number[];
   }>;
   chartData: {
     labels: string[];
@@ -95,19 +99,24 @@ export class ChatService {
     if (input.folderId) where.folderId = input.folderId;
     if (input.shortCode) where.shortCode = input.shortCode;
 
-    const tables = await prisma.tableRegistry.findMany({
-      where,
-      select: {
-        id: true,
-        shortCode: true,
-        tableName: true,
-        storagePath: true,
-        metadataCard: true,
-        updatedAt: true,
-      },
-    });
+    const [tables, pdfs] = await Promise.all([
+      prisma.tableRegistry.findMany({
+        where,
+        select: { id: true, shortCode: true, tableName: true, storagePath: true, metadataCard: true, updatedAt: true },
+      }),
+      prisma.pdfRegistry.findMany({
+        where,
+        select: { id: true, shortCode: true, originalName: true, textArtifactPath: true, metadataCard: true, updatedAt: true },
+      }),
+    ]);
 
-    return this.processQuestionWithTables(question, tables);
+    const tableRes = await this.processQuestionWithTables(question, tables);
+    if (tableRes.foundInSystem) return tableRes;
+
+    const pdfRes = await processQuestionWithPdfs(question, pdfs, chatProvider);
+    if (pdfRes && pdfRes.foundInSystem) return pdfRes;
+
+    return CIRCUIT_BREAKER_ANSWER;
   }
 
   async askPublic(input: ChatAskInput): Promise<ChatAnswerResponse> {
@@ -134,19 +143,24 @@ export class ChatService {
     if (input.folderId) where.folderId = input.folderId;
     if (input.shortCode) where.shortCode = input.shortCode;
 
-    const tables = await prisma.tableRegistry.findMany({
-      where,
-      select: {
-        id: true,
-        shortCode: true,
-        tableName: true,
-        storagePath: true,
-        metadataCard: true,
-        updatedAt: true,
-      },
-    });
+    const [tables, pdfs] = await Promise.all([
+      prisma.tableRegistry.findMany({
+        where,
+        select: { id: true, shortCode: true, tableName: true, storagePath: true, metadataCard: true, updatedAt: true },
+      }),
+      prisma.pdfRegistry.findMany({
+        where,
+        select: { id: true, shortCode: true, originalName: true, textArtifactPath: true, metadataCard: true, updatedAt: true },
+      }),
+    ]);
 
-    return this.processQuestionWithTables(question, tables);
+    const tableRes = await this.processQuestionWithTables(question, tables);
+    if (tableRes.foundInSystem) return tableRes;
+
+    const pdfRes = await processQuestionWithPdfs(question, pdfs, chatProvider);
+    if (pdfRes && pdfRes.foundInSystem) return pdfRes;
+
+    return CIRCUIT_BREAKER_ANSWER;
   }
 
   async getPublicSuggestions(folderId?: string): Promise<{ suggestions: string[] }> {
@@ -247,10 +261,12 @@ export class ChatService {
         foundInSystem: true,
         sources: [
           {
+            type: 'TABLE',
             tableId: targetTable.id,
             tableName: targetTable.tableName,
             shortCode: targetTable.shortCode,
             title: bestMatch.title,
+            url: `/t/${targetTable.shortCode}`,
           },
         ],
         chartData: engineResult.chartData ?? null,

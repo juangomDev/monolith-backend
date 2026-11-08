@@ -27,7 +27,7 @@
 | **Fase 15** | Paridad Total en Tablas (Hot-Swap, Renombrado), Búsqueda Global y Operaciones en Lote | ✅ Completado |
 | **Fase 16** | Auditoría de Acciones (`AuditLog`), Gestión Dinámica de API Keys y Monitor de Almacenamiento | ✅ Completado |
 | **Fase 17** | Módulo de Formularios Customizables, Tablas Vivas y Resolución Única (Write-Once) | ✅ Completado |
-| **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ⏳ Pendiente |
+| **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ✅ Completado |
 
 ---
 
@@ -892,61 +892,61 @@
 > 
 > 5. **Límites Arquitectónicos e Inmutabilidad (Reglas 1, 2 y 3):** Mantener todos los archivos estrictamente `< 300 LOC`, preservar intactos el 100% de los tests congelados previos y documentar simultáneamente en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
 
-- [ ] **18.1 Modelo de Datos en Prisma y Soporte de Carpetas (`prisma/schema.prisma`)**
-  - [ ] `18.1.1` Ampliar enum `FolderType` a `IMAGE`, `TABLE`, `PDF`.
-  - [ ] `18.1.2` Crear modelo `PdfRegistry` (`@@map("pdf_registry")`):
+- [x] **18.1 Modelo de Datos en Prisma y Soporte de Carpetas (`prisma/schema.prisma`)**
+  - [x] `18.1.1` Ampliar enum `FolderType` a `IMAGE`, `TABLE`, `PDF`.
+  - [x] `18.1.2` Crear modelo `PdfRegistry` (`@@map("pdf_registry")`):
     - `id` (UUID, PK), `shortCode` (String único, 10 chars Base58).
     - `originalName` (String), `storagePath` (String), `textArtifactPath` (String).
     - `sizeBytes` (Int), `pageCount` (Int), `isScanned` (Boolean `@default(false)` para identificar PDFs de solo imagen sin texto seleccionable).
     - `metadataCard` (Json? `@map("metadata_card")`: `title`, `description`, `tags`, `keywords`, `summary`).
     - `folderId` (UUID, FK a `Folder` con `onDelete: Cascade`).
     - `createdAt` y `updatedAt`.
-  - [ ] `18.1.3` Instalar dependencia ligera `unpdf` (extracción de texto por página en TypeScript puro sin binarios pesados de sistema) y ejecutar `npx prisma generate`.
+  - [x] `18.1.3` Instalar dependencia ligera `unpdf` (extracción de texto por página en TypeScript puro sin binarios pesados de sistema) y ejecutar `npx prisma generate`.
 
-- [ ] **18.2 Seguridad de Archivos y Extractor de Doble Artefacto (`src/gateway/file-guard.ts` y `src/modules/pdfs/pdfs.parser.ts`)**
-  - [ ] `18.2.1` En `src/gateway/file-guard.ts`: Añadir validador de magic bytes para `application/pdf` (`%PDF-`) e inspector de buffer que rechace con `400 MALICIOUS_PAYLOAD` diccionarios PDF peligrosos (`/JS`, `/JavaScript`, `/Launch`).
-  - [ ] `18.2.2` Crear `src/modules/pdfs/pdfs.parser.ts`:
+- [x] **18.2 Seguridad de Archivos y Extractor de Doble Artefacto (`src/gateway/file-guard.ts` y `src/modules/pdfs/pdfs.parser.ts`)**
+  - [x] `18.2.1` En `src/gateway/file-guard.ts`: Añadir validador de magic bytes para `application/pdf` (`%PDF-`) e inspector de buffer que rechace con `400 MALICIOUS_PAYLOAD` diccionarios PDF peligrosos (`/JS`, `/JavaScript`, `/Launch`).
+  - [x] `18.2.2` Crear `src/modules/pdfs/pdfs.parser.ts`:
     - Extraer el texto página por página (`pages: [{ pageNumber: 1, text: "..." }, ...]`) y el conteo total `pageCount`.
     - Si el texto total extraído es vacío (< 20 caracteres), marcar `isScanned: true` sin fallar la subida.
     - Autogenerar la `metadataCard` inicial extrayendo título del documento, palabras clave más frecuentes (`keywords`) y vista previa de las primeras páginas.
     - Comprimir la estructura con `zlib.gzipSync` y guardarla en `./storage/pdfs/${shortCode}.text.json.gz`.
 
-- [ ] **18.3 Repositorio, Almacenamiento y Servicio de PDFs (`src/modules/pdfs/`)**
-  - [ ] `18.3.1` Crear `src/modules/pdfs/pdfs.storage.ts` y `pdfs.repository.ts` siguiendo el patrón modular `< 300 LOC`: guardado/borrado de `.pdf` + `.text.json.gz`, paginación SQL (`page`, `limit`, `folderId`, `search`) y filtros de privacidad/RBAC.
-  - [ ] `18.3.2` Crear `src/modules/pdfs/pdfs.service.ts`:
+- [x] **18.3 Repositorio, Almacenamiento y Servicio de PDFs (`src/modules/pdfs/`)**
+  - [x] `18.3.1` Crear `src/modules/pdfs/pdfs.storage.ts` y `pdfs.repository.ts` siguiendo el patrón modular `< 300 LOC`: guardado/borrado de `.pdf` + `.text.json.gz`, paginación SQL (`page`, `limit`, `folderId`, `search`) y filtros de privacidad/RBAC.
+  - [x] `18.3.2` Crear `src/modules/pdfs/pdfs.service.ts`:
     - `uploadPdf`: Auto-asignación a carpeta 'General' (tipo PDF) si no se envía `folderId`, o verificación de permiso `EDIT` si es `COLLABORATOR`.
     - `renamePdf` (`PATCH /api/v1/pdfs/:id`): Modificar `originalName` validando acceso RBAC.
     - `replacePdf` (`PUT /api/v1/pdfs/:id` - Hot-Swap): Reemplazar el archivo `.pdf` físico y regenerar su `.text.json.gz` conservando el mismo `id`, `shortCode` y URL pública con `?v=timestamp`.
     - `updateMetadataCard` (`PATCH /api/v1/pdfs/:id/metadata`): Enriquecer `title`, `description` y `tags` para el buscador y el Chat.
     - `deletePdf` (`DELETE /api/v1/pdfs/:id`): Eliminar registro en BD y destruir en disco tanto el `.pdf` como el `.text.json.gz`.
-  - [ ] `18.3.3` En `folders.movement.service.ts` y `folders.service.ts`: Habilitar movimiento de PDFs entre carpetas de tipo PDF respetando RBAC (`EDIT`) y la eliminación física en disco ante borrado de carpeta o usuario.
+  - [x] `18.3.3` En `folders.movement.service.ts` y `folders.service.ts`: Habilitar movimiento de PDFs entre carpetas de tipo PDF respetando RBAC (`EDIT`) y la eliminación física en disco ante borrado de carpeta o usuario.
 
-- [ ] **18.4 Rutas HTTP y Capability URL Pública (`src/modules/pdfs/pdfs.routes.ts` y `pdfs.schemas.ts`)**
-  - [ ] `18.4.1` Endpoints protegidos con `authenticateUserOrApiKey`:
+- [x] **18.4 Rutas HTTP y Capability URL Pública (`src/modules/pdfs/pdfs.routes.ts` y `pdfs.schemas.ts`)**
+  - [x] `18.4.1` Endpoints protegidos con `authenticateUserOrApiKey`:
     - `GET /api/v1/pdfs` (`?page=&limit=&folderId=&search=`)
     - `POST /api/v1/pdfs` (`multipart/form-data`, máx. 50MB)
     - `PATCH /api/v1/pdfs/:id` (renombrar)
     - `PUT /api/v1/pdfs/:id` (reemplazo en caliente Hot-Swap)
     - `PATCH /api/v1/pdfs/:id/metadata` (editar Ficha Técnica)
     - `DELETE /api/v1/pdfs/:id`
-  - [ ] `18.4.2` Endpoint Público de Entrega `GET /p/:short_code`:
+  - [x] `18.4.2` Endpoint Público de Entrega `GET /p/:short_code`:
     - Por defecto: sirve el stream binario con `Content-Type: application/pdf`, `Content-Disposition: inline; filename="..."`, `Cache-Control: public, max-age=31536000, immutable` y `Content-Security-Policy: sandbox`.
     - Con `?download=true`: fuerza descarga con `Content-Disposition: attachment`.
     - Con `?format=text` (y `?page=N` opcional): transmite en ~2 ms el contenido de `${shortCode}.text.json.gz`.
 
-- [ ] **18.5 Conexión con el Motor de Chat Analítico (`src/modules/chat/chat.engine.ts`)**
-  - [ ] `18.5.1` Ampliar el buscador de Fichas Técnicas de `chat.engine.ts` para consultar también registros de `PdfRegistry` accesibles según el contexto (RBAC en `/api/v1/chat/ask` o solo carpetas públicas `isPrivate: false` en `/api/v1/public/chat/ask`).
-  - [ ] `18.5.2` Cuando una pregunta coincida con un PDF, descomprimir en memoria su `.text.json.gz`, seleccionar los fragmentos/páginas más relevantes para la consulta y enviarlos al proveedor LLM indicando el número de página (`[Página X]`).
-  - [ ] `18.5.3` Incluir en el arreglo `sources` de la respuesta del Chat el tipo de fuente (`type: 'TABLE' | 'PDF'`), `shortCode`, `url` (`/p/:short_code`) y las páginas citadas (`pages: number[]`).
+- [x] **18.5 Conexión con el Motor de Chat Analítico (`src/modules/chat/chat.engine.ts`)**
+  - [x] `18.5.1` Ampliar el buscador de Fichas Técnicas de `chat.engine.ts` para consultar también registros de `PdfRegistry` accesibles según el contexto (RBAC en `/api/v1/chat/ask` o solo carpetas públicas `isPrivate: false` en `/api/v1/public/chat/ask`).
+  - [x] `18.5.2` Cuando una pregunta coincida con un PDF, descomprimir en memoria su `.text.json.gz`, seleccionar los fragmentos/páginas más relevantes para la consulta y enviarlos al proveedor LLM indicando el número de página (`[Página X]`).
+  - [x] `18.5.3` Incluir en el arreglo `sources` de la respuesta del Chat el tipo de fuente (`type: 'TABLE' | 'PDF'`), `shortCode`, `url` (`/p/:short_code`) y las páginas citadas (`pages: number[]`).
 
-- [ ] **18.6 Documentación Simultánea y Pruebas Automatizadas (Reglas 1, 2 y 3)**
-  - [ ] `18.6.1` Crear suites de pruebas en `tests/modules/pdfs/` (`pdfs.parser.test.ts`, `pdfs.service.test.ts`, `pdfs.routes.test.ts`):
+- [x] **18.6 Documentación Simultánea y Pruebas Automatizadas (Reglas 1, 2 y 3)**
+  - [x] `18.6.1` Crear suites de pruebas en `tests/modules/pdfs/` (`pdfs.parser.test.ts`, `pdfs.service.test.ts`, `pdfs.routes.test.ts`):
     - Subida de PDF válido, generación de `.text.json.gz` y conteo de páginas.
     - Rechazo con `400 MALICIOUS_PAYLOAD` ante PDF con `/JavaScript` inyectado y `415` ante magic bytes falsos.
     - Hot-Swap (`PUT`), renombrado (`PATCH`), entrega en `/p/:short_code` (inline, `?download=true`, `?format=text`) y borrado físico en cascada.
     - Consulta desde el Chat respondiendo con el contenido del PDF y citando la página correspondiente.
-  - [ ] `18.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json` con `npm run openapi:export`.
-  - [ ] `18.6.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+  - [x] `18.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y regenerar `openapi.json` con `npm run openapi:export`.
+  - [x] `18.6.3` Verificar `< 300 LOC` en todos los archivos, `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
 
 ---
 

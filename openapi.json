@@ -15495,6 +15495,2558 @@
           }
         }
       }
+    },
+    "/p/{short_code}": {
+      "get": {
+        "summary": "Visualización inline, descarga directa o lectura de texto de PDF por shortCode",
+        "tags": [
+          "Pdfs"
+        ],
+        "description": "Sin parámetros sirve application/pdf inline. Con ?download=true fuerza descarga attachment. Con ?format=text sirve el artefacto de texto extraído (.text.json.gz) en ~2 ms.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "download",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "text",
+                "raw"
+              ]
+            },
+            "in": "query",
+            "name": "format",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "v",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 14
+            },
+            "in": "path",
+            "name": "short_code",
+            "required": true
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pdfs": {
+      "get": {
+        "summary": "Lista documentos PDF registrados",
+        "tags": [
+          "Pdfs"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "folderId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "search",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pdfs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "shortCode": {
+                            "type": "string",
+                            "example": "pdf1234567"
+                          },
+                          "originalName": {
+                            "type": "string",
+                            "example": "manual_operaciones.pdf"
+                          },
+                          "sizeBytes": {
+                            "type": "integer",
+                            "example": 1048576
+                          },
+                          "pageCount": {
+                            "type": "integer",
+                            "example": 12
+                          },
+                          "isScanned": {
+                            "type": "boolean",
+                            "example": false
+                          },
+                          "metadataCard": {
+                            "type": [
+                              "null",
+                              "object"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "folderId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ],
+                            "format": "uuid"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "/p/pdf1234567"
+                          },
+                          "urlWithVersion": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "/p/pdf1234567?v=1740000000000"
+                          },
+                          "downloadUrl": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "/p/pdf1234567?download=true"
+                          },
+                          "textUrl": {
+                            "type": "string",
+                            "format": "uri",
+                            "example": "/p/pdf1234567?format=text"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Carga multipart de documento PDF (máx. 50MB)",
+        "tags": [
+          "Pdfs"
+        ],
+        "description": "Valida magic bytes %PDF-, analiza contra scripts maliciosos (/JavaScript) y genera el doble artefacto .text.json.gz con Ficha Técnica automática.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "PDF cargado y procesado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "PDF cargado y procesado exitosamente",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "pdf1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "manual_operaciones.pdf"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 1048576
+                    },
+                    "pageCount": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "isScanned": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "metadataCard": {
+                      "type": [
+                        "null",
+                        "object"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "folderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?v=1740000000000"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?download=true"
+                    },
+                    "textUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?format=text"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Carga útil excede el tamaño límite permitido (50MB)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Carga útil excede el tamaño límite permitido (50MB)",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/413"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 413
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "PAYLOAD_TOO_LARGE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Tipo de medio no soportado o magic bytes falsificados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Tipo de medio no soportado o magic bytes falsificados",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/415"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 415
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNSUPPORTED_MEDIA_TYPE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pdfs/{id}": {
+      "patch": {
+        "summary": "Renombra un documento PDF",
+        "tags": [
+          "Pdfs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "originalName"
+                ],
+                "properties": {
+                  "originalName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "pdf1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "manual_operaciones.pdf"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 1048576
+                    },
+                    "pageCount": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "isScanned": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "metadataCard": {
+                      "type": [
+                        "null",
+                        "object"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "folderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?v=1740000000000"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?download=true"
+                    },
+                    "textUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?format=text"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Reemplazo en caliente (Hot-Swap) de PDF",
+        "tags": [
+          "Pdfs"
+        ],
+        "description": "Reemplaza el archivo binario y regenera el artefacto .text.json.gz preservando el id, shortCode y URL corta.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "pdf1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "manual_operaciones.pdf"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 1048576
+                    },
+                    "pageCount": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "isScanned": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "metadataCard": {
+                      "type": [
+                        "null",
+                        "object"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "folderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?v=1740000000000"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?download=true"
+                    },
+                    "textUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?format=text"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Carga útil excede el tamaño límite permitido (50MB)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Carga útil excede el tamaño límite permitido (50MB)",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/413"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 413
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Carga útil excede el tamaño límite permitido (50MB)"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "PAYLOAD_TOO_LARGE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Tipo de medio no soportado o magic bytes falsificados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Tipo de medio no soportado o magic bytes falsificados",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/415"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 415
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Tipo de medio no soportado o magic bytes falsificados"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNSUPPORTED_MEDIA_TYPE"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Elimina un documento PDF y destruye sus archivos en disco",
+        "tags": [
+          "Pdfs"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pdfs/{id}/metadata": {
+      "patch": {
+        "summary": "Actualiza la Ficha Técnica (metadataCard) del PDF",
+        "tags": [
+          "Pdfs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "keywords": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 3000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string",
+                      "example": "pdf1234567"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "example": "manual_operaciones.pdf"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "example": 1048576
+                    },
+                    "pageCount": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "isScanned": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "metadataCard": {
+                      "type": [
+                        "null",
+                        "object"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "folderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "uuid"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567"
+                    },
+                    "urlWithVersion": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?v=1740000000000"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?download=true"
+                    },
+                    "textUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "/p/pdf1234567?format=text"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pdfs/{id}/folder": {
+      "patch": {
+        "summary": "Mueve un PDF a otra carpeta de tipo PDF",
+        "tags": [
+          "Pdfs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "folderId"
+                ],
+                "properties": {
+                  "folderId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "shortCode": {
+                      "type": "string"
+                    },
+                    "folderId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "originalName": {
+                      "type": "string"
+                    },
+                    "pageCount": {
+                      "type": "integer"
+                    },
+                    "sizeBytes": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Petición inválida o validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Petición inválida o validación fallida",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/400"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Petición inválida o validación fallida"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "BAD_REQUEST"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acceso prohibido o permisos insuficientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Acceso prohibido o permisos insuficientes",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/403"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Acceso prohibido o permisos insuficientes"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "FORBIDDEN"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Recurso no encontrado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/404"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "Recurso no encontrado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "NOT_FOUND"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
@@ -15539,6 +18091,10 @@
     {
       "name": "Forms",
       "description": "Formularios customizables, tablas vivas y resolución única Write-Once"
+    },
+    {
+      "name": "Pdfs",
+      "description": "Alojamiento, capability URLs (/p/:short_code), doble artefacto y Chat RAG de PDFs"
     },
     {
       "name": "Health",

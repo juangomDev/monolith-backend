@@ -29,6 +29,7 @@ export type FolderWithDetails = Folder & {
   _count: {
     images: number;
     tables: number;
+    pdfs?: number;
   };
   user: {
     id: string;
@@ -94,6 +95,7 @@ export class FoldersRepository {
           select: {
             images: true,
             tables: true,
+            pdfs: true,
           },
         },
         user: {
@@ -120,6 +122,7 @@ export class FoldersRepository {
           select: {
             images: true,
             tables: true,
+            pdfs: true,
           },
         },
         user: {
@@ -152,6 +155,7 @@ export class FoldersRepository {
           select: {
             images: true,
             tables: true,
+            pdfs: true,
           },
         },
         user: {
@@ -193,6 +197,7 @@ export class FoldersRepository {
       include: {
         images: { select: { id: true, storagePath: true } },
         tables: { select: { id: true, storagePath: true } },
+        pdfs: { select: { id: true, storagePath: true, textArtifactPath: true } },
       },
     });
 
@@ -201,8 +206,9 @@ export class FoldersRepository {
     }
 
     const storagePaths = [
-      ...folder.images.map((img) => img.storagePath),
-      ...folder.tables.map((tbl) => tbl.storagePath),
+      ...(folder.images || []).map((img) => img.storagePath),
+      ...(folder.tables || []).map((tbl) => tbl.storagePath),
+      ...(folder.pdfs || []).flatMap((pdf) => [pdf.storagePath, pdf.textArtifactPath]),
     ];
 
     await prisma.folder.delete({
@@ -229,6 +235,13 @@ export class FoldersRepository {
     });
   }
 
+  async movePdfToFolder(pdfId: string, folderId: string) {
+    return prisma.pdfRegistry.update({
+      where: { id: pdfId },
+      data: { folderId },
+    });
+  }
+
   async findImageById(id: string): Promise<ImageRegistry | null> {
     return prisma.imageRegistry.findUnique({
       where: { id },
@@ -237,6 +250,12 @@ export class FoldersRepository {
 
   async findTableById(id: string): Promise<TableRegistry | null> {
     return prisma.tableRegistry.findUnique({
+      where: { id },
+    });
+  }
+
+  async findPdfById(id: string) {
+    return prisma.pdfRegistry.findUnique({
       where: { id },
     });
   }

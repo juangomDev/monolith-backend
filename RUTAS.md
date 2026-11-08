@@ -67,6 +67,14 @@
 | **55** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
 | **56** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista las entradas de un formulario (`?month=YYYY-MM&status=`). |
 | **57** | `GET` | `/api/v1/forms/:id/export` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Exporta respuestas a Excel (.xlsx) o CSV (.csv) con filtro mensual. |
+| **58** | `GET` | `/p/:short_code` | Pdfs | Pública (Capability URL) | Anónimo | Entrega pública inmutable de PDF (`inline`, `?download=true` o texto `?format=text`). |
+| **59** | `GET` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR` | Listar catálogo de PDFs con filtros (`folderId`, `search`), paginación y metadataCard. |
+| **60** | `POST` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Subida multipart de PDF, validación de exploits, extracción de texto y doble artefacto. |
+| **61** | `PATCH` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Renombrar nombre original del archivo PDF (`originalName`). |
+| **62** | `PUT` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en Caliente (Hot-Swap) de PDF conservando ID, shortCode y URL pública. |
+| **63** | `PATCH` | `/api/v1/pdfs/:id/metadata` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Actualizar ficha técnica (`metadataCard`: category, summary, keywords, custom). |
+| **64** | `DELETE` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación de PDF en base de datos y borrado físico de sus 2 artefactos en disco. |
+| **65** | `PATCH` | `/api/v1/pdfs/:id/folder` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Mover documento PDF a otra carpeta verificando que sea de tipo `PDF`. |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -966,6 +974,62 @@ Reenvío bajo demanda de los datos sellados de una fila ya resuelta hacia `exter
 #### `GET /api/v1/forms/:id/entries` y `GET /api/v1/forms/:id/export` (Protegida)
 - `GET /api/v1/forms/:id/entries?month=YYYY-MM&status=VALID`: Consulta paginada filtrada.
 - `GET /api/v1/forms/:id/export?month=YYYY-MM&status=&format=xlsx|csv`: Descarga consolidada de respuestas del mes en formato Excel o CSV.
+
+---
+
+### 3.9 Módulo de Archivos PDF, Patrón de Doble Artefacto y Capability URL Pública (`/p/:short_code`)
+
+El módulo de PDFs gestiona almacenamiento de documentos de hasta 50MB, escaneo activo de seguridad contra payloads maliciosos (`/JavaScript`, `/JS`, `/Launch`, `/SubmitForm`, `/ImportData`), extracción automática de texto estructurado por página (`unpdf`), y el patrón de **Doble Artefacto** (`${shortCode}.pdf` y `${shortCode}.text.json.gz`). Además, alimenta directamente el motor de Chat RAG con respuestas citadas por página (`pages: [1, 2]`).
+
+#### `GET /p/:short_code` (Pública - Capability URL Opaque Base58)
+Entrega inmutable del documento PDF con cabecera `Cache-Control: public, max-age=31536000, immutable` y `Content-Security-Policy: sandbox`.
+- **Query Params opcionales:**
+  - `download=true`: Fuerza descarga con `Content-Disposition: attachment`.
+  - `format=text`: En lugar del binario, entrega el JSON de texto comprimido (`.text.json.gz`) descomprimido al vuelo (~2ms).
+  - `page=N`: Con `format=text`, filtra y entrega únicamente la página especificada.
+- **Respuesta 200 OK:** Stream binario `application/pdf` o JSON `application/json`.
+- **Errores:** `404 Not Found`.
+
+#### `POST /api/v1/pdfs` (Protegida - Subida Multipart)
+Carga un documento PDF en memoria, valida magic bytes `%PDF-` y escanea el búfer contra scripts o exploits maliciosos. Extrae texto por páginas, detecta si es escaneado (`isScanned: true` si < 20 caracteres), genera su `metadataCard` y persiste los 2 artefactos en disco.
+- **Form-Data:** `file` (Buffer PDF), opcional `folderId` (UUID de carpeta tipo `PDF`).
+- **Respuesta 201 Created:** Registro completo `PdfRegistry` con su shortCode y metadatos.
+- **Errores:** `400 Bad Request` (payload malicioso / no es PDF), `413 Payload Too Large` (> 50MB).
+
+#### `GET /api/v1/pdfs` (Protegida - Catálogo de Documentos)
+Consulta paginada de PDFs con soporte para búsqueda textual en nombre y metadatos (`?search=`), filtrado por carpeta (`?folderId=`) y paginación (`?page=1&limit=50`).
+- **Respuesta 200 OK:** `{ "data": [...], "meta": { "total": N, "page": 1, "limit": 50, "totalPages": N } }`.
+
+#### `PATCH /api/v1/pdfs/:id` (Protegida - Renombrar)
+Modifica el campo `originalName` del documento PDF sin alterar sus artefactos en disco ni su `shortCode`.
+- **Cuerpo JSON:** `{ "originalName": "nuevo-nombre.pdf" }`.
+
+#### `PUT /api/v1/pdfs/:id` (Protegida - Reemplazo en Caliente / Hot-Swap)
+Permite sustituir el archivo físico del PDF por una versión corregida o actualizada preservando exactamente el mismo `id`, `shortCode` y URL pública `/p/:short_code`. Actualiza `sizeBytes`, `pageCount`, re-extrae el texto y actualiza el artefacto `.text.json.gz`.
+- **Form-Data:** `file` (Buffer PDF).
+- **Respuesta 200 OK:** Registro actualizado.
+
+#### `PATCH /api/v1/pdfs/:id/metadata` (Protegida - Ficha Técnica)
+Permite al usuario enriquecer o sobreescribir la ficha técnica (`metadataCard`) del PDF con categoría, resumen, palabras clave o atributos personalizados.
+- **Cuerpo JSON:**
+  ```json
+  {
+    "category": "Contratos",
+    "summary": "Acuerdo de confidencialidad y servicios 2026",
+    "keywords": ["acuerdo", "legal", "firmado"],
+    "custom": { "version": "1.2", "firmado": true }
+  }
+  ```
+- **Respuesta 200 OK:** Registro actualizado.
+
+#### `DELETE /api/v1/pdfs/:id` (Protegida - Eliminación Física Completa)
+Elimina el registro en PostgreSQL / Prisma y borra físicamente de `./storage/pdfs/` tanto el archivo `${shortCode}.pdf` como el artefacto `${shortCode}.text.json.gz`.
+- **Respuesta 200 OK:** `{ "success": true, "deletedId": "...", "freedBytes": N }`.
+
+#### `PATCH /api/v1/pdfs/:id/folder` (Protegida - Mover PDF)
+Mueve el PDF a otra carpeta del sistema, validando estrictamente que la carpeta destino sea de tipo `FolderType.PDF`.
+- **Cuerpo JSON:** `{ "targetFolderId": "uuid-carpeta-pdf" }`.
+- **Respuesta 200 OK:** Registro actualizado.
 
 ---
 

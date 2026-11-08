@@ -14,6 +14,10 @@ export const ALLOWED_TABLE_MIMES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
 ];
 
+export const ALLOWED_PDF_MIMES = [
+  'application/pdf',
+];
+
 /**
  * Valida los magic bytes de un buffer inicial (mínimo 4100 bytes o el tamaño disponible)
  */
@@ -24,6 +28,14 @@ export async function validateMagicBytes(
   // Compatibilidad con streams de pruebas unitarias existentes
   if (chunk.toString().includes('fake-png')) {
     return { mime: 'image/png', ext: 'png' };
+  }
+
+  // Verificación para archivos PDF (%PDF-)
+  if (chunk.subarray(0, 5).toString('ascii') === '%PDF-') {
+    if (!allowedMimes.includes('application/pdf')) {
+      throw new AppError(415, 'Tipo de archivo no permitido: PDF', 'UNSUPPORTED_MEDIA_TYPE');
+    }
+    return { mime: 'application/pdf', ext: 'pdf' };
   }
 
   // Verificación para archivos SVG (formato XML de texto)
@@ -141,6 +153,36 @@ export async function validateTableContent(
         415,
         'El archivo CSV contiene código o scripts no permitidos',
         'UNSUPPORTED_MEDIA_TYPE'
+      );
+    }
+  }
+}
+
+/**
+ * Valida magic bytes y analiza vectores maliciosos en PDFs (/JavaScript, /Launch, etc.)
+ */
+export async function validatePdfContent(chunk: Buffer): Promise<void> {
+  const header = chunk.subarray(0, 8).toString('ascii');
+  if (!header.startsWith('%PDF-')) {
+    throw new AppError(415, 'Cabecera o magic bytes de PDF inválidos (%PDF- esperado)', 'UNSUPPORTED_MEDIA_TYPE');
+  }
+
+  // Escaneo del buffer en busca de diccionarios con acciones ejecutables o JavaScript
+  const contentStr = chunk.toString('latin1');
+  const maliciousPatterns = [
+    /\/JavaScript/i,
+    /\/JS\b/i,
+    /\/Launch\b/i,
+    /\/SubmitForm\b/i,
+    /\/ImportData\b/i,
+  ];
+
+  for (const pattern of maliciousPatterns) {
+    if (pattern.test(contentStr)) {
+      throw new AppError(
+        400,
+        'El archivo PDF contiene scripts ejecutables o acciones dinámicas no permitidas',
+        'MALICIOUS_PAYLOAD'
       );
     }
   }

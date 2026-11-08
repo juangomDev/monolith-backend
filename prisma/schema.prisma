@@ -64,6 +64,27 @@ model TableRegistry {
   @@map("tables_registry")
 }
 
+// 3.1. Registro de documentos PDF (Doble Artefacto: .pdf + .text.json.gz)
+model PdfRegistry {
+  id               String   @id @default(uuid()) @db.Uuid
+  shortCode        String   @unique @map("short_code") @db.VarChar(12)
+  originalName     String   @map("original_name")
+  storagePath      String   @map("storage_path")
+  textArtifactPath String   @map("text_artifact_path")
+  sizeBytes        Int      @map("size_bytes")
+  pageCount        Int      @default(0) @map("page_count")
+  isScanned        Boolean  @default(false) @map("is_scanned")
+  metadataCard     Json?    @map("metadata_card") @db.JsonB
+  folderId         String?  @map("folder_id") @db.Uuid
+  folder           Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([shortCode])
+  @@index([folderId])
+  @@map("pdf_registry")
+}
+
 // 4. Roles y Usuarios del sistema
 enum Role {
   ADMIN
@@ -96,6 +117,7 @@ model User {
 enum FolderType {
   IMAGE
   TABLE
+  PDF
 }
 
 enum FolderPermission {
@@ -114,6 +136,7 @@ model Folder {
   createdAt DateTime        @default(now()) @map("created_at")
   images    ImageRegistry[]
   tables    TableRegistry[]
+  pdfs      PdfRegistry[]
   forms     FormDefinition[]
   members   FolderMember[]
 

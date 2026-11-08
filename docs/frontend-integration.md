@@ -790,6 +790,117 @@ Descarga todas las respuestas filtradas por mes y estado en Excel (`.xlsx`) o CS
 window.open(`${API_URL}/api/v1/forms/${form.id}/export?month=2026-03&format=xlsx`, '_blank');
 ```
 
+---
+
+## 18. 📑 Módulo de Archivos PDF y Doble Artefacto (`/p/:short_code`)
+
+El backend proporciona soporte completo para documentos PDF de hasta 50MB mediante el **Patrón de Doble Artefacto**:
+1. `${shortCode}.pdf`: Documento original sanitizado contra exploits JavaScript/Launch.
+2. `${shortCode}.text.json.gz`: Extracción estructurada de texto por página comprimida en gzip (~95% de compresión), permitiendo lecturas ultra-rápidas (~2ms) y citas precisas en el Chat RAG.
+
+### 18.1. Subida de Archivos PDF (`POST /api/v1/pdfs`)
+
+```typescript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+if (selectedFolderId) {
+  formData.append('folderId', selectedFolderId);
+}
+
+const response = await fetch(`${API_URL}/api/v1/pdfs`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: formData,
+});
+
+const pdf = await response.json();
+// Retorna:
+// {
+//   id: "uuid-del-pdf",
+//   shortCode: "aB3k9XyZ10",
+//   originalName: "manual-operativo.pdf",
+//   sizeBytes: 1542000,
+//   pageCount: 14,
+//   isScanned: false,
+//   folderId: "uuid-carpeta-pdf",
+//   metadataCard: { category: "GENERAL", summary: "...", keywords: [...] },
+//   createdAt: "2026-03-01T..."
+// }
+```
+
+### 18.2. Enlaces Públicos Inmutables (Capability URLs)
+
+El shortcode de 10 caracteres Base58 es seguro e hiper-rápido:
+
+```typescript
+// 1. Visualización nativa en navegador (iframe o nueva pestaña)
+const viewUrl = `${API_URL}/p/${pdf.shortCode}`;
+
+// 2. Descarga directa forzada (attachment)
+const downloadUrl = `${API_URL}/p/${pdf.shortCode}?download=true`;
+
+// 3. Inspección del texto extraído en JSON sin descargar el binario
+const textJsonUrl = `${API_URL}/p/${pdf.shortCode}?format=text`;
+
+// 4. Obtener solo una página específica en JSON
+const page2Url = `${API_URL}/p/${pdf.shortCode}?format=text&page=2`;
+```
+
+### 18.3. Reemplazo en Caliente (Hot-Swap) (`PUT /api/v1/pdfs/:id`)
+Permite corregir o actualizar un documento PDF manteniendo exactamente el mismo `id`, `shortCode` y URL pública `/p/:short_code`:
+
+```typescript
+const updateData = new FormData();
+updateData.append('file', newFileInput.files[0]);
+
+const hotSwapRes = await fetch(`${API_URL}/api/v1/pdfs/${pdf.id}`, {
+  method: 'PUT',
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: updateData,
+});
+const updatedPdf = await hotSwapRes.json();
+```
+
+### 18.4. Ficha Técnica y Metadatos (`PATCH /api/v1/pdfs/:id/metadata`)
+Permite enriquecer los metadatos semánticos que el Chat RAG utiliza para indexar y responder:
+
+```typescript
+await fetch(`${API_URL}/api/v1/pdfs/${pdf.id}/metadata`, {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    category: 'Manuales',
+    summary: 'Procedimiento de resolución de incidencias nivel 2',
+    keywords: ['soporte', 'incidencias', 'sla'],
+  }),
+});
+```
+
+### 18.5. Chat RAG con Citas de Páginas
+Cuando los usuarios realizan preguntas en el Chat interno o público (`/api/v1/chat/ask` o `/api/v1/public/chat/ask`), el motor cita automáticamente los PDFs relevantes y sus números de página:
+
+```typescript
+// En la respuesta de chat:
+// response.sources = [
+//   {
+//     type: "PDF",
+//     name: "manual-operativo.pdf",
+//     url: "/p/aB3k9XyZ10",
+//     pages: [2, 3]
+//   }
+// ]
+```
+El frontend puede renderizar directamente enlaces como:
+`<a href="${source.url}#page=${source.pages[0]}" target="_blank">${source.name} (Pág. ${source.pages.join(', ')})</a>`
+
+
 
 
 

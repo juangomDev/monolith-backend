@@ -9,6 +9,7 @@ export interface InMemoryDb {
   folderMembers: any[];
   images: any[];
   tables: any[];
+  pdfs: any[];
 }
 
 export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardown: () => void }> {
@@ -19,7 +20,7 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
 
   const state: InMemoryDb = {
     users: [{ id: adminId, username: adminUser, passwordHash: adminHash, role: Role.ADMIN, tokenVersion: 0, isActive: true, createdById: null, createdAt: new Date() }],
-    folders: [], folderMembers: [], images: [], tables: [],
+    folders: [], folderMembers: [], images: [], tables: [], pdfs: [],
   };
 
   const orig = {
@@ -74,6 +75,7 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
     const res = fmtFolder(f);
     if (include?.images) res.images = state.images.filter((i) => i.folderId === f.id);
     if (include?.tables) res.tables = state.tables.filter((t) => t.folderId === f.id);
+    if (include?.pdfs) res.pdfs = state.pdfs.filter((p) => p.folderId === f.id);
     return res;
   };
   (prisma.folder as any).findFirst = async ({ where }: any) =>

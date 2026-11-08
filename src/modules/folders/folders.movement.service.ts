@@ -103,6 +103,51 @@ export class FoldersMovementService {
       sizeBytes: updated.sizeBytes,
     };
   }
+
+  async movePdfToFolder(pdfId: string, rawInput: unknown, requester: RequesterContext) {
+    if (!UUID_REGEX.test(pdfId)) {
+      throw new AppError(404, 'Documento PDF no encontrado', 'NOT_FOUND');
+    }
+
+    const parseResult = moveResourceSchema.safeParse(rawInput);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0]?.message || 'El folderId destino es inválido', 'BAD_REQUEST');
+    }
+
+    const { folderId } = parseResult.data;
+
+    const pdf = await this.repo.findPdfById(pdfId);
+    if (!pdf) {
+      throw new AppError(404, 'Documento PDF no encontrado', 'NOT_FOUND');
+    }
+
+    const targetFolder = await this.repo.findFolderById(folderId);
+    if (!targetFolder) {
+      throw new AppError(404, 'Carpeta destino no encontrada', 'NOT_FOUND');
+    }
+
+    if (targetFolder.type !== FolderType.PDF) {
+      throw new AppError(400, "Incompatibilidad de tipos: Los PDFs solo pueden moverse a carpetas de tipo 'PDF'", 'INVALID_FOLDER_TYPE');
+    }
+
+    if (requester.role === Role.ADMIN || targetFolder.userId === requester.id) {
+      // Propietario o ADMIN tienen acceso de edición directo
+    } else if (targetFolder.isPrivate && requester.role !== Role.COLLABORATOR) {
+      throw new AppError(403, 'No tienes permiso para mover archivos a esta carpeta privada', 'FORBIDDEN');
+    } else {
+      await this.sharesService.assertFolderAccess(folderId, requester, FolderPermission.EDIT);
+    }
+
+    const updated = await this.repo.movePdfToFolder(pdfId, folderId);
+    return {
+      id: updated.id,
+      shortCode: updated.shortCode,
+      folderId: updated.folderId,
+      originalName: updated.originalName,
+      pageCount: updated.pageCount,
+      sizeBytes: updated.sizeBytes,
+    };
+  }
 }
 
 export const foldersMovementService = new FoldersMovementService();
