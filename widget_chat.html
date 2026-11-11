@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demostración: Widget de Chat IA Público</title>
+  <!-- Chart.js para renderizar gráficas interactivas si la IA devuelve chartData -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 2rem; min-height: 100vh; }
+
+    /* Página Web Simulada de Fondo */
+    .mock-site { max-width: 900px; margin: 0 auto; }
+    .header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+    .hero { background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--border); border-radius: 12px; padding: 2.5rem; text-align: center; margin-bottom: 2rem; }
+    .hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .hero p { color: var(--text-muted); font-size: 1.1rem; }
+
+    .settings-bar {
+      background: #1e293b; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; font-size: 0.9rem;
+    }
+    .settings-bar input {
+      background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; outline: none; width: 280px;
+    }
+
+    /* WIDGET FLOTANTE EN ESQUINA INFERIOR DERECHA */
+    .chat-widget { position: fixed; bottom: 25px; right: 25px; z-index: 9999; }
+
+    .chat-bubble-btn {
+      background: var(--primary); color: #fff; border: none; padding: 14px 22px; border-radius: 50px; cursor: pointer; font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); transition: transform 0.2s, background 0.2s;
+    }
+    .chat-bubble-btn:hover { background: var(--primary-hover); transform: scale(1.05); }
+
+    .chat-window {
+      display: none; width: 380px; height: 550px; background: #1e293b; border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); flex-direction: column; overflow: hidden; margin-top: 12px; animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+    .chat-header {
+      background: #0f172a; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+    }
+    .chat-header h3 { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .chat-header span.close-btn { cursor: pointer; color: var(--text-muted); font-size: 1.25rem; }
+    .chat-header span.close-btn:hover { color: #fff; }
+
+    /* Contenedor de Mensajes */
+    .chat-body { flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+    .msg { max-width: 85%; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.875rem; line-height: 1.4; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 2px; }
+    .msg.ia { align-self: flex-start; background: #334155; color: var(--text); border-bottom-left-radius: 2px; }
+    
+    .msg-sources { margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid #475569; padding-top: 0.4rem; }
+    .msg-sources a { color: #60a5fa; text-decoration: none; }
+    .msg-sources a:hover { text-decoration: underline; }
+
+    /* Gráfica dentro de la burbuja */
+    .chart-container { background: #0f172a; border-radius: 8px; padding: 0.5rem; margin-top: 0.5rem; height: 180px; }
+
+    /* Sugerencias Rápidas */
+    .suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 1rem 0.5rem 1rem; }
+    .chip {
+      background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; padding: 5px 10px; border-radius: 20px; cursor: pointer; transition: all 0.2s;
+    }
+    .chip:hover { border-color: var(--primary); color: #fff; background: #1e293b; }
+
+    /* Barra de Entrada */
+    .chat-footer {
+      background: #0f172a; border-top: 1px solid var(--border); padding: 0.75rem 1rem; display: flex; gap: 8px;
+    }
+    .chat-footer input {
+      flex: 1; background: #1e293b; border: 1px solid var(--border); color: #fff; padding: 0.6rem 0.85rem; border-radius: 8px; outline: none; font-size: 0.875rem;
+    }
+    .chat-footer input:focus { border-color: var(--primary); }
+    .chat-footer button {
+      background: var(--primary); color: #fff; border: none; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Página Web de Demostración -->
+  <div class="mock-site">
+    <div class="header">
+      <h2>🌐 Mi Sitio Web Público (Comercio / Catálogo)</h2>
+      <span style="color:var(--text-muted)">Demo de Widget Integrado</span>
+    </div>
+
+    <div class="settings-bar">
+      <span>⚙️ <strong>Servidor Backend:</strong></span>
+      <input type="text" id="apiUrlInput" value="http://localhost:3000">
+      <span style="font-size:0.8rem; color:var(--text-muted)">* Sin tokens secretos: usa el endpoint público <code>POST /api/v1/public/chat/ask</code></span>
+    </div>
+
+    <div class="hero">
+      <h1>Bienvenido a Nuestra Plataforma</h1>
+      <p>Este sitio web simula cualquier página externa (WordPress, React, tienda online, etc.).</p>
+      <p style="margin-top:1rem; font-size:0.9rem; color:#60a5fa;">
+        👉 Mira en la esquina inferior derecha: haz clic en el botón azul para abrir el asistente inteligente.
+      </p>
+    </div>
+  </div>
+
+  <!-- WIDGET FLOTANTE -->
+  <div class="chat-widget">
+    <button class="chat-bubble-btn" onclick="toggleWidget()">
+      💬 Asistente IA
+    </button>
+
+    <div id="chatWindow" class="chat-window">
+      <div class="chat-header">
+        <h3>🤖 Asistente Virtual</h3>
+        <span class="close-btn" onclick="toggleWidget()">✖</span>
+      </div>
+
+      <div id="chatBody" class="chat-body">
+        <div class="msg ia">
+          ¡Hola! Soy tu asistente virtual. Puedo ayudarte con precios, libros, cartas y datos publicados en nuestro catálogo. ¿En qué te puedo ayudar hoy?
+        </div>
+      </div>
+
+      <!-- Preguntas sugeridas dinámicas -->
+      <div id="suggestionsBox" class="suggestions"></div>
+
+      <div class="chat-footer">
+        <input type="text" id="userInput" placeholder="Escribe tu consulta..." onkeypress="if(event.key==='Enter') enviarConsulta()">
+        <button id="sendBtn" onclick="enviarConsulta()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let widgetAbierto = false;
+
+    function getApiUrl() {
+      return document.getElementById('apiUrlInput').value.replace(/\/$/, '');
+    }
+
+    function toggleWidget() {
+      const win = document.getElementById('chatWindow');
+      widgetAbierto = !widgetAbierto;
+      win.style.display = widgetAbierto ? 'flex' : 'none';
+      if (widgetAbierto) {
+        document.getElementById('userInput').focus();
+        cargarSugerencias();
+      }
+    }
+
+    // 1. Cargar sugerencias dinámicas desde el backend
+    async function cargarSugerencias() {
+      const box = document.getElementById('suggestionsBox');
+      if (box.children.length > 0) return; // ya cargadas
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/public/chat/suggestions`);
+        if (res.ok) {
+          const { suggestions } = await res.json();
+          box.innerHTML = '';
+          suggestions.slice(0, 3).forEach(s => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.innerText = s;
+            chip.onclick = () => {
+              document.getElementById('userInput').value = s;
+              enviarConsulta();
+            };
+            box.appendChild(chip);
+          });
+        }
+      } catch {}
+    }
+
+    // 2. Enviar pregunta al endpoint público
+    async function enviarConsulta() {
+      const input = document.getElementById('userInput');
+      const question = input.value.trim();
+      if (!question) return;
+
+      const body = document.getElementById('chatBody');
+      
+      // Mensaje del usuario
+      const userBubble = document.createElement('div');
+      userBubble.className = 'msg user';
+      userBubble.innerText = question;
+      body.appendChild(userBubble);
+      input.value = '';
+      body.scrollTop = body.scrollHeight;
+
+      // Mensaje de carga
+      const loadingBubble = document.createElement('div');
+      loadingBubble.className = 'msg ia';
+      loadingBubble.id = 'loadingMsg';
+      loadingBubble.innerText = 'Pensando y consultando catálogo...';
+      body.appendChild(loadingBubble);
+      body.scrollTop = body.scrollHeight;
+
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/public/chat/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+        const data = await res.json();
+        loadingBubble.remove();
+
+        const iaBubble = document.createElement('div');
+        iaBubble.className = 'msg ia';
+        iaBubble.innerText = data.answer || 'No se obtuvo respuesta.';
+
+        // Si incluye fuentes
+        if (data.sources && data.sources.length > 0) {
+          const sourcesDiv = document.createElement('div');
+          sourcesDiv.className = 'msg-sources';
+          sourcesDiv.innerHTML = '📄 <strong>Fuentes:</strong> ' + data.sources.map(s => {
+            const url = s.type === 'PDF' ? `${getApiUrl()}/p/${s.shortCode}` : `${getApiUrl()}/t/${s.shortCode}`;
+            return `<a href="${url}" target="_blank">${s.name || s.shortCode}</a>`;
+          }).join(', ');
+          iaBubble.appendChild(sourcesDiv);
+        }
+
+        // Si incluye datos de gráfica (chartData)
+        if (data.chartData && data.chartData.labels && data.chartData.labels.length > 0) {
+          const chartBox = document.createElement('div');
+          chartBox.className = 'chart-container';
+          const canvas = document.createElement('canvas');
+          chartBox.appendChild(canvas);
+          iaBubble.appendChild(chartBox);
+
+          // Renderizar con Chart.js
+          setTimeout(() => {
+            new Chart(canvas, {
+              type: 'bar',
+              data: {
+                labels: data.chartData.labels,
+                datasets: [{
+                  label: 'Valores',
+                  data: data.chartData.values,
+                  backgroundColor: '#3b82f6',
+                  borderRadius: 4
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: '#94a3b8', font: { size: 9 } } },
+                  y: { ticks: { color: '#94a3b8', font: { size: 9 } } }
+                }
+              }
+            });
+          }, 50);
+        }
+
+        body.appendChild(iaBubble);
+        body.scrollTop = body.scrollHeight;
+
+      } catch (err) {
+        loadingBubble.remove();
+        const errBubble = document.createElement('div');
+        errBubble.className = 'msg ia';
+        errBubble.style.color = '#f87171';
+        errBubble.innerText = '❌ Error al comunicarse con el backend. Verifica que esté encendido en ' + getApiUrl();
+        body.appendChild(errBubble);
+      }
+    }
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carga Rápida de Libros - Librería Digital</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --error: #ef4444;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 2rem 1rem; min-height: 100vh; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .card { background-color: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    p.subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    label { font-size: 0.875rem; font-weight: 600; color: var(--text); }
+    input[type="text"], input[type="number"], select {
+      background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 0.65rem 0.85rem; border-radius: 6px; font-size: 0.95rem; width: 100%; outline: none; transition: border-color 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--primary); }
+
+    .file-dropzone {
+      border: 2px dashed var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; background: #0f172a; cursor: pointer; transition: all 0.2s; position: relative;
+    }
+    .file-dropzone:hover { border-color: var(--primary); background: #132238; }
+    .file-dropzone input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .file-label { font-size: 0.85rem; color: var(--text-muted); }
+    .file-name { font-weight: 600; color: var(--primary); margin-top: 0.35rem; font-size: 0.85rem; word-break: break-all; }
+
+    .btn {
+      background-color: var(--primary); color: #fff; border: none; padding: 0.85rem 1.5rem; font-size: 1rem; font-weight: 600; border-radius: 6px; cursor: pointer; width: 100%; transition: background-color 0.2s; display: flex; justify-content: center; align-items: center; gap: 0.5rem;
+    }
+    .btn:hover { background-color: var(--primary-hover); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Barra de Progreso */
+    .progress-box { display: none; margin-top: 1.25rem; background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+    .progress-bar-bg { background: #334155; border-radius: 4px; height: 8px; width: 100%; overflow: hidden; margin-top: 0.5rem; }
+    .progress-bar-fill { background: var(--primary); height: 100%; width: 0%; transition: width 0.3s ease; }
+    .status-text { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+    /* Alertas */
+    .alert { padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.875rem; margin-top: 1rem; display: none; }
+    .alert-success { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); color: #34d399; }
+    .alert-error { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--error); color: #f87171; }
+
+    details { background: #0f172a; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; }
+    summary { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; outline: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="card">
+    <h1>📚 Librería Digital - Carga de Libros</h1>
+    <p class="subtitle">Sube en un solo clic la portada, el documento PDF y la ficha al catálogo.</p>
+
+    <!-- Configuración Rápida (Opcional si cambias de servidor) -->
+    <details>
+      <summary>⚙️ Configuración del Servidor y Carpetas</summary>
+      <div style="margin-top: 1rem;">
+        <div class="form-group">
+          <label>URL del Backend:</label>
+          <input type="text" id="apiUrl" value="http://localhost:3000">
+        </div>
+        <div class="form-group">
+          <label>Token JWT del Colaborador o X-API-Key:</label>
+          <input type="text" id="authToken" placeholder="Bearer eyJhbGci... o API Key">
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>ID Carpeta Portadas (IMAGE):</label>
+            <input type="text" id="folderImgId" placeholder="UUID de la carpeta de imágenes">
+          </div>
+          <div class="form-group">
+            <label>ID Carpeta Libros (PDF):</label>
+            <input type="text" id="folderPdfId" placeholder="UUID de la carpeta de PDFs">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Slug Formulario Catálogo (Tabla Abierta):</label>
+          <input type="text" id="formSlug" value="catalogo-libros">
+        </div>
+        <button type="button" class="btn" style="background:#475569; font-size:0.85rem; padding:0.5rem;" onclick="autodetectarCarpetas()">
+          🔍 Autodetectar Carpetas Automáticamente (/api/v1/folders/tree)
+        </button>
+      </div>
+    </details>
+
+    <!-- FORMULARIO DE CARGA DIRECTA -->
+    <form id="bookForm" onsubmit="subirLibroCompleto(event)">
+      <div class="form-group">
+        <label>Título del Libro *</label>
+        <input type="text" id="titulo" placeholder="Ej: Cien Años de Soledad" required>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Autor / Escritor *</label>
+          <input type="text" id="autor" placeholder="Ej: Gabriel García Márquez" required>
+        </div>
+        <div class="form-group">
+          <label>Número de Páginas *</label>
+          <input type="number" id="paginas" min="1" placeholder="Ej: 417" required>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- ZONA PORTADA -->
+        <div class="form-group">
+          <label>Portada (Imagen JPG/PNG) *</label>
+          <div class="file-dropzone">
+            <input type="file" id="filePortada" accept="image/*" required onchange="actualizarNombreArchivo(this, 'labelPortada')">
+            <div class="file-label">🖼️ Clic o arrastra la portada</div>
+            <div id="labelPortada" class="file-name"></div>
+          </div>
+        </div>
+
+        <!-- ZONA LIBRO PDF -->
+        <div class="form-group">
+          <label>Documento Completo (PDF) *</label>
+          <div class="file-dropzone">
+            <input type="file" id="filePdf" accept="application/pdf" required onchange="actualizarNombreArchivo(this, 'labelPdf')">
+            <div class="file-label">📄 Clic o arrastra el PDF</div>
+            <div id="labelPdf" class="file-name"></div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" id="btnSubmit" class="btn" style="margin-top: 1rem;">
+        🚀 Subir Todo de Golpe
+      </button>
+
+      <!-- Barra de Progreso y Estado -->
+      <div id="progressBox" class="progress-box">
+        <div id="statusText" class="status-text">Iniciando proceso...</div>
+        <div class="progress-bar-bg">
+          <div id="progressBar" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Alertas -->
+      <div id="alertSuccess" class="alert alert-success"></div>
+      <div id="alertError" class="alert alert-error"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Guardar configuración localmente en el navegador
+  window.addEventListener('load', () => {
+    ['apiUrl', 'authToken', 'folderImgId', 'folderPdfId', 'formSlug'].forEach(id => {
+      const saved = localStorage.getItem('lib_' + id);
+      if (saved) document.getElementById(id).value = saved;
+      document.getElementById(id).addEventListener('input', (e) => {
+        localStorage.setItem('lib_' + id, e.target.value.trim());
+      });
+    });
+  });
+
+  function actualizarNombreArchivo(input, labelId) {
+    const label = document.getElementById(labelId);
+    if (input.files && input.files[0]) {
+      label.innerText = `✔️ ${input.files[0].name} (${(input.files[0].size / 1024 / 1024).toFixed(2)} MB)`;
+    } else {
+      label.innerText = '';
+    }
+  }
+
+  function setStatus(text, percent) {
+    document.getElementById('progressBox').style.display = 'block';
+    document.getElementById('statusText').innerText = text;
+    document.getElementById('progressBar').style.width = percent + '%';
+  }
+
+  function ocultarAlertas() {
+    document.getElementById('alertSuccess').style.display = 'none';
+    document.getElementById('alertError').style.display = 'none';
+  }
+
+  function getHeaders() {
+    const token = document.getElementById('authToken').value.trim();
+    if (!token) return {};
+    return token.startsWith('Bearer ') || token.length > 60 
+      ? { 'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}` }
+      : { 'X-API-Key': token };
+  }
+
+  // 1. Opcional: Autodetectar carpetas desde GET /api/v1/folders/tree
+  async function autodetectarCarpetas() {
+    const apiUrl = document.getElementById('apiUrl').value.replace(/\/$/, '');
+    ocultarAlertas();
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/folders/tree`, { headers: getHeaders() });
+      if (!res.ok) throw new Error('No se pudo leer el árbol de carpetas. Verifica tu token.');
+      const data = await res.json();
+      
+      // Buscar primera carpeta de imagen y de pdf en el árbol
+      let imgId = null, pdfId = null;
+      function buscar(nodes) {
+        for (const n of nodes) {
+          if (n.type === 'IMAGE' && !imgId) imgId = n.id;
+          if (n.type === 'PDF' && !pdfId) pdfId = n.id;
+          if (n.children && n.children.length > 0) buscar(n.children);
+        }
+      }
+      buscar(data.tree || []);
+
+      if (imgId) {
+        document.getElementById('folderImgId').value = imgId;
+        localStorage.setItem('lib_folderImgId', imgId);
+      }
+      if (pdfId) {
+        document.getElementById('folderPdfId').value = pdfId;
+        localStorage.setItem('lib_folderPdfId', pdfId);
+      }
+      alert(`✅ Carpetas detectadas:\nPortadas: ${imgId || 'No encontrada'}\nLibros: ${pdfId || 'No encontrada'}`);
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  }
+
+  // 2. FUNCIÓN PRINCIPAL: SUBIR TODO DE GOLPE
+  async function subirLibroCompleto(e) {
+    e.preventDefault();
+    ocultarAlertas();
+
+    const apiUrl = document.getElementById('apiUrl').value.replace(/\/$/, '');
+    const folderImgId = document.getElementById('folderImgId').value.trim();
+    const folderPdfId = document.getElementById('folderPdfId').value.trim();
+    const formSlug = document.getElementById('formSlug').value.trim();
+
+    const filePortada = document.getElementById('filePortada').files[0];
+    const filePdf = document.getElementById('filePdf').files[0];
+
+    const titulo = document.getElementById('titulo').value.trim();
+    const autor = document.getElementById('autor').value.trim();
+    const paginas = parseInt(document.getElementById('paginas').value, 10);
+
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+
+    try {
+      // PASO 1: SUBIR PORTADA
+      setStatus('⏳ [1/3] Subiendo portada a la carpeta de imágenes...', 25);
+      const formFoto = new FormData();
+      formFoto.append('file', filePortada);
+      if (folderImgId) formFoto.append('folderId', folderImgId);
+
+      const resFoto = await fetch(`${apiUrl}/api/v1/images`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: formFoto
+      });
+      if (!resFoto.ok) {
+        const err = await resFoto.json();
+        throw new Error(`Error en portada: ${err.detail || err.message || resFoto.statusText}`);
+      }
+      const dataFoto = await resFoto.json();
+      const portadaCode = dataFoto.image.shortCode;
+
+      // PASO 2: SUBIR LIBRO PDF
+      setStatus('⏳ [2/3] Subiendo documento PDF del libro...', 60);
+      const formDoc = new FormData();
+      formDoc.append('file', filePdf);
+      if (folderPdfId) formDoc.append('folderId', folderPdfId);
+
+      const resDoc = await fetch(`${apiUrl}/api/v1/pdfs`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: formDoc
+      });
+      if (!resDoc.ok) {
+        const err = await resDoc.json();
+        throw new Error(`Error en PDF: ${err.detail || err.message || resDoc.statusText}`);
+      }
+      const dataDoc = await resDoc.json();
+      const libroCode = dataDoc.pdf.shortCode;
+
+      // PASO 3: REGISTRAR EN TABLA ABIERTA (FORMULARIO)
+      setStatus('⏳ [3/3] Registrando libro en el catálogo con sus códigos vinculados...', 90);
+      const resEntry = await fetch(`${apiUrl}/api/v1/forms/${formSlug}/entries`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getHeaders()
+        },
+        body: JSON.stringify({
+          titulo,
+          autor,
+          paginas,
+          portada_code: portadaCode,
+          libro_code: libroCode
+        })
+      });
+
+      if (!resEntry.ok) {
+        const err = await resEntry.json();
+        throw new Error(`Error en catálogo: ${err.detail || err.message || resEntry.statusText}`);
+      }
+
+      setStatus('🎉 ¡Completado exitosamente!', 100);
+
+      // Mostrar Éxito y Links directos
+      const successBox = document.getElementById('alertSuccess');
+      successBox.innerHTML = `
+        <strong>✅ ¡Libro registrado con éxito en el catálogo!</strong><br>
+        • Portada: <a href="${apiUrl}/i/${portadaCode}" target="_blank" style="color:#6ee7b7">Ver Portada (${portadaCode})</a><br>
+        • Documento: <a href="${apiUrl}/p/${libroCode}" target="_blank" style="color:#6ee7b7">Leer Libro PDF (${libroCode})</a>
+      `;
+      successBox.style.display = 'block';
+
+      // Limpiar inputs para el siguiente libro
+      document.getElementById('titulo').value = '';
+      document.getElementById('autor').value = '';
+      document.getElementById('paginas').value = '';
+      document.getElementById('filePortada').value = '';
+      document.getElementById('filePdf').value = '';
+      document.getElementById('labelPortada').innerText = '';
+      document.getElementById('labelPdf').innerText = '';
+
+    } catch (err) {
+      const errBox = document.getElementById('alertError');
+      errBox.innerText = `❌ ${err.message}`;
+      errBox.style.display = 'block';
+      setStatus('Error en el proceso', 0);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
+

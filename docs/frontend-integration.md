@@ -470,43 +470,125 @@ const data = await response.json();
 // data: { answer, foundInSystem, sources, chartData: { labels, values, percentages } }
 ```
 
-### 14.3. Ejemplo de Widget Web Público para Sitios Externos
-Para incrustar un asistente analítico en páginas web externas sin requerir login:
+### 14.3. Ejemplo de Widget Web Público para Sitios Externos (React, WordPress y Vanilla JS)
+Para incrustar un asistente analítico en páginas web externas sin requerir login ni exponer credenciales:
+
+#### A. En HTML puro o WordPress (Widget Flotante Listo para Pegar)
+Se puede insertar directamente antes de la etiqueta `</body>` en WordPress (mediante bloques de HTML personalizado o plugins de scripts en pie de página):
+
 ```html
-<div id="analytics-widget">
-  <div id="chat-messages"></div>
-  <div id="chat-suggestions"></div>
-  <input id="chat-input" placeholder="Pregunta sobre las tablas públicas..." />
-  <button id="chat-btn">Consultar</button>
+<!-- Widget Flotante de Chat con IA -->
+<div id="chat-container" style="position:fixed; bottom:20px; right:20px; z-index:9999;">
+  <button id="chat-btn" onclick="toggleChat()" style="background:#3b82f6; color:#fff; border:none; padding:12px 18px; border-radius:50px; cursor:pointer; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+    💬 Preguntar a la IA
+  </button>
+  
+  <div id="chat-box" style="display:none; width:340px; height:460px; background:#1e293b; color:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.4); flex-direction:column; overflow:hidden; margin-top:10px;">
+    <div style="background:#0f172a; padding:12px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
+      <span>Asistente Virtual</span>
+      <span onclick="toggleChat()" style="cursor:pointer; font-size:18px;">✖</span>
+    </div>
+    <div id="chat-messages" style="flex:1; padding:12px; overflow-y:auto; font-size:14px; display:flex; flex-direction:column; gap:8px;"></div>
+    <div style="padding:10px; background:#0f172a; display:flex; gap:6px;">
+      <input type="text" id="chat-input" placeholder="Escribe tu consulta..." style="flex:1; padding:8px; border-radius:6px; border:none; outline:none; background:#1e293b; color:#fff;" onkeypress="if(event.key==='Enter') enviarPregunta()">
+      <button onclick="enviarPregunta()" style="background:#3b82f6; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">➤</button>
+    </div>
+  </div>
 </div>
 
 <script>
-  const API_BASE = 'https://tu-backend.com';
+  const API_URL = "https://tu-backend.com"; // URL pública de tu API
 
-  // 1. Cargar sugerencias automáticas
-  fetch(`${API_BASE}/api/v1/public/chat/suggestions`)
-    .then(r => r.json())
-    .then(({ suggestions }) => {
-      const container = document.getElementById('chat-suggestions');
-      suggestions.forEach(q => {
-        const btn = document.createElement('button');
-        btn.innerText = q;
-        btn.onclick = () => askQuestion(q);
-        container.appendChild(btn);
+  function toggleChat() {
+    const box = document.getElementById('chat-box');
+    box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+  }
+
+  async function enviarPregunta() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    const container = document.getElementById('chat-messages');
+    container.innerHTML += `<div style="align-self:flex-end; background:#2563eb; padding:8px 12px; border-radius:8px; max-width:80%; word-break:break-word;">${msg}</div>`;
+    input.value = '';
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/public/chat/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: msg })
       });
-    });
-
-  // 2. Enviar consulta al widget público
-  async function askQuestion(question) {
-    const res = await fetch(`${API_BASE}/api/v1/public/chat/ask`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question })
-    });
-    const result = await res.json();
-    console.log(result.answer, result.chartData);
+      const data = await res.json();
+      
+      container.innerHTML += `<div style="align-self:flex-start; background:#334155; padding:8px 12px; border-radius:8px; max-width:80%; word-break:break-word;">${data.answer}</div>`;
+      container.scrollTop = container.scrollHeight;
+    } catch {
+      container.innerHTML += `<div style="color:#f87171; font-size:12px;">Error al conectar con la IA.</div>`;
+    }
   }
 </script>
+```
+
+#### B. En React / Next.js (Componente Modular)
+```tsx
+import React, { useState } from 'react';
+
+interface ChatMessage {
+  sender: 'user' | 'ia';
+  text: string;
+}
+
+export const PublicChatWidget: React.FC<{ apiUrl: string }> = ({ apiUrl }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    const userText = input.trim();
+    setMessages((prev) => [...prev, { sender: 'user', text: userText }]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/public/chat/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userText }),
+      });
+      const data = await res.json();
+      setMessages((prev) => [...prev, { sender: 'ia', text: data.answer }]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { sender: 'ia', text: 'Error al comunicarse con el asistente de IA.' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-box">
+      <div className="messages">
+        {messages.map((m, i) => (
+          <div key={i} className={`bubble ${m.sender}`}>{m.text}</div>
+        ))}
+        {loading && <div className="bubble ia">Consultando datos...</div>}
+      </div>
+      <div className="input-row">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Pregunta sobre nuestro catálogo..."
+        />
+        <button onClick={handleSend} disabled={loading}>Enviar</button>
+      </div>
+    </div>
+  );
+};
 ```
 
 ### 14.4. Interruptor de Publicación para IA (`ai_manager` y Membresías de Carpetas)
@@ -1038,6 +1120,14 @@ const res = await fetch(`${API_URL}/api/v1/folders/tree`, {
 });
 const { tree, total } = await res.json();
 ```
+
+---
+
+## 21. 📚 Guías y Casos de Uso Avanzados
+Para ver la implementación completa y el código de integración de un catálogo multimedia en 1 solo clic (portadas + PDFs + tablas abiertas), consulta:
+- **[Guía de Integración: Librería Digital y Carga Multimedia Compuesta](file:///c:/Users/Windows%2011/Documents/pro-n/monolith-backend/docs/guia-libreria-digital-flujo-compuesto.md)**
+- **[Prototipo Web Autónomo](file:///c:/Users/Windows%2011/Documents/pro-n/monolith-backend/formulario_libro.html)**
+
 
 
 
