@@ -10,6 +10,7 @@ import {
   updateFolderRouteSchema,
   getFolderByIdRouteSchema,
   deleteFolderRouteSchema,
+  getFolderTreeRouteSchema,
   moveImageToFolderRouteSchema,
   moveTableToFolderRouteSchema,
 } from './folders.schemas.js';
@@ -26,16 +27,32 @@ export const foldersRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const requester = await extractRequester(request);
       const query = (request.query as any) || {};
-      const { type, search } = query as { type?: FolderType; search?: string };
+      const { type, search, parentId } = query as { type?: FolderType; search?: string; parentId?: string };
       const page = query.page !== undefined ? parseInt(String(query.page), 10) : undefined;
       const limit = query.limit !== undefined ? parseInt(String(query.limit), 10) : undefined;
 
       const result = await foldersService.listFolders(requester, {
         type,
         search,
+        parentId: parentId || undefined,
         page: page !== undefined && !isNaN(page) ? page : undefined,
         limit: limit !== undefined && !isNaN(limit) ? limit : undefined,
       });
+      return reply.status(200).send(result);
+    }
+  );
+
+  // GET /api/v1/folders/tree: Árbol jerárquico de carpetas
+  fastify.get(
+    '/api/v1/folders/tree',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: getFolderTreeRouteSchema,
+    },
+    async (request, reply) => {
+      const requester = await extractRequester(request);
+      const result = await foldersService.getFolderTree(requester);
       return reply.status(200).send(result);
     }
   );

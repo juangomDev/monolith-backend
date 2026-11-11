@@ -61,6 +61,9 @@ export class PdfsService {
     } else if (targetFolderId && requester) {
       const folder = await this.foldersRepo.findFolderById(targetFolderId);
       if (!folder) throw new AppError(404, 'Carpeta destino no encontrada', 'FOLDER_NOT_FOUND');
+      if (folder.type === FolderType.CONTAINER) {
+        throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
+      }
       if (folder.type !== FolderType.PDF) {
         throw new AppError(400, "Incompatibilidad: los PDFs solo pueden subirse a carpetas de tipo 'PDF'", 'INVALID_FOLDER_TYPE');
       }

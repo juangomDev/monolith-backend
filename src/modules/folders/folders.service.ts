@@ -4,6 +4,7 @@ import { FolderType, Role, FolderPermission, type Folder } from '@prisma/client'
 import { foldersRepository, type FoldersRepository, type FolderWithDetails } from './folders.repository.js';
 import { foldersSharesService, type FoldersSharesService } from './folders.shares.service.js';
 import { foldersMovementService, FoldersMovementService } from './folders.movement.service.js';
+import { FoldersHierarchyService } from './folders.hierarchy.service.js';
 import { AppError } from '../../shared/errors.js';
 import {
   UUID_REGEX,
@@ -26,13 +27,16 @@ export {
 
 export class FoldersService {
   private readonly movementService: FoldersMovementService;
+  private readonly hierarchyService: FoldersHierarchyService;
 
   constructor(
     private readonly repo: FoldersRepository = foldersRepository,
     private readonly sharesService: FoldersSharesService = foldersSharesService,
-    movementService?: FoldersMovementService
+    movementService?: FoldersMovementService,
+    hierarchyService?: FoldersHierarchyService
   ) {
     this.movementService = movementService ?? new FoldersMovementService(this.repo, this.sharesService);
+    this.hierarchyService = hierarchyService ?? new FoldersHierarchyService(this.repo, this.sharesService);
   }
 
   private formatFolder(
@@ -55,6 +59,8 @@ export class FoldersService {
       type: folder.type,
       color: folder.color ?? null,
       isPrivate: folder.isPrivate,
+      isSystem: (folder as any).isSystem ?? false,
+      parentId: (folder as any).parentId ?? null,
       itemCount: folder.type === FolderType.IMAGE ? imagesCount : tablesCount,
       userId: folder.userId,
       owner: folder.user ? { id: folder.user.id, username: folder.user.username } : undefined,
@@ -64,10 +70,6 @@ export class FoldersService {
   }
 
   async createFolder(rawInput: unknown, requester: RequesterContext): Promise<FormattedFolder> {
-    if (requester.role === Role.COLLABORATOR) {
-      throw new AppError(403, 'Los colaboradores no tienen permiso para crear carpetas en el sistema', 'FORBIDDEN');
-    }
-
     const parseResult = createFolderSchema.safeParse(rawInput);
     if (!parseResult.success) {
       throw new AppError(
@@ -78,13 +80,16 @@ export class FoldersService {
       );
     }
 
-    const { name, type, color, isPrivate } = parseResult.data;
+    const { name, type, color, isPrivate, parentId } = parseResult.data;
+    const { targetUserId } = await this.hierarchyService.validateAndResolveHierarchy(parentId, type, requester);
+
     const created = await this.repo.createFolder({
       name,
       type,
       color: color ?? undefined,
       isPrivate: isPrivate ?? false,
-      userId: requester.id,
+      parentId: parentId ?? null,
+      userId: targetUserId,
     });
 
     return {
@@ -93,6 +98,8 @@ export class FoldersService {
       type: created.type,
       color: created.color ?? null,
       isPrivate: created.isPrivate,
+      isSystem: (created as any).isSystem ?? false,
+      parentId: (created as any).parentId ?? null,
       itemCount: 0,
       userId: created.userId,
       myPermission: 'EDIT',
@@ -128,6 +135,10 @@ export class FoldersService {
       throw new AppError(400, 'No se permite cambiar el nombre de la carpeta General del sistema', 'BAD_REQUEST');
     }
 
+    if ((folder as any).isSystem) {
+      throw new AppError(400, 'No se permite cambiar el nombre o modificar la carpeta de sistema', 'CANNOT_MODIFY_SYSTEM_FOLDER');
+    }
+
     const updated = await this.repo.updateFolder(id, parseResult.data);
     return this.formatFolder(updated, requester);
   }
@@ -138,6 +149,7 @@ export class FoldersService {
   ) {
     const isAdmin = requester.role === Role.ADMIN;
     let type: FolderType | undefined;
+    let parentId: string | null | undefined;
     let search: string | undefined;
     let page: number | undefined;
     let limit: number | undefined;
@@ -146,6 +158,7 @@ export class FoldersService {
       type = optionsOrType;
     } else if (typeof optionsOrType === 'object' && optionsOrType !== null) {
       type = optionsOrType.type;
+      parentId = optionsOrType.parentId;
       search = optionsOrType.search;
       page = optionsOrType.page && optionsOrType.page > 0 ? optionsOrType.page : undefined;
       limit = optionsOrType.limit && optionsOrType.limit > 0 ? optionsOrType.limit : undefined;
@@ -153,6 +166,7 @@ export class FoldersService {
 
     const filter = {
       type,
+      parentId,
       search,
       page,
       limit,
@@ -222,6 +236,10 @@ export class FoldersService {
       throw new AppError(400, 'No se permite eliminar la carpeta General del sistema', 'BAD_REQUEST');
     }
 
+    if ((folder as any).isSystem) {
+      throw new AppError(400, 'No se permite eliminar carpetas de sistema', 'CANNOT_MODIFY_SYSTEM_FOLDER');
+    }
+
     if (requester.role !== Role.ADMIN && folder.userId !== requester.id) {
       throw new AppError(403, 'No tienes permiso para eliminar esta carpeta', 'FORBIDDEN');
     }
@@ -247,6 +265,14 @@ export class FoldersService {
     return {
       message: 'Carpeta y archivos asociados eliminados exitosamente',
       deletedCount: deleteResult.storagePaths.length,
+    };
+  }
+
+  async getFolderTree(requester: RequesterContext) {
+    const listResult = await this.listFolders(requester, { limit: 1000 });
+    return {
+      tree: this.hierarchyService.buildTree(listResult.folders),
+      total: listResult.folders.length,
     };
   }
 

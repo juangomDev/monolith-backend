@@ -29,6 +29,7 @@
 | **Fase 17** | Módulo de Formularios Customizables, Tablas Abiertas y Resolución Única (Write-Once) | ✅ Completado |
 | **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ✅ Completado |
 | **Fase 19** | Sistema de Eventos Desacoplados y Notificaciones en Vivo (Tablas Abiertas, Bandeja In-App y SSE) | ✅ Completado |
+| **Fase 20** | Arquitectura Jerárquica Departamental (3 Niveles) y Bóveda Compartida (`shared`) | ✅ Completado |
 
 ---
 
@@ -998,6 +999,69 @@
   - [x] `19.5.1` Pruebas unitarias de `event-bus.ts`, `notifications.service.test.ts` y pruebas integradas de rutas `notifications.routes.test.ts`.
   - [x] `19.5.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y exportar `openapi.json` con `npm run openapi:export`.
   - [x] `19.5.3` Verificar 100% de tests pasando (383+ tests), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 🏢 FASE 20: Arquitectura Jerárquica Departamental (3 Niveles) y Bóveda Compartida (`shared`)
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Jerarquía Estricta de 3 Niveles:**
+>    - Nivel 0: Raíz Global (Supervisión ADMIN).
+>    - Nivel 1: Carpeta Departamental de Manager (creada automáticamente con su `username`, `type: CONTAINER`, 0 archivos directos).
+>    - Niveles 2 y 3: Carpetas y Subcarpetas de Proyectos especializadas (`IMAGE`, `TABLE`, `PDF`). Bloqueo de creación en Nivel 4 con `400 MAX_FOLDER_DEPTH_EXCEEDED`.
+>
+> 2. **Prohibición de Carga Directa en Nivel 1:**
+>    - Si se intenta subir un archivo a una carpeta de tipo `CONTAINER`, rechazar con `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER`. El usuario debe crear/seleccionar una subcarpeta especializada.
+>
+> 3. **Control Supremo del Manager Ancestral:**
+>    - El Manager conserva automáticamente el 100% de los permisos (edición, renombrado, eliminación, reasignación) sobre todas las subcarpetas creadas por sus colaboradores dentro de su árbol.
+>
+> 4. **Bóveda Corporativa Compartida (`shared`):**
+>    - Carpeta de sistema en la raíz global (`name: "shared"`, `isSystem: true`, `type: CONTAINER`).
+>    - Permiso automático `READ` para todos los usuarios autenticados sin invitaciones manuales.
+>    - Escritura/administración reservada a `ADMIN` (y Managers autorizados).
+>
+> 5. **Exploración en Árbol (`GET /api/v1/folders/tree`):**
+>    - Endpoint que devuelve la estructura jerárquica anidada accesible para el usuario (rama `shared` + árbol del Manager).
+>
+> 6. **Inmutabilidad y Límites Arquitectónicos (Reglas 1, 2 y 3):**
+>    - Preservar intactos el 100% de los 403 tests congelados.
+>    - Mantener todos los archivos estrictamente `< 300 LOC`.
+>    - Documentar en OpenAPI 3.1, `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+- [x] **20.1 Modelo de Datos en Prisma (`prisma/schema.prisma`)**
+  - [x] `20.1.1` Ampliar enum `FolderType` con `CONTAINER`.
+  - [x] `20.1.2` Agregar `parentId` (autoreferenciado a `Folder`) e `isSystem: Boolean @default(false)` en `Folder`.
+  - [x] `20.1.3` Ejecutar `npx prisma generate`.
+
+- [x] **20.2 Inicialización de Sistema y Creación Automática de Carpetas**
+  - [x] `20.2.1` En `src/config/bootstrap.ts`: Crear/verificar la carpeta raíz global `shared` (`type: CONTAINER`, `isSystem: true`, `isPrivate: false`, del admin).
+  - [x] `20.2.2` En `src/modules/users/users.service.ts`: Al crear un usuario `MANAGER`, crear atómicamente su carpeta de Nivel 1 (`name: username`, `type: CONTAINER`, `userId: user.id`, `parentId: null`).
+
+- [x] **20.3 Motor Jerárquico y Resolución de Permisos (`src/modules/folders/folders.shares.service.ts` y `folders.repository.ts`)**
+  - [x] `20.3.1` Validar permiso `READ` universal en `shared` para cualquier usuario autenticado.
+  - [x] `20.3.2` Control supremo: Si el `caller` es el Manager dueño de la carpeta raíz ancestral de Nivel 1, conceder acceso `EDIT` irrestricto sobre todas sus subcarpetas hijas.
+  - [x] `20.3.3` Control de profundidad máxima (Límite 3 niveles): Calcular profundidad del padre al crear carpeta con `parentId`; si profundidad >= 3, rechazar con `400 MAX_FOLDER_DEPTH_EXCEEDED`.
+  - [x] `20.3.4` Coherencia de tipo: Si el padre no es `CONTAINER`, el hijo debe heredar el mismo tipo especializado del padre (`parent.type === child.type`).
+
+- [x] **20.4 Bloqueo de Carga de Archivos en Carpetas Contenedoras**
+  - [x] `20.4.1` En `images.service.ts`: Bloquear con `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER` si `folder.type === 'CONTAINER'`.
+  - [x] `20.4.2` En `tables.service.ts`: Bloquear con `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER` si `folder.type === 'CONTAINER'`.
+  - [x] `20.4.3` En `pdfs.service.ts`: Bloquear con `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER` si `folder.type === 'CONTAINER'`.
+  - [x] `20.4.4` En `forms.service.ts`: Bloquear con `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER` si `folder.type === 'CONTAINER'`.
+
+- [x] **20.5 Rutas y Exploración en Árbol (`src/modules/folders/`)**
+  - [x] `20.5.1` En `folders.schemas.ts`: Esquemas OpenAPI 3.1 para `parentId`, `FolderType.CONTAINER` y endpoint de árbol.
+  - [x] `20.5.2` En `folders.routes.ts`:
+    - `GET /api/v1/folders/tree`: Retorna la jerarquía anidada visible del usuario.
+    - Soporte de `?parentId=UUID` en `GET /api/v1/folders`.
+    - Parámetro `parentId` opcional en `POST /api/v1/folders`.
+
+- [x] **20.6 Pruebas Automatizadas y Documentación Simultánea (Reglas 1, 2 y 3)**
+  - [x] `20.6.1` Pruebas unitarias de jerarquía, control supremo del manager, bloqueo de subida en `CONTAINER`, profundidad máxima y acceso universal a `shared`.
+  - [x] `20.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y exportar `openapi.json`.
+  - [x] `20.6.3` Verificar 100% de tests pasando (403+ tests), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
 
 ---
 

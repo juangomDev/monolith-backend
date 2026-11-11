@@ -1005,6 +1005,40 @@ await fetch(`${API_URL}/api/v1/forms/${formId}/subscribe`, {
 });
 ```
 
+---
+
+## 20. 🌲 Jerarquía de Carpetas en 3 Niveles y Bóveda Compartida (Fase 20)
+
+### A. Estructura Jerárquica de 3 Niveles
+El sistema organiza el almacenamiento en un árbol de máximo 3 niveles:
+1. **Nivel 1 (Raíz de Manager o Bóveda):** 
+   - Se crea automáticamente con tipo `CONTAINER` al dar de alta a un usuario `MANAGER` (ej. carpeta `juan`).
+   - Existe una carpeta raíz corporativa del sistema llamada `shared` (`isSystem: true`), pública y de solo lectura para todos los usuarios autenticados.
+   - **Regla Estricta de Ingesta:** En carpetas de tipo `CONTAINER` **NO se permite la subida directa de ningún archivo** (imágenes, tablas, pdfs o formularios). Arroja `400 CANNOT_UPLOAD_TO_CONTAINER_FOLDER`.
+2. **Nivel 2 (Subcarpetas de Proyectos/Áreas):**
+   - Creadas dentro del contenedor del Manager (`parentId: <id_carpeta_nivel_1>`).
+   - Tienen un tipo especializado asignado: `IMAGE`, `TABLE` o `PDF`.
+3. **Nivel 3 (Subproyectos o Categorías):**
+   - Subcarpetas anidadas bajo el Nivel 2 (`parentId: <id_carpeta_nivel_2>`).
+   - Deben mantener estrictamente el mismo tipo que la carpeta padre (`parent.type === child.type`).
+   - **Límite de Profundidad:** Intentar crear un Nivel 4 arroja `400 MAX_FOLDER_DEPTH_EXCEEDED`.
+
+### B. Control Supremo del Manager y Permisos de Colaboradores
+1. **Creación de Subcarpetas por Colaboradores:** Un colaborador con permiso `EDIT` sobre una carpeta compartida puede crear subcarpetas dentro de ella. La subcarpeta pertenecerá al árbol del Manager (`userId` se asigna al titular de la jerarquía).
+2. **Control Supremo del Manager:** El Manager tiene plenos poderes administrativos (`EDIT`/`ADMIN`) sobre cualquier subcarpeta o archivo creado por colaboradores en su árbol jerárquico.
+3. **Bóveda `shared`:**
+   - Visible para todos los usuarios autenticados con permiso automático `READ`.
+   - Modificación y eliminación bloqueadas para usuarios normales (`400 CANNOT_MODIFY_SYSTEM_FOLDER`).
+
+### C. Obtención del Árbol Jerárquico Completo (`GET /api/v1/folders/tree`)
+Retorna el árbol completo anidado con nodos `children`:
+```typescript
+const res = await fetch(`${API_URL}/api/v1/folders/tree`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+const { tree, total } = await res.json();
+```
+
 
 
 

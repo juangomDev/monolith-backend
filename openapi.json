@@ -7603,14 +7603,26 @@
             "schema": {
               "type": "string",
               "enum": [
+                "CONTAINER",
                 "IMAGE",
-                "TABLE"
+                "TABLE",
+                "PDF"
               ]
             },
             "in": "query",
             "name": "type",
             "required": false,
             "description": "Filtrar por tipo de contenido"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "parentId",
+            "required": false,
+            "description": "Filtrar por ID de carpeta contenedora/padre"
           },
           {
             "schema": {
@@ -7676,8 +7688,10 @@
                           "type": {
                             "type": "string",
                             "enum": [
+                              "CONTAINER",
                               "IMAGE",
-                              "TABLE"
+                              "TABLE",
+                              "PDF"
                             ]
                           },
                           "color": {
@@ -7690,6 +7704,17 @@
                           "isPrivate": {
                             "type": "boolean",
                             "example": false
+                          },
+                          "isSystem": {
+                            "type": "boolean",
+                            "example": false
+                          },
+                          "parentId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
                           },
                           "itemCount": {
                             "type": "integer",
@@ -7872,10 +7897,20 @@
                   "type": {
                     "type": "string",
                     "enum": [
+                      "CONTAINER",
                       "IMAGE",
-                      "TABLE"
+                      "TABLE",
+                      "PDF"
                     ],
                     "example": "IMAGE"
+                  },
+                  "parentId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "ID de la carpeta contenedora o padre de nivel superior"
                   },
                   "color": {
                     "type": "string",
@@ -7924,8 +7959,10 @@
                         "type": {
                           "type": "string",
                           "enum": [
+                            "CONTAINER",
                             "IMAGE",
-                            "TABLE"
+                            "TABLE",
+                            "PDF"
                           ]
                         },
                         "color": {
@@ -7938,6 +7975,17 @@
                         "isPrivate": {
                           "type": "boolean",
                           "example": false
+                        },
+                        "isSystem": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "parentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
                         },
                         "itemCount": {
                           "type": "integer",
@@ -8119,6 +8167,115 @@
         }
       }
     },
+    "/api/v1/folders/tree": {
+      "get": {
+        "summary": "Obtener árbol jerárquico de carpetas visibles",
+        "tags": [
+          "Folders"
+        ],
+        "description": "Retorna la estructura en árbol anidado de todas las carpetas a las que el usuario autenticado tiene acceso.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Árbol jerárquico obtenido exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Árbol jerárquico obtenido exitosamente",
+                  "type": "object",
+                  "properties": {
+                    "tree": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "example": 5
+                    }
+                  },
+                  "required": [
+                    "tree",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado o token/API Key inválido o revocado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "No autenticado o token/API Key inválido o revocado",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "https://httpstatuses.com/401"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string",
+                      "example": "No autenticado o token/API Key inválido o revocado"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "UNAUTHORIZED"
+                    },
+                    "instance": {
+                      "type": "string",
+                      "example": "/api/v1/resource"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/folders/{id}": {
       "patch": {
         "summary": "Actualizar propiedades de una carpeta (renombrar, color o privacidad)",
@@ -8201,8 +8358,10 @@
                         "type": {
                           "type": "string",
                           "enum": [
+                            "CONTAINER",
                             "IMAGE",
-                            "TABLE"
+                            "TABLE",
+                            "PDF"
                           ]
                         },
                         "color": {
@@ -8215,6 +8374,17 @@
                         "isPrivate": {
                           "type": "boolean",
                           "example": false
+                        },
+                        "isSystem": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "parentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
                         },
                         "itemCount": {
                           "type": "integer",
@@ -8568,8 +8738,10 @@
                         "type": {
                           "type": "string",
                           "enum": [
+                            "CONTAINER",
                             "IMAGE",
-                            "TABLE"
+                            "TABLE",
+                            "PDF"
                           ]
                         },
                         "color": {
@@ -8582,6 +8754,17 @@
                         "isPrivate": {
                           "type": "boolean",
                           "example": false
+                        },
+                        "isSystem": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "parentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
                         },
                         "itemCount": {
                           "type": "integer",

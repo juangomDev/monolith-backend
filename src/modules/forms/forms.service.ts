@@ -1,4 +1,4 @@
-import { Role, FolderPermission, type FormDefinition, type FormEntry } from '@prisma/client';
+import { Role, FolderType, FolderPermission, type FormDefinition, type FormEntry } from '@prisma/client';
 import { formsRepository, type FormsRepository, type ListFormsOptions, type ListEntriesOptions } from './forms.repository.js';
 import { formsTableSync, type FormsTableSync } from './forms.table-sync.js';
 import { foldersSharesService, type FoldersSharesService } from '../folders/folders.shares.service.js';
@@ -49,7 +49,10 @@ export class FormsService {
   ) {}
 
   async createForm(dto: CreateFormDto, caller: CallerContext): Promise<FormDefinition> {
-    await this.sharesService.assertFolderAccess(dto.folderId, caller, FolderPermission.EDIT);
+    const access = await this.sharesService.assertFolderAccess(dto.folderId, caller, FolderPermission.EDIT);
+    if (access?.folder?.type === FolderType.CONTAINER) {
+      throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
+    }
 
     const cleanSlug = dto.slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     if (!cleanSlug) throw new AppError(400, 'El slug del formulario no es válido', 'INVALID_SLUG');

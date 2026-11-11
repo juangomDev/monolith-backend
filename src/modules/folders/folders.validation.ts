@@ -5,9 +5,10 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a
 
 export const createFolderSchema = z.object({
   name: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres').max(60, 'El nombre no puede exceder 60 caracteres'),
-  type: z.enum(['IMAGE', 'TABLE']),
+  type: z.enum(['CONTAINER', 'IMAGE', 'TABLE', 'PDF']),
   color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'El color debe ser un código hexadecimal válido (ej. #3b82f6)').optional().nullable(),
   isPrivate: z.boolean().optional().default(false),
+  parentId: z.string().uuid('El parentId debe ser un UUID válido').optional().nullable(),
 });
 
 export const updateFolderSchema = z
@@ -36,6 +37,8 @@ export interface FormattedFolder {
   type: FolderType;
   color: string | null;
   isPrivate: boolean;
+  isSystem?: boolean;
+  parentId?: string | null;
   itemCount: number;
   userId: string;
   owner?: { id: string; username: string };
@@ -45,6 +48,7 @@ export interface FormattedFolder {
 
 export interface ListFoldersQueryOptions {
   type?: FolderType;
+  parentId?: string | null;
   search?: string;
   page?: number;
   limit?: number;

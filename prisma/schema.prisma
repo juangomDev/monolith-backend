@@ -117,6 +117,7 @@ model User {
 
 // 5. Carpetas y Proyectos Compartidos
 enum FolderType {
+  CONTAINER
   IMAGE
   TABLE
   PDF
@@ -133,6 +134,10 @@ model Folder {
   type      FolderType
   color     String?         @db.VarChar(20)
   isPrivate Boolean         @default(false) @map("is_private")
+  isSystem  Boolean         @default(false) @map("is_system")
+  parentId  String?         @map("parent_id") @db.Uuid
+  parent    Folder?         @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[]        @relation("FolderHierarchy")
   userId    String          @map("user_id") @db.Uuid
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime        @default(now()) @map("created_at")
@@ -144,6 +149,8 @@ model Folder {
 
   @@index([type])
   @@index([userId])
+  @@index([parentId])
+  @@index([isSystem])
   @@index([isPrivate])
   @@map("folders")
 }

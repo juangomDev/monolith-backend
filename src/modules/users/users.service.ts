@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { Role, type User } from '@prisma/client';
+import { prisma } from '../../config/db.js';
 import { usersRepository, type UsersRepository } from './users.repository.js';
 import { AppError } from '../../shared/errors.js';
 import { auditService } from '../audit/audit.service.js';
@@ -150,6 +151,24 @@ export class UsersService {
       resourceId: newUser.id,
       metadata: { username: newUser.username, role: newUser.role },
     });
+
+    // Creación automática de carpeta raíz departamental para nuevos Managers (Nivel 1)
+    if (newUser.role === Role.MANAGER && (prisma as any).folder?.create) {
+      await (prisma as any).folder
+        .create({
+          data: {
+            name: newUser.username,
+            type: 'CONTAINER',
+            userId: newUser.id,
+            parentId: null,
+            isPrivate: true,
+            isSystem: false,
+          },
+        })
+        .catch((err: any) => {
+          console.error(`[UsersService] Error creando carpeta raíz de manager para ${newUser.username}:`, err?.message || err);
+        });
+    }
 
     const { passwordHash: _, ...safeUser } = newUser;
     return safeUser;

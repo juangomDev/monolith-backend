@@ -39,13 +39,14 @@ export function formatTableItem(record: any) {
 export class TablesService {
   async saveTable(part: MultipartFile, folderId?: string, user?: RequesterContext | string) {
     const requesterCtx = typeof user === 'string' ? { id: user, role: Role.ADMIN } : user;
-    if (requesterCtx?.role === Role.COLLABORATOR) {
-      if (!folderId) {
-        throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
+    if (requesterCtx?.role === Role.COLLABORATOR && !folderId) {
+      throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
+    }
+    if (folderId && requesterCtx) {
+      const access = await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
+      if (access?.folder?.type === FolderType.CONTAINER) {
+        throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
       }
-      await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
-    } else if (folderId && requesterCtx) {
-      await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
     }
 
     let ext = path.extname(part.filename).toLowerCase();

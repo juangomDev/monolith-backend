@@ -88,6 +88,28 @@ export async function ensureInitialSystemSeed(
     aiManagerCreated = true;
   }
 
+  // Garantizar existencia de la bóveda compartida corporativa 'shared'
+  if ((dbClient as any).folder) {
+    const adminUser = existingAdmin || (await dbClient.user.findUnique({ where: { username: config.adminUsername } }));
+    if (adminUser) {
+      const existingShared = await (dbClient as any).folder.findFirst({
+        where: { isSystem: true, name: 'shared' },
+      });
+      if (!existingShared) {
+        await (dbClient as any).folder.create({
+          data: {
+            name: 'shared',
+            type: 'CONTAINER',
+            isPrivate: false,
+            isSystem: true,
+            userId: adminUser.id,
+            parentId: null,
+          },
+        });
+      }
+    }
+  }
+
   return { adminCreated, aiManagerCreated };
 }
 

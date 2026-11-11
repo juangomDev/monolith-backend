@@ -23,15 +23,16 @@
 | **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario (protege cuentas del sistema). |
 | **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico. |
 | **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos. |
-| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso (`?type=&search=&page=&limit=`). |
-| **15** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `MANAGER` | Crea una carpeta (tipo `IMAGE` o `TABLE`, pública o privada). |
-| **16** | `PATCH` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Actualiza propiedades (nombre, color o privacidad) de la carpeta. |
-| **17** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
-| **18** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
-| **19** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
-| **20** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
-| **21** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
-| **22** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
+| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso (`?type=&search=&parentId=&page=&limit=`). |
+| **15** | `GET` | `/api/v1/folders/tree` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Retorna el árbol jerárquico anidado de todas las carpetas visibles. |
+| **16** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Crea una carpeta o subcarpeta (`CONTAINER`, `IMAGE`, `TABLE`, `PDF`). |
+| **17** | `PATCH` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Actualiza propiedades (nombre, color o privacidad) de la carpeta. |
+| **18** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
+| **19** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
+| **20** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
+| **21** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
+| **22** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
+| **23** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
 | **23** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=&search=`). |
 | **24** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
 | **25** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
@@ -324,10 +325,11 @@ Elimina definitivamente un usuario y destruye en cascada sus archivos en disco (
 ### 3.4. Módulo de Carpetas (`/api/v1/folders`)
 
 #### `GET /api/v1/folders`
-Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públicas y sus privadas; `ADMIN` ve todas). Soporta filtrado por tipo, búsqueda por texto y paginación SQL opcional.
+Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públicas y sus privadas; `ADMIN` ve todas). Soporta filtrado por tipo, búsqueda por texto, filtro por carpeta padre y paginación SQL opcional.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Query Params:**
-  - `type` (Opcional): `IMAGE` o `TABLE`.
+  - `type` (Opcional): `CONTAINER`, `IMAGE`, `TABLE` o `PDF`.
+  - `parentId` (Opcional): UUID de la carpeta contenedora / superior.
   - `search` (Opcional): Búsqueda por nombre de carpeta (insensible a mayúsculas).
   - `page` (Opcional): Número de página (ej. `1`).
   - `limit` (Opcional): Cantidad por página (ej. `20`).
@@ -341,6 +343,8 @@ Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públ
         "type": "IMAGE",
         "color": "#64748b",
         "isPrivate": false,
+        "isSystem": false,
+        "parentId": null,
         "itemCount": 42,
         "userId": "11111111-1111-1111-1111-111111111111",
         "owner": {
@@ -366,12 +370,59 @@ Lista las carpetas según las reglas de visibilidad (usuarios ven carpetas públ
   ```
 - **Nota Retrocompatible:** Si no se envían `page` ni `limit`, devuelve `{ folders: [...], total: N }` completo.
 
+#### `GET /api/v1/folders/tree`
+Retorna el árbol jerárquico anidado de todas las carpetas a las que el usuario tiene acceso (Nivel 1 -> Nivel 2 -> Nivel 3).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "tree": [
+      {
+        "id": "c1111111-1111-4111-8111-111111111111",
+        "name": "juan",
+        "type": "CONTAINER",
+        "parentId": null,
+        "isSystem": false,
+        "children": [
+          {
+            "id": "d2222222-2222-4222-8222-222222222222",
+            "name": "marketing",
+            "type": "IMAGE",
+            "parentId": "c1111111-1111-4111-8111-111111111111",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "f4444444-4444-4444-8444-444444444444",
+        "name": "shared",
+        "type": "CONTAINER",
+        "parentId": null,
+        "isSystem": true,
+        "children": []
+      }
+    ],
+    "total": 3
+  }
+  ```
+
 #### `POST /api/v1/folders`
-Crea una nueva carpeta organizada por tipo de contenido. Exclusivo de `MANAGER` o `ADMIN` (`COLLABORATOR` recibe `403 FORBIDDEN`).
+Crea una nueva carpeta o subcarpeta dentro de la jerarquía. 
+- `MANAGER` y `ADMIN` pueden crear carpetas contenedoras raíz (`parentId: null`).
+- `COLLABORATOR` no puede crear carpetas raíz (`403 FORBIDDEN`), solo subcarpetas especificando un `parentId` válido sobre el que posea permiso `EDIT`.
+- **Regla de profundidad:** Máximo 3 niveles (Raíz Manager N1 -> Subcarpeta N2 -> Subcarpeta N3). Nivel 4 arroja `400 MAX_FOLDER_DEPTH_EXCEEDED`.
+- **Regla de tipos:** Subcarpetas bajo un padre tipado (`IMAGE`, `TABLE`, `PDF`) deben mantener el mismo tipo (`parent.type === child.type`).
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Body:**
   ```json
   {
+    "name": "Campañas 2026",
+    "type": "IMAGE",
+    "parentId": "c1111111-1111-4111-8111-111111111111",
+    "color": "#3b82f6",
+    "isPrivate": false
+  }
+  ```
     "name": "Reportes Mensuales",
     "type": "TABLE",
     "color": "#10b981",

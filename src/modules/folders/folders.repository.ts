@@ -6,6 +6,8 @@ export interface CreateFolderInput {
   type: FolderType;
   color?: string;
   isPrivate?: boolean;
+  isSystem?: boolean;
+  parentId?: string | null;
   userId: string;
 }
 
@@ -17,6 +19,7 @@ export interface UpdateFolderInput {
 
 export interface FindFoldersFilter {
   type?: FolderType;
+  parentId?: string | null;
   userId?: string;
   isAdmin: boolean;
   role?: Role;
@@ -51,15 +54,23 @@ export class FoldersRepository {
       where.type = filter.type;
     }
 
+    if (filter.parentId !== undefined) {
+      where.parentId = filter.parentId;
+    }
+
     if (filter.search && filter.search.trim().length > 0) {
       where.name = { contains: filter.search.trim(), mode: 'insensitive' };
     }
 
     if (!filter.isAdmin) {
       if (filter.role === Role.COLLABORATOR) {
-        where.members = { some: { userId: filter.userId } };
+        where.OR = [
+          { isSystem: true },
+          { members: { some: { userId: filter.userId } } },
+        ];
       } else {
         where.OR = [
+          { isSystem: true },
           { isPrivate: false },
           { userId: filter.userId },
           { members: { some: { userId: filter.userId } } },
@@ -77,6 +88,8 @@ export class FoldersRepository {
         type: data.type,
         color: data.color,
         isPrivate: data.isPrivate ?? false,
+        isSystem: data.isSystem ?? false,
+        parentId: data.parentId ?? null,
         userId: data.userId,
       },
     });

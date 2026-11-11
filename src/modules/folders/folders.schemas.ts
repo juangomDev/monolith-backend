@@ -19,9 +19,11 @@ export const folderItemSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     name: { type: 'string', example: 'Proyectos 2026' },
-    type: { type: 'string', enum: ['IMAGE', 'TABLE'] },
+    type: { type: 'string', enum: ['CONTAINER', 'IMAGE', 'TABLE', 'PDF'] },
     color: { type: 'string', nullable: true, example: '#3b82f6' },
     isPrivate: { type: 'boolean', example: false },
+    isSystem: { type: 'boolean', example: false },
+    parentId: { type: 'string', format: 'uuid', nullable: true },
     itemCount: { type: 'integer', example: 12 },
     userId: { type: 'string', format: 'uuid' },
     owner: {
@@ -61,8 +63,13 @@ export const listFoldersRouteSchema: FastifySchema = {
     properties: {
       type: {
         type: 'string',
-        enum: ['IMAGE', 'TABLE'],
+        enum: ['CONTAINER', 'IMAGE', 'TABLE', 'PDF'],
         description: 'Filtrar por tipo de contenido',
+      },
+      parentId: {
+        type: 'string',
+        format: 'uuid',
+        description: 'Filtrar por ID de carpeta contenedora/padre',
       },
       search: {
         type: 'string',
@@ -122,7 +129,13 @@ export const createFolderRouteSchema: FastifySchema = {
     required: ['name', 'type'],
     properties: {
       name: { type: 'string', minLength: 2, maxLength: 60, example: 'Galería de Productos' },
-      type: { type: 'string', enum: ['IMAGE', 'TABLE'], example: 'IMAGE' },
+      type: { type: 'string', enum: ['CONTAINER', 'IMAGE', 'TABLE', 'PDF'], example: 'IMAGE' },
+      parentId: {
+        type: 'string',
+        format: 'uuid',
+        nullable: true,
+        description: 'ID de la carpeta contenedora o padre de nivel superior',
+      },
       color: {
         type: 'string',
         pattern: '^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$',
@@ -252,5 +265,25 @@ export const deleteFolderRouteSchema: FastifySchema = {
     401: standardErrorResponses[401],
     403: standardErrorResponses[403],
     404: standardErrorResponses[404],
+  },
+};
+
+export const getFolderTreeRouteSchema: FastifySchema = {
+  tags: ['Folders'],
+  summary: 'Obtener árbol jerárquico de carpetas visibles',
+  description:
+    'Retorna la estructura en árbol anidado de todas las carpetas a las que el usuario autenticado tiene acceso.',
+  security: securityDualAuth,
+  response: {
+    200: {
+      description: 'Árbol jerárquico obtenido exitosamente',
+      type: 'object',
+      properties: {
+        tree: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        total: { type: 'integer', example: 5 },
+      },
+      required: ['tree', 'total'],
+    },
+    401: standardErrorResponses[401],
   },
 };

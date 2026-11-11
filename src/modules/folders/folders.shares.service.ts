@@ -34,8 +34,27 @@ export class FoldersSharesService {
       return { folder, permission: 'ADMIN' };
     }
 
+    if (folder.isSystem) {
+      if (requiredPermission === FolderPermission.READ) {
+        return { folder, permission: FolderPermission.READ };
+      }
+      throw new AppError(403, 'La carpeta compartida de sistema es de solo lectura', 'FORBIDDEN');
+    }
+
     if (folder.userId === caller.id) {
       return { folder, permission: FolderPermission.EDIT };
+    }
+
+    // Control Supremo del Manager sobre cualquier subcarpeta en su árbol
+    if (caller.role === Role.MANAGER && folder.parentId) {
+      let currParentId: string | null = folder.parentId;
+      while (currParentId) {
+        const pFolder = await this.foldersRepo.findFolderById(currParentId);
+        if (pFolder && pFolder.userId === caller.id) {
+          return { folder, permission: FolderPermission.EDIT };
+        }
+        currParentId = pFolder?.parentId ?? null;
+      }
     }
 
     const member = await this.sharesRepo.findMember(folderId, caller.id);
@@ -48,6 +67,24 @@ export class FoldersSharesService {
           return { folder, permission: FolderPermission.EDIT };
         }
         throw new AppError(403, 'Permiso insuficiente: solo tienes acceso de lectura en esta carpeta', 'FORBIDDEN');
+      }
+    }
+
+    // Herencia de membresía desde carpeta padre
+    if (folder.parentId) {
+      let currParentId: string | null = folder.parentId;
+      while (currParentId) {
+        const parentMember = await this.sharesRepo.findMember(currParentId, caller.id);
+        if (parentMember) {
+          if (requiredPermission === FolderPermission.READ) {
+            return { folder, permission: parentMember.permission };
+          }
+          if (requiredPermission === FolderPermission.EDIT && parentMember.permission === FolderPermission.EDIT) {
+            return { folder, permission: FolderPermission.EDIT };
+          }
+        }
+        const pFolder = await this.foldersRepo.findFolderById(currParentId);
+        currParentId = pFolder?.parentId ?? null;
       }
     }
 
