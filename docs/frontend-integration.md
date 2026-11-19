@@ -282,12 +282,13 @@ const { images, meta, total } = await res.json();
 
 ---
 
-## 7. 📊 Gestión Avanzada de Tablas y Doble Artefacto (Fase 11)
+## 7. 📊 Gestión Avanzada de Tablas, Soporte JSON y Doble Artefacto (Fase 11 y 21)
 
 ### A. Patrón de Doble Artefacto (Rendimiento Extremo de Lectura)
-Al cargar un archivo Excel (`.xlsx`) o CSV (`.csv`):
+Al cargar un archivo Excel (`.xlsx`), CSV (`.csv`) o JSON estructurado (`.json`):
 1. **Archivo Original Intacto:** El backend preserva el binario original en disco sin alteraciones para descargas directas de alta fidelidad (`GET /t/:short_code?download=true`).
 2. **Artefacto Pre-calculado `.data.json.gz`:** En la subida, se extraen celdas combinadas (`merges`), estilos de celda (color de fondo) y encabezados, comprimiéndose en un archivo `.data.json.gz` adyacente.
+3. **Formatos JSON Nativos:** Se admiten arrays de objetos directos `[ { "id": 1, "nombre": "Item" } ]`, matrices estructuradas `{ "columns": ["id", "nombre"], "rows": [...] }` o contenedores con envoltorio `{ "data": [...] }` o `{ "rows": [...] }`. Todos se convierten transparentemente a tablas paginables con sanitización anti-fórmulas.
 
 ### B. Consumo Instantáneo en el Frontend (`GET /t/:short_code`)
 Al consultar los datos para pintar la gráfica o tabla:
@@ -467,8 +468,20 @@ const response = await fetch(`${API_URL}/api/v1/chat/ask`, {
   }),
 });
 const data = await response.json();
-// data: { answer, foundInSystem, sources, chartData: { labels, values, percentages } }
+// data: {
+//   answer: string,
+//   foundInSystem: boolean,
+//   usedAi: boolean, // true si la respuesta fue elaborada por IA; false si fue determinista/circuit-breaker
+//   sources: Array<{ type?: 'TABLE' | 'PDF', tableId, tableName, shortCode, title?, url?, pages? }>,
+//   chartData: { labels, values, percentages } | null
+// }
 ```
+
+> [!TIP]
+> **Bandera `usedAi` para la Interfaz de Usuario:**
+> Utiliza `data.usedAi` para mostrar al usuario un distintivo visual (badge):
+> - Si `usedAi === true`: Mostrar badge `🤖 Respuesta elaborada con IA`.
+> - Si `usedAi === false`: Mostrar badge `ℹ️ Respuesta directa del Sistema` (ej. cortocircuito o sin datos en el sistema).
 
 ### 14.3. Ejemplo de Widget Web Público para Sitios Externos (React, WordPress y Vanilla JS)
 Para incrustar un asistente analítico en páginas web externas sin requerir login ni exponer credenciales:

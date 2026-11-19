@@ -39,7 +39,7 @@ export const getTableByShortCodeRouteSchema: FastifySchema = {
   tags: ['Tables'],
   summary: 'Consulta JSON paginada o descarga de dataset por shortCode',
   description:
-    'Si incluye query param ?download=true, descarga directamente el archivo original (.csv o .xlsx). Si incluye ?raw=true o se solicita con Accept-Encoding: gzip sin paginar, entrega el stream precalculado ultra-rápido (2 ms). De lo contrario, entrega los datos en formato JSON paginado con esquema de columnas y metadatos.',
+    'Si incluye query param ?download=true, descarga directamente el archivo original (.csv, .xlsx o .json). Si incluye ?raw=true o se solicita con Accept-Encoding: gzip sin paginar, entrega el stream precalculado ultra-rápido (2 ms). De lo contrario, entrega los datos en formato JSON paginado con esquema de columnas y metadatos.',
   params: {
     type: 'object',
     required: ['short_code'],
@@ -144,9 +144,9 @@ export const listTablesRouteSchema: FastifySchema = {
 
 export const uploadTableRouteSchema: FastifySchema = {
   tags: ['Tables'],
-  summary: 'Subir y procesar dataset tabular (CSV o Excel)',
+  summary: 'Subir y procesar dataset tabular (CSV, Excel o JSON)',
   description:
-    'Ingesta multipart/form-data de archivos CSV o XLSX. Inspecciona cabeceras para deducir columnas y total de filas. Se asigna a General si no se provee folderId.',
+    'Ingesta multipart/form-data de archivos CSV, XLSX o JSON. Inspecciona cabeceras para deducir columnas y total de filas. Se asigna a General si no se provee folderId.',
   security: securityDualAuth,
   consumes: ['multipart/form-data'],
   response: {

@@ -20,6 +20,7 @@ export interface ChatAskInput {
 export interface ChatAnswerResponse {
   answer: string;
   foundInSystem: boolean;
+  usedAi: boolean;
   sources: Array<{
     type?: 'TABLE' | 'PDF';
     tableId: string;
@@ -39,6 +40,7 @@ export interface ChatAnswerResponse {
 const CIRCUIT_BREAKER_ANSWER: ChatAnswerResponse = {
   answer: 'La información solicitada no existe en los archivos registrados en este sistema.',
   foundInSystem: false,
+  usedAi: false,
   sources: [],
   chartData: null,
 };
@@ -259,6 +261,7 @@ export class ChatService {
       return {
         answer: aiRes.answer,
         foundInSystem: true,
+        usedAi: true,
         sources: [
           {
             type: 'TABLE',

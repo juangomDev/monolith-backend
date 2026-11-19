@@ -51,14 +51,14 @@ export class TablesService {
 
     let ext = path.extname(part.filename).toLowerCase();
     const isCsv = part.mimetype === 'text/csv' || part.mimetype === 'application/csv';
-    const isXlsx =
-      part.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      part.mimetype === 'application/vnd.ms-excel';
+    const isXlsx = part.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || part.mimetype === 'application/vnd.ms-excel';
+    const isJson = part.mimetype === 'application/json';
 
-    if (ext !== '.csv' && ext !== '.xlsx') {
+    if (ext !== '.csv' && ext !== '.xlsx' && ext !== '.json') {
       if (isCsv) ext = '.csv';
       else if (isXlsx) ext = '.xlsx';
-      else throw new AppError(415, 'Formato no permitido. Solo se aceptan archivos .csv y .xlsx', 'UNSUPPORTED_MEDIA_TYPE');
+      else if (isJson) ext = '.json';
+      else throw new AppError(415, 'Formato no permitido. Solo se aceptan archivos .csv, .xlsx y .json', 'UNSUPPORTED_MEDIA_TYPE');
     }
 
     const shortCode = generateShortCode();

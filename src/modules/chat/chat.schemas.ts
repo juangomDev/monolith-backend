@@ -8,6 +8,11 @@ export const chatAnswerSchema = {
   properties: {
     answer: { type: 'string', description: 'Respuesta analítica fundamentada' },
     foundInSystem: { type: 'boolean', description: 'Indica si los datos existen en el sistema' },
+    usedAi: {
+      type: 'boolean',
+      default: false,
+      description: 'Indica si la respuesta fue generada/sintetizada por la IA (true) o por el sistema determinista / circuit breaker (false)',
+    },
     sources: {
       type: 'array',
       description: 'Tablas utilizadas como fuentes para la respuesta',

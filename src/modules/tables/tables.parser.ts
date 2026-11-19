@@ -166,7 +166,8 @@ export async function parseTableMetadata(filePath: string, ext: string): Promise
   const cleanExt = ext.toLowerCase();
   if (cleanExt === '.csv') return parseCsvMetadata(filePath);
   if (cleanExt === '.xlsx') return parseXlsxMetadata(filePath);
-  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv o .xlsx`, 'UNSUPPORTED_MEDIA_TYPE');
+  if (cleanExt === '.json') return (await import('./tables.json-parser.js')).parseJsonMetadata(filePath);
+  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv, .xlsx o .json`, 'UNSUPPORTED_MEDIA_TYPE');
 }
 
 /**
@@ -176,7 +177,8 @@ export async function readTableRows(filePath: string, ext: string, page: number,
   const cleanExt = ext.toLowerCase();
   if (cleanExt === '.csv') return readCsvRows(filePath, page, limit);
   if (cleanExt === '.xlsx') return readXlsxRows(filePath, page, limit);
-  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv o .xlsx`, 'UNSUPPORTED_MEDIA_TYPE');
+  if (cleanExt === '.json') return (await import('./tables.json-parser.js')).readJsonRows(filePath, page, limit);
+  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv, .xlsx o .json`, 'UNSUPPORTED_MEDIA_TYPE');
 }
 
 function extractCellStyle(cell: ExcelJS.Cell): CellStyle | undefined {
@@ -187,8 +189,7 @@ function extractCellStyle(cell: ExcelJS.Cell): CellStyle | undefined {
   }
   const bold = Boolean(cell.font?.bold);
   const align = typeof cell.alignment?.horizontal === 'string' ? cell.alignment.horizontal : undefined;
-  if (!bg && !bold && !align) return undefined;
-  return { ...(bg && { bg }), ...(bold && { bold }), ...(align && { align }) };
+  return (!bg && !bold && !align) ? undefined : { ...(bg && { bg }), ...(bold && { bold }), ...(align && { align }) };
 }
 
 /**
@@ -197,6 +198,11 @@ function extractCellStyle(cell: ExcelJS.Cell): CellStyle | undefined {
  */
 export async function extractRichTableData(filePath: string, ext: string): Promise<RichTableData> {
   const cleanExt = ext.toLowerCase();
+
+  if (cleanExt === '.json') {
+    const { parseJsonTable } = await import('./tables.json-parser.js');
+    return parseJsonTable(filePath);
+  }
 
   if (cleanExt === '.csv') {
     return new Promise((resolve, reject) => {
@@ -281,5 +287,5 @@ export async function extractRichTableData(filePath: string, ext: string): Promi
     }
   }
 
-  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv o .xlsx`, 'UNSUPPORTED_MEDIA_TYPE');
+  throw new AppError(415, `Formato '${ext}' no soportado. Use .csv, .xlsx o .json`, 'UNSUPPORTED_MEDIA_TYPE');
 }

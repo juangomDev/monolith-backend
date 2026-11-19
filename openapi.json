@@ -2511,7 +2511,7 @@
         "tags": [
           "Tables"
         ],
-        "description": "Si incluye query param ?download=true, descarga directamente el archivo original (.csv o .xlsx). Si incluye ?raw=true o se solicita con Accept-Encoding: gzip sin paginar, entrega el stream precalculado ultra-rápido (2 ms). De lo contrario, entrega los datos en formato JSON paginado con esquema de columnas y metadatos.",
+        "description": "Si incluye query param ?download=true, descarga directamente el archivo original (.csv, .xlsx o .json). Si incluye ?raw=true o se solicita con Accept-Encoding: gzip sin paginar, entrega el stream precalculado ultra-rápido (2 ms). De lo contrario, entrega los datos en formato JSON paginado con esquema de columnas y metadatos.",
         "parameters": [
           {
             "schema": {
@@ -2977,11 +2977,11 @@
         }
       },
       "post": {
-        "summary": "Subir y procesar dataset tabular (CSV o Excel)",
+        "summary": "Subir y procesar dataset tabular (CSV, Excel o JSON)",
         "tags": [
           "Tables"
         ],
-        "description": "Ingesta multipart/form-data de archivos CSV o XLSX. Inspecciona cabeceras para deducir columnas y total de filas. Se asigna a General si no se provee folderId.",
+        "description": "Ingesta multipart/form-data de archivos CSV, XLSX o JSON. Inspecciona cabeceras para deducir columnas y total de filas. Se asigna a General si no se provee folderId.",
         "security": [
           {
             "bearerAuth": []
@@ -4266,7 +4266,7 @@
         "tags": [
           "Tables"
         ],
-        "description": "Sustituye físicamente el archivo .csv o .xlsx conservando intactos su id, shortCode, folderId y URL pública (/t/:short_code). Regenera el artefacto .data.json.gz y actualiza metadataCard e invalida la caché del Chat.",
+        "description": "Sustituye físicamente el archivo .csv, .xlsx o .json conservando intactos su id, shortCode, folderId y URL pública (/t/:short_code). Regenera el artefacto .data.json.gz y actualiza metadataCard e invalida la caché del Chat.",
         "parameters": [
           {
             "schema": {
@@ -11256,6 +11256,11 @@
                       "type": "boolean",
                       "description": "Indica si los datos existen en el sistema"
                     },
+                    "usedAi": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Indica si la respuesta fue generada/sintetizada por la IA (true) o por el sistema determinista / circuit breaker (false)"
+                    },
                     "sources": {
                       "type": "array",
                       "description": "Tablas utilizadas como fuentes para la respuesta",
@@ -11569,6 +11574,11 @@
                     "foundInSystem": {
                       "type": "boolean",
                       "description": "Indica si los datos existen en el sistema"
+                    },
+                    "usedAi": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Indica si la respuesta fue generada/sintetizada por la IA (true) o por el sistema determinista / circuit breaker (false)"
                     },
                     "sources": {
                       "type": "array",

@@ -786,11 +786,11 @@ Lista los datasets tabulares registrados en el sistema con paginación y filtrad
   ```
 
 #### `POST /api/v1/tables`
-Sube y procesa un dataset tabular estructurado (`.csv` o `.xlsx`). Aplica el **Patrón de Doble Artefacto**: almacena el archivo fuente intacto para descargas y genera un artefacto pre-calculado `.data.json.gz` con colores, encabezados y celdas combinadas para consultas instantáneas.
+Sube y procesa un dataset tabular estructurado (`.csv`, `.xlsx` o `.json`). Aplica el **Patrón de Doble Artefacto**: almacena el archivo fuente intacto para descargas y genera un artefacto pre-calculado `.data.json.gz` con colores, encabezados y celdas combinadas para consultas instantáneas. Admite arrays de objetos `[ { col: val } ]`, matrices `{ columns: [...], rows: [...] }` o envoltorios `{ data: [...] }`.
 - **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
 - **Content-Type:** `multipart/form-data`
 - **Campos del Formulario:**
-  - `file`: Archivo CSV o Excel (Obligatorio, máx. 100MB).
+  - `file`: Archivo CSV, Excel o JSON (Obligatorio, máx. 100MB).
   - `folderId`: UUID de la carpeta destino (Opcional; si se omite, se asigna a `General`).
 - **Respuesta 201 Created:**
   ```json
@@ -825,7 +825,7 @@ Entrega de datos tabulares enriquecidos o descarga binaria del archivo original 
 - **Query Params:**
   - `page`: Número de página (Default: `1`).
   - `limit`: Filas por página (Default: `100`, máx. `500`).
-  - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original (`.xlsx` o `.csv`) con cabecera `Content-Disposition`.
+  - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original (`.xlsx`, `.csv` o `.json`) con cabecera `Content-Disposition`.
   - `raw`: Si es `'true'` o si se envía con `Accept-Encoding: gzip` sin paginación, sirve directamente el stream precalculado ultra-rápido (2 ms) con cabecera `Content-Encoding: gzip`.
 - **Respuesta 200 OK (Modo JSON Enriquecido):**
   ```json
@@ -918,6 +918,7 @@ Consulta analítica privada sobre tablas registradas con evaluación estricta de
   {
     "answer": "En Brasil se registran 104.000.000 de hombres (48,82%) y 109.000.000 de mujeres (51,18%), para un total censado de 213.000.000 habitantes.",
     "foundInSystem": true,
+    "usedAi": true,
     "sources": [
       {
         "tableId": "66666666-6666-6666-6666-666666666666",
@@ -933,11 +934,12 @@ Consulta analítica privada sobre tablas registradas con evaluación estricta de
     }
   }
   ```
-- **Cortocircuito Anti-Alucinaciones:** Si los datos no existen en el sistema, responde en 2 ms con:
+- **Cortocircuito Anti-Alucinaciones:** Si los datos no existen en el sistema, responde en 2 ms con `usedAi: false`:
   ```json
   {
     "answer": "La información solicitada no existe en los archivos registrados en este sistema.",
     "foundInSystem": false,
+    "usedAi": false,
     "sources": [],
     "chartData": null
   }

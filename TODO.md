@@ -30,6 +30,7 @@
 | **Fase 18** | Módulo de Archivos PDF, Patrón de Doble Artefacto (.text.json.gz), Link Corto (/p/:short_code) e Integración con Chat RAG | ✅ Completado |
 | **Fase 19** | Sistema de Eventos Desacoplados y Notificaciones en Vivo (Tablas Abiertas, Bandeja In-App y SSE) | ✅ Completado |
 | **Fase 20** | Arquitectura Jerárquica Departamental (3 Niveles) y Bóveda Compartida (`shared`) | ✅ Completado |
+| **Fase 21** | Ingesta Nativa de Tablas JSON e Indicador de Origen en Respuestas de IA (`usedAi`) | ✅ Completado |
 
 ---
 
@@ -1062,6 +1063,56 @@
   - [x] `20.6.1` Pruebas unitarias de jerarquía, control supremo del manager, bloqueo de subida en `CONTAINER`, profundidad máxima y acceso universal a `shared`.
   - [x] `20.6.2` Actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y exportar `openapi.json`.
   - [x] `20.6.3` Verificar 100% de tests pasando (403+ tests), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 📊 FASE 21: Ingesta Nativa de Tablas JSON e Indicador de Origen en Respuestas de IA (`usedAi`)
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Ingesta Nativa de Archivos JSON como Tablas:**
+>    - Permitir subir archivos `.json` (`application/json`) en `POST /api/v1/tables` y `PUT /api/v1/tables/:id` (Hot-Swap).
+>    - Parser modular `tables.json-parser.ts` para mantener `tables.service.ts` y `tables.parser.ts` estrictamente `< 300 LOC`.
+>    - Soporte para array de objetos (`[ { ... }, { ... } ]`) o formato tabular `{ "columns": [...], "rows": [...] }` / `{ "data": [...] }`.
+>    - Deducción automática de columnas, cálculo de `metadataCard` y generación del artefacto precalculado `.data.json.gz`.
+>    - Compatibilidad total con entrega paginada en `/t/:short_code` y con el Chat de IA.
+>
+> 2. **Indicador Explícito de Origen en Respuestas del Chat (`usedAi`):**
+>    - Añadir bandera booleana `usedAi` en `ChatAnswerResponse` tanto en respuestas internas (`POST /api/v1/chat/ask`) como públicas (`POST /api/v1/public/chat/ask`).
+>    - `usedAi: false` cuando la respuesta proviene del sistema o circuit breaker (anti-alucinación / sin datos).
+>    - `usedAi: true` cuando la respuesta fue sintetizada por el modelo LLM a partir de fuentes documentales encontradas.
+>
+> 3. **Protocolo de Calidad (Reglas 1, 2, 3 y Arquitectura):**
+>    - 0 roturas en los 412 tests congelados preexistentes.
+>    - Cobertura de pruebas completa en `tests/modules/tables/tables.json.test.ts`.
+>    - Sincronización obligatoria de `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+>    - 0 archivos `>= 300 LOC` en todo `src/`.
+
+- [x] **21.1 Parser Modular de Tablas JSON (`src/modules/tables/tables.json-parser.ts`)**
+  - [x] `21.1.1` Implementar función `parseJsonTable(filePath: string)` que admita arrays de objetos y formatos estructurados `{ data: [...] }`.
+  - [x] `21.1.2` Deducir columnas automáticamente a partir de las claves de los objetos y normalizar filas con tipos primitivos.
+  - [x] `21.1.3` Generar `metadataCard` inicial (con conteo de filas, columnas y tipos detectados).
+
+- [x] **21.2 Ingesta y Reemplazo de Tablas (`tables.service.ts` y `tables.mutation.service.ts`)**
+  - [x] `21.2.1` Actualizar validación de extensiones y mimetypes en `tables.service.ts` para aceptar `.json` y `application/json` cuidando el límite `< 300 LOC`.
+  - [x] `21.2.2` Habilitar reemplazo en caliente con archivo `.json` en `tables.mutation.service.ts` (`PUT /api/v1/tables/:id`).
+  - [x] `21.2.3` Actualizar esquemas OpenAPI en `tables.schemas.ts` y `tables.mutation.schemas.ts`.
+
+- [x] **21.3 Indicador de Origen en Respuestas del Chat (`usedAi`)**
+  - [x] `21.3.1` Extender la interfaz `ChatAnswerResponse` con `usedAi: boolean` en `src/modules/chat/chat.service.ts`.
+  - [x] `21.3.2` Configurar `usedAi: false` en `CIRCUIT_BREAKER_ANSWER` y respuestas de fallback del sistema.
+  - [x] `21.3.3` Configurar `usedAi: true` cuando `chatProvider.ask(...)` genera la respuesta basada en tablas o PDFs.
+  - [x] `21.3.4` Actualizar esquema OpenAPI en `src/modules/chat/chat.schemas.ts`.
+
+- [x] **21.4 Pruebas Automatizadas y Validación Cruzada**
+  - [x] `21.4.1` Crear suite `tests/modules/tables/tables.json.test.ts` verificando subida de `.json`, deducción de columnas, paginación `/t/:short_code` y reemplazo Hot-Swap.
+  - [x] `21.4.2` Verificar que las pruebas del Chat reflejen el nuevo campo `usedAi` (tanto `true` como `false`).
+  - [x] `21.4.3` Verificar 100% de tests aprobados (`npm test`), TypeScript build limpio (`npm run build`) y auditoría limpia (`npm audit`).
+
+- [x] **21.5 Sincronización de Contratos y Documentación**
+  - [x] `21.5.1` Exportar especificación OpenAPI actualizada (`npm run openapi:export`).
+  - [x] `21.5.2` Actualizar `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+  - [x] `21.5.3` Actualizar estado en `TODO.md` a `✅ Completado`.
 
 ---
 

@@ -45,7 +45,7 @@ export const replaceTableRouteSchema: FastifySchema = {
   tags: ['Tables'],
   summary: 'Reemplazar en caliente dataset tabular (Hot-Swap)',
   description:
-    'Sustituye físicamente el archivo .csv o .xlsx conservando intactos su id, shortCode, folderId y URL pública (/t/:short_code). Regenera el artefacto .data.json.gz y actualiza metadataCard e invalida la caché del Chat.',
+    'Sustituye físicamente el archivo .csv, .xlsx o .json conservando intactos su id, shortCode, folderId y URL pública (/t/:short_code). Regenera el artefacto .data.json.gz y actualiza metadataCard e invalida la caché del Chat.',
   security: securityDualAuth,
   consumes: ['multipart/form-data'],
   params: {

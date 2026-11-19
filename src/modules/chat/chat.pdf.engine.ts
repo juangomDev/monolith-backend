@@ -131,6 +131,7 @@ export async function processQuestionWithPdfs(
     return {
       answer: aiRes.answer,
       foundInSystem: true,
+      usedAi: true,
       sources: [
         {
           type: 'PDF',

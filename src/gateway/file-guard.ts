@@ -98,7 +98,7 @@ export async function validateMagicBytes(
 }
 
 /**
- * Valida el contenido y estructura de archivos de tabla (.csv o .xlsx)
+ * Valida el contenido y estructura de archivos de tabla (.csv, .xlsx o .json)
  */
 export async function validateTableContent(
   chunk: Buffer,
@@ -122,12 +122,13 @@ export async function validateTableContent(
         'UNSUPPORTED_MEDIA_TYPE'
       );
     }
-  } else if (declaredExt === '.csv') {
-    // Si file-type detecta un binario (ej. imagen, ejecutable, pdf, archive), no es un CSV
+  } else if (declaredExt === '.csv' || declaredExt === '.json') {
+    const extName = declaredExt.slice(1).toUpperCase();
+    // Si file-type detecta un binario (ej. imagen, ejecutable, pdf, archive), no es un CSV o JSON de texto plano
     if (type) {
       throw new AppError(
         415,
-        `El archivo CSV contiene una firma binaria no permitida: ${type.mime}`,
+        `El archivo ${extName} contiene una firma binaria no permitida: ${type.mime}`,
         'UNSUPPORTED_MEDIA_TYPE'
       );
     }
@@ -137,7 +138,7 @@ export async function validateTableContent(
     if (preview.includes(0x00)) {
       throw new AppError(
         415,
-        'El archivo CSV contiene datos binarios no permitidos',
+        `El archivo ${extName} contiene datos binarios no permitidos`,
         'UNSUPPORTED_MEDIA_TYPE'
       );
     }
@@ -151,7 +152,7 @@ export async function validateTableContent(
     ) {
       throw new AppError(
         415,
-        'El archivo CSV contiene código o scripts no permitidos',
+        `El archivo ${extName} contiene código o scripts no permitidos`,
         'UNSUPPORTED_MEDIA_TYPE'
       );
     }
