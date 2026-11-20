@@ -7,15 +7,25 @@ export interface AiResponse {
   answer: string;
   modelUsed: string;
   fromCache: boolean;
+  usedAi: boolean;
 }
 
-const chatCache = new LRUCache<string, string>({
+export interface CachedChatEntry {
+  answer: string;
+  usedAi: boolean;
+}
+
+const chatCache = new LRUCache<string, CachedChatEntry>({
   max: 1000,
   ttl: 5 * 60 * 1000, // 5 minutos
 });
 
-export function getChatCache(): LRUCache<string, string> {
+export function getChatCache(): LRUCache<string, CachedChatEntry> {
   return chatCache;
+}
+
+function normalizeModelId(model: string): string {
+  return model.trim().replace(/^models\//i, '');
 }
 
 export function generateCacheKey(normalizedQuestion: string, tableIds: string[], updatedAt = ''): string {
@@ -59,6 +69,7 @@ async function callChatCompletions(
   userPrompt: string
 ): Promise<{ text: string; status: number }> {
   const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const cleanModel = normalizeModelId(model);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -70,7 +81,7 @@ async function callChatCompletions(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: cleanModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -80,11 +91,11 @@ async function callChatCompletions(
       signal: controller.signal,
     });
 
-    if (res.status === 429) {
-      return { text: '', status: 429 };
-    }
-
     if (!res.ok) {
+      const errorBody = (await res.text().catch(() => '')).slice(0, 500);
+      console.error(
+        `[ChatProvider] Error HTTP ${res.status} en ${url} (model="${cleanModel}"): ${errorBody || 'sin cuerpo de error'}`
+      );
       return { text: '', status: res.status };
     }
 
@@ -92,7 +103,11 @@ async function callChatCompletions(
     const content = data?.choices?.[0]?.message?.content?.trim() || '';
     return { text: content, status: 200 };
   } catch (err: any) {
-    return { text: '', status: err.name === 'AbortError' ? 408 : 500 };
+    const status = err?.name === 'AbortError' ? 408 : 500;
+    console.error(
+      `[ChatProvider] Error de red/timeout (${status}) en ${url} (model="${cleanModel}"): ${err?.message || String(err)}`
+    );
+    return { text: '', status };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -109,20 +124,26 @@ export class ChatProvider {
         answer: 'La información solicitada no existe en los archivos registrados en este sistema.',
         modelUsed: 'deterministic-circuit-breaker',
         fromCache: false,
+        usedAi: false,
       };
     }
 
     const cacheKey = generateCacheKey(engineResult.normalizedQuestion, tableIds, updatedAt);
-    const cachedAnswer = chatCache.get(cacheKey);
-    if (cachedAnswer) {
-      return { answer: cachedAnswer, modelUsed: 'cache', fromCache: true };
+    const cachedEntry = chatCache.get(cacheKey);
+    if (cachedEntry) {
+      return {
+        answer: cachedEntry.answer,
+        modelUsed: 'cache',
+        fromCache: true,
+        usedAi: cachedEntry.usedAi,
+      };
     }
 
     const apiKey = env.AI_API_KEY || process.env.AI_API_KEY;
     if (!apiKey) {
       const fallback = synthesizeDeterministicFallback(engineResult);
-      chatCache.set(cacheKey, fallback);
-      return { answer: fallback, modelUsed: 'deterministic-local', fromCache: false };
+      chatCache.set(cacheKey, { answer: fallback, usedAi: false });
+      return { answer: fallback, modelUsed: 'deterministic-local', fromCache: false, usedAi: false };
     }
 
     const systemPrompt =
@@ -130,29 +151,43 @@ export class ChatProvider {
 
     const userPrompt = `Pregunta: ${engineResult.question}\n\n<verified_data_context>\nDatos Analíticos Verificados:\n${engineResult.summaryText}\nFilas filtradas: ${engineResult.totalRowsFiltered}\nMuestra de datos: ${JSON.stringify(engineResult.sampleRows)}\n</verified_data_context>`;
 
-    let primaryRes = await callChatCompletions(
+    const primaryModel = normalizeModelId(env.AI_MODEL);
+    const fallbackModel = env.AI_FALLBACK_MODEL ? normalizeModelId(env.AI_FALLBACK_MODEL) : '';
+
+    const primaryRes = await callChatCompletions(
       env.AI_BASE_URL,
       apiKey,
-      env.AI_MODEL,
+      primaryModel,
       systemPrompt,
       userPrompt
     );
 
-    let modelUsed = env.AI_MODEL;
+    let modelUsed = primaryModel;
     let answerText = primaryRes.text;
+    let usedAi = Boolean(answerText);
 
-    // Rotación automática si recibe 429
-    if (primaryRes.status === 429 && env.AI_FALLBACK_MODEL) {
+    // Rotación automática si recibe 429, 404 (modelo no encontrado/expirado), 408 (timeout) o 5xx
+    const shouldTryFallback =
+      !answerText &&
+      Boolean(fallbackModel) &&
+      fallbackModel !== primaryModel &&
+      (primaryRes.status === 429 ||
+        primaryRes.status === 404 ||
+        primaryRes.status === 408 ||
+        primaryRes.status >= 500);
+
+    if (shouldTryFallback) {
       const fallbackRes = await callChatCompletions(
         env.AI_BASE_URL,
         apiKey,
-        env.AI_FALLBACK_MODEL,
+        fallbackModel,
         systemPrompt,
         userPrompt
       );
       if (fallbackRes.status === 200 && fallbackRes.text) {
-        modelUsed = env.AI_FALLBACK_MODEL;
+        modelUsed = fallbackModel;
         answerText = fallbackRes.text;
+        usedAi = true;
       }
     }
 
@@ -160,10 +195,11 @@ export class ChatProvider {
     if (!answerText) {
       answerText = synthesizeDeterministicFallback(engineResult);
       modelUsed = 'deterministic-fallback';
+      usedAi = false;
     }
 
-    chatCache.set(cacheKey, answerText);
-    return { answer: answerText, modelUsed, fromCache: false };
+    chatCache.set(cacheKey, { answer: answerText, usedAi });
+    return { answer: answerText, modelUsed, fromCache: false, usedAi };
   }
 }
 

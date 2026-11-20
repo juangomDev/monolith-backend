@@ -1114,6 +1114,18 @@
   - [x] `21.5.2` Actualizar `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
   - [x] `21.5.3` Actualizar estado en `TODO.md` a `✅ Completado`.
 
+- [x] **21.6 Hardening del Proveedor de IA (`chat.provider.ts`) y Exactitud de `usedAi`**
+  - [x] `21.6.1` Logueo estructurado de errores HTTP (404, 401, 403, 429, 5xx) y timeouts con cuerpo de respuesta de Google/OpenAI sin exponer `AI_API_KEY`, más normalización de prefijo `models/`.
+  - [x] `21.6.2` Rotación automática a `AI_FALLBACK_MODEL` ante `404`, `429`, `408` y `5xx`.
+  - [x] `21.6.3` Propagación exacta de `usedAi: false` cuando el proveedor cae a `deterministic-local` o `deterministic-fallback` (incluyendo preservación del estado en caché LRU).
+  - [x] `21.6.4` Suite de pruebas unitarias de resiliencia en `tests/modules/chat/chat.provider.resilience.test.ts`.
+
+- [x] **21.7 Corrección de Visualización Pública de PDFs (`GET /p/:short_code`)**
+  - [x] `21.7.1` Prefijar `url`, `urlWithVersion`, `downloadUrl` y `textUrl` con `env.BASE_URL` en `formatPdfItem` (`pdfs.service.ts`), alineado con Imágenes y Tablas.
+  - [x] `21.7.2` Eliminar `Content-Security-Policy: sandbox` vacío y `X-Frame-Options: DENY` en `GET /p/:short_code` (`pdfs.routes.ts`), configurando `Content-Security-Policy: frame-ancestors *` para habilitar tanto el visor PDF nativo del navegador como `<iframe />` en el frontend.
+  - [x] `21.7.3` Unificar directorio con `env.STORAGE_DIR` y validar existencia física en disco (`404 FILE_NOT_FOUND`) en `pdfs.storage.ts` y `pdfs.service.ts`.
+  - [x] `21.7.4` Pruebas automatizadas en `tests/modules/pdfs/pdfs.public-url.test.ts`.
+
 ---
 
 ## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)

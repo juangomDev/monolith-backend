@@ -8,6 +8,7 @@ import { foldersSharesService, type FoldersSharesService } from '../folders/fold
 import { generateShortCode } from '../../shared/shortcode.js';
 import { auditService } from '../audit/audit.service.js';
 import { AppError } from '../../shared/errors.js';
+import { env } from '../../config/env.js';
 
 export interface RequesterContext {
   id: string;
@@ -15,7 +16,8 @@ export interface RequesterContext {
 }
 
 export function formatPdfItem(record: PdfRegistry & { folder?: any }) {
-  const version = record.updatedAt.getTime();
+  const version = record.updatedAt ? new Date(record.updatedAt).getTime() : Date.now();
+  const baseUrl = env.BASE_URL.replace(/\/$/, '');
   return {
     id: record.id,
     shortCode: record.shortCode,
@@ -26,10 +28,10 @@ export function formatPdfItem(record: PdfRegistry & { folder?: any }) {
     metadataCard: record.metadataCard,
     folderId: record.folderId,
     folder: record.folder ? { id: record.folder.id, name: record.folder.name, isPrivate: record.folder.isPrivate } : undefined,
-    url: `/p/${record.shortCode}`,
-    urlWithVersion: `/p/${record.shortCode}?v=${version}`,
-    downloadUrl: `/p/${record.shortCode}?download=true`,
-    textUrl: `/p/${record.shortCode}?format=text`,
+    url: `${baseUrl}/p/${record.shortCode}`,
+    urlWithVersion: `${baseUrl}/p/${record.shortCode}?v=${version}`,
+    downloadUrl: `${baseUrl}/p/${record.shortCode}?download=true`,
+    textUrl: `${baseUrl}/p/${record.shortCode}?format=text`,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -114,7 +116,17 @@ export class PdfsService {
   async getPdfDownload(shortCode: string) {
     const record = await this.repo.findByShortCode(shortCode);
     if (!record) throw new AppError(404, 'Documento PDF no encontrado', 'NOT_FOUND');
-    const stream = this.storage.getPdfStream(shortCode);
+
+    let targetPath: string | undefined;
+    if (typeof (this.storage as any).resolveExistingPdfPath === 'function') {
+      const resolved = await this.storage.resolveExistingPdfPath(shortCode, record.storagePath);
+      if (!resolved) {
+        throw new AppError(404, 'El archivo físico del PDF no existe en almacenamiento', 'FILE_NOT_FOUND');
+      }
+      targetPath = resolved;
+    }
+
+    const stream = this.storage.getPdfStream(shortCode, targetPath);
     return { record, stream };
   }
 

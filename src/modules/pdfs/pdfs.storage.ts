@@ -3,23 +3,44 @@ import { createReadStream, type ReadStream } from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { promisify } from 'node:util';
+import { env } from '../../config/env.js';
 
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
 
-const pdfsDir = path.resolve(process.cwd(), 'storage/pdfs');
+function getPdfsDir(): string {
+  return path.resolve(env.STORAGE_DIR, 'pdfs');
+}
 
 export class PdfsStorage {
   async ensureDir(): Promise<void> {
-    await fs.mkdir(pdfsDir, { recursive: true });
+    await fs.mkdir(getPdfsDir(), { recursive: true });
   }
 
   getPdfPath(shortCode: string): string {
-    return path.join(pdfsDir, `${shortCode}.pdf`);
+    return path.join(getPdfsDir(), `${shortCode}.pdf`);
   }
 
   getTextArtifactPath(shortCode: string): string {
-    return path.join(pdfsDir, `${shortCode}.text.json.gz`);
+    return path.join(getPdfsDir(), `${shortCode}.text.json.gz`);
+  }
+
+  async resolveExistingPdfPath(shortCode: string, fallbackPath?: string): Promise<string | null> {
+    const primaryPath = this.getPdfPath(shortCode);
+    try {
+      await fs.access(primaryPath);
+      return primaryPath;
+    } catch {
+      if (fallbackPath) {
+        try {
+          await fs.access(fallbackPath);
+          return fallbackPath;
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
   }
 
   async savePdfFile(shortCode: string, buffer: Buffer): Promise<string> {
@@ -38,8 +59,8 @@ export class PdfsStorage {
     return artifactPath;
   }
 
-  getPdfStream(shortCode: string): ReadStream {
-    return createReadStream(this.getPdfPath(shortCode));
+  getPdfStream(shortCode: string, customPath?: string): ReadStream {
+    return createReadStream(customPath || this.getPdfPath(shortCode));
   }
 
   getArtifactStream(shortCode: string): ReadStream {

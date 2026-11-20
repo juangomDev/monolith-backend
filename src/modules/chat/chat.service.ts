@@ -261,7 +261,7 @@ export class ChatService {
       return {
         answer: aiRes.answer,
         foundInSystem: true,
-        usedAi: true,
+        usedAi: Boolean(aiRes.usedAi),
         sources: [
           {
             type: 'TABLE',

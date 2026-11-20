@@ -97,7 +97,7 @@ export function findRelevantPdfPages(
 export async function processQuestionWithPdfs(
   question: string,
   pdfs: Array<{ id: string; shortCode: string; originalName: string; textArtifactPath: string; metadataCard: any; updatedAt: Date }>,
-  provider: { ask: (engineResult: any, docIds: string[], updatedAt: string) => Promise<{ answer: string }> }
+  provider: { ask: (engineResult: any, docIds: string[], updatedAt: string) => Promise<{ answer: string; usedAi?: boolean }> }
 ): Promise<any | null> {
   if (!pdfs || pdfs.length === 0) return null;
   const matches = matchPdfsByMetadata(question, pdfs);
@@ -131,7 +131,7 @@ export async function processQuestionWithPdfs(
     return {
       answer: aiRes.answer,
       foundInSystem: true,
-      usedAi: true,
+      usedAi: aiRes.usedAi ?? true,
       sources: [
         {
           type: 'PDF',

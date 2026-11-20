@@ -1044,7 +1044,7 @@ Reenvío bajo demanda de los datos sellados de una fila ya resuelta hacia `exter
 El módulo de PDFs gestiona almacenamiento de documentos de hasta 50MB, escaneo activo de seguridad contra payloads maliciosos (`/JavaScript`, `/JS`, `/Launch`, `/SubmitForm`, `/ImportData`), extracción automática de texto estructurado por página (`unpdf`), y el patrón de **Doble Artefacto** (`${shortCode}.pdf` y `${shortCode}.text.json.gz`). Además, alimenta directamente el motor de Chat RAG con respuestas citadas por página (`pages: [1, 2]`).
 
 #### `GET /p/:short_code` (Pública - Capability URL Opaque Base58)
-Entrega inmutable del documento PDF con cabecera `Cache-Control: public, max-age=31536000, immutable` y `Content-Security-Policy: sandbox`.
+Entrega inmutable del documento PDF con cabecera `Cache-Control: public, max-age=31536000, immutable`, `Cross-Origin-Resource-Policy: cross-origin` y `Content-Security-Policy: frame-ancestors *` (removiendo `X-Frame-Options` para habilitar tanto el visor nativo del navegador como previsualización embebida en `<iframe />`).
 - **Query Params opcionales:**
   - `download=true`: Fuerza descarga con `Content-Disposition: attachment`.
   - `format=text`: En lugar del binario, entrega el JSON de texto comprimido (`.text.json.gz`) descomprimido al vuelo (~2ms).

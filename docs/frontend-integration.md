@@ -480,8 +480,8 @@ const data = await response.json();
 > [!TIP]
 > **Bandera `usedAi` para la Interfaz de Usuario:**
 > Utiliza `data.usedAi` para mostrar al usuario un distintivo visual (badge):
-> - Si `usedAi === true`: Mostrar badge `🤖 Respuesta elaborada con IA`.
-> - Si `usedAi === false`: Mostrar badge `ℹ️ Respuesta directa del Sistema` (ej. cortocircuito o sin datos en el sistema).
+> - Si `usedAi === true`: Mostrar badge `🤖 Respuesta elaborada con IA` (el LLM respondió exitosamente o se sirvió desde caché una respuesta previamente generada por IA).
+> - Si `usedAi === false`: Mostrar badge `ℹ️ Respuesta directa del Sistema` (cortocircuito sin datos, `AI_API_KEY` sin configurar, o fallback determinista local tras error HTTP/404/timeout del proveedor de IA).
 
 ### 14.3. Ejemplo de Widget Web Público para Sitios Externos (React, WordPress y Vanilla JS)
 Para incrustar un asistente analítico en páginas web externas sin requerir login ni exponer credenciales:

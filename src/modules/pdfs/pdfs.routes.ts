@@ -52,9 +52,11 @@ export const pdfsRoutes: FastifyPluginAsync = async (fastify) => {
       const { record, stream } = await pdfsService.getPdfDownload(short_code);
       const isDownload = query?.download === 'true';
 
+      reply.removeHeader('X-Frame-Options');
       reply.header('Content-Type', 'application/pdf');
       reply.header('Cache-Control', 'public, max-age=31536000, immutable');
-      reply.header('Content-Security-Policy', 'sandbox');
+      reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
+      reply.header('Content-Security-Policy', 'frame-ancestors *');
 
       if (isDownload) {
         reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(record.originalName)}"`);
