@@ -14,6 +14,7 @@ import {
   deleteTableRouteSchema,
   extractRequester,
 } from './tables.schemas.js';
+import { hasDynamicTableFilters } from './tables.filter.js';
 import { renameTableRouteSchema, replaceTableRouteSchema } from './tables.mutation.schemas.js';
 import { bulkDeleteTablesRouteSchema, bulkMoveTablesRouteSchema } from './tables.bulk.schemas.js';
 
@@ -52,6 +53,7 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const isPaginated = query?.page !== undefined || query?.limit !== undefined;
       const includeStyles = query?.includeStyles === 'true';
+      const hasFilters = hasDynamicTableFilters(query);
 
       // Modo directo fila por fila: retorna únicamente el array JSON de filas [{...}, {...}]
       if (query?.format === 'rows') {
@@ -59,14 +61,14 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
         const limit = isPaginated
           ? Math.min(5000, Math.max(1, parseInt(query?.limit || '100', 10) || 100))
           : 100000;
-        const result = await tablesService.getTableDataPaginated(short_code, page, limit, false);
+        const result = await tablesService.getTableDataPaginated(short_code, page, limit, false, query);
         return reply.send(result.data);
       }
 
       const acceptsGzip = Boolean(request.headers['accept-encoding']?.includes('gzip'));
 
-      // Entrega instantánea de artefacto precalculado limpio (2 ms) si se pide raw o si el cliente acepta gzip sin paginar
-      if (query?.raw === 'true' || (acceptsGzip && !isPaginated && !includeStyles)) {
+      // Entrega instantánea de artefacto precalculado limpio (2 ms) si se pide raw o si el cliente acepta gzip sin paginar ni filtrar
+      if ((query?.raw === 'true' && !hasFilters) || (acceptsGzip && !isPaginated && !includeStyles && !hasFilters)) {
         const precalc = await tablesService.getPrecalculatedGzipStream(short_code);
         if (precalc) {
           reply.header('Content-Type', 'application/json');
@@ -77,9 +79,11 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const page = Math.max(1, parseInt(query?.page || '1', 10) || 1);
-      const limit = Math.min(500, Math.max(1, parseInt(query?.limit || '100', 10) || 100));
+      const defaultLimit = hasFilters && query?.limit === undefined ? 5000 : 100;
+      const maxLimit = hasFilters ? 5000 : 500;
+      const limit = Math.min(maxLimit, Math.max(1, parseInt(query?.limit || String(defaultLimit), 10) || defaultLimit));
 
-      const result = await tablesService.getTableDataPaginated(short_code, page, limit, includeStyles);
+      const result = await tablesService.getTableDataPaginated(short_code, page, limit, includeStyles, query);
       return reply.send(result);
     }
   );

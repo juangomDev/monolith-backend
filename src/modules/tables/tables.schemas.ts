@@ -55,6 +55,7 @@ export const getTableByShortCodeRouteSchema: FastifySchema = {
   },
   querystring: {
     type: 'object',
+    additionalProperties: true,
     properties: {
       download: { type: 'string', enum: ['true', 'false'], description: 'Descargar archivo original' },
       raw: { type: 'string', enum: ['true', 'false'], description: 'Servir artefacto precalculado gzip directo' },
@@ -68,8 +69,16 @@ export const getTableByShortCodeRouteSchema: FastifySchema = {
         enum: ['true', 'false'],
         description: 'Si es true, incluye cellStyles, merges y headers de Excel (false por defecto para evitar relleno)',
       },
+      search: {
+        type: 'string',
+        description: 'Búsqueda parcial de texto libre (insensible a mayúsculas/acentos) en cualquier columna de la tabla',
+      },
+      select: {
+        type: 'string',
+        description: 'Lista de columnas a devolver separadas por coma (ej. ?select=id,name,code)',
+      },
       page: { type: 'integer', default: 1, description: 'Número de página a consultar' },
-      limit: { type: 'integer', default: 100, maximum: 500, description: 'Registros por página (máx 500)' },
+      limit: { type: 'integer', default: 100, maximum: 5000, description: 'Registros por página' },
     },
   },
   response: {

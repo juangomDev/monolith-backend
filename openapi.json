@@ -2567,6 +2567,24 @@
           },
           {
             "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "description": "Búsqueda parcial de texto libre (insensible a mayúsculas/acentos) en cualquier columna de la tabla"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "select",
+            "required": false,
+            "description": "Lista de columnas a devolver separadas por coma (ej. ?select=id,name,code)"
+          },
+          {
+            "schema": {
               "type": "integer",
               "default": 1
             },
@@ -2579,12 +2597,12 @@
             "schema": {
               "type": "integer",
               "default": 100,
-              "maximum": 500
+              "maximum": 5000
             },
             "in": "query",
             "name": "limit",
             "required": false,
-            "description": "Registros por página (máx 500)"
+            "description": "Registros por página"
           },
           {
             "schema": {

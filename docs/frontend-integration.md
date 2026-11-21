@@ -303,7 +303,17 @@ const rowsRes = await fetch(`http://localhost:3000/t/${shortCode}?format=rows`);
 const rows = await rowsRes.json();
 // rows: [ { col1: val1, col2: val2 }, ... ]
 
-// 3. (Opcional) Si se requieren estilos de celda y celdas combinadas de Excel:
+// 3. Filtrado Dinámico Universal por Columnas, Jerarquía Padre-Hijo (father / father_id), Búsqueda y Selección:
+// a) Obtener solo nodos raíz (ej. Estados sin padre):
+const estados = await fetch(`http://localhost:3000/t/${shortCode}?father=null&format=rows`).then((r) => r.json());
+
+// b) Obtener todos los hijos de un padre por ID (usando el nombre de columna 'father' o el alias 'father_id' de columnsMeta):
+const municipios = await fetch(`http://localhost:3000/t/${shortCode}?father=15&select=id,name,code&format=rows`).then((r) => r.json());
+
+// c) Filtrar cualquier tabla por una o varias columnas + búsqueda libre sin acentos:
+const filtrado = await fetch(`http://localhost:3000/t/${shortCode}?Estado=Miranda,Zulia&search=educacion&format=rows`).then((r) => r.json());
+
+// 4. (Opcional) Si se requieren estilos de celda y celdas combinadas de Excel:
 const styledRes = await fetch(`http://localhost:3000/t/${shortCode}?includeStyles=true`);
 const { headers, merges, cellStyles } = await styledRes.json();
 ```

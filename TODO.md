@@ -32,6 +32,7 @@
 | **Fase 20** | Arquitectura Jerárquica Departamental (3 Niveles) y Bóveda Compartida (`shared`) | ✅ Completado |
 | **Fase 21** | Ingesta Nativa de Tablas JSON e Indicador de Origen en Respuestas de IA (`usedAi`) | ✅ Completado |
 | **Fase 22** | Entrega Limpia Fila por Fila y Eliminación de Relleno en Tablas (`GET /t/:short_code`) | ✅ Completado |
+| **Fase 23** | Filtrado Dinámico Universal por Columnas, Jerarquía Padre-Hijo (`father`), Búsqueda y Proyección en `/t/:short_code` | ✅ Completado |
 
 ---
 
@@ -1140,6 +1141,20 @@
   - [x] `22.2.1` Omitir `cellStyles`, `metadataCard`, `merges` y `headers` por defecto en `GET /t/:short_code` (solo se incluyen si `?includeStyles=true`).
   - [x] `22.2.2` Soportar `?format=rows` para devolver directamente el array JSON fila por fila (`[ { ... }, { ... } ]`).
   - [x] `22.2.3` Pruebas automatizadas en `tests/modules/tables/tables.clean-rows.test.ts` y sincronización de `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
+
+---
+
+## 🔎 FASE 23: Filtrado Dinámico Universal por Columnas, Jerarquía Padre-Hijo (`father`), Búsqueda y Proyección (`GET /t/:short_code`)
+
+- [x] **23.1 Motor de Filtrado Tabular (`src/modules/tables/tables.filter.ts`)**
+  - [x] `23.1.1` Resolución dinámica de cualquier columna de la tabla o alias en `metadataCard.columnsMeta` (ej. `father` <-> `father_id`).
+  - [x] `23.1.2` Soporte para nodos raíz (`?father=null` / `empty`), filtros múltiples por coma (`?father=1,15`), coincidencia flexible número/string y sin acentos.
+  - [x] `23.1.3` Búsqueda global de texto parcial (`?search=` / `?q=`) y proyección de columnas (`?select=id,name,code`).
+
+- [x] **23.2 Integración en `GET /t/:short_code`, Pruebas y Documentación**
+  - [x] `23.2.1` Integrar filtrado en `tables.routes.ts` y `tables.service.ts` compatible con `?format=rows` y paginación.
+  - [x] `23.2.2` Crear suite `tests/modules/tables/tables.filter.test.ts`.
+  - [x] `23.2.3` Sincronizar `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
 
 ---
 

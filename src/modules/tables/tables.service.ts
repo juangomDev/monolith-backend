@@ -8,6 +8,7 @@ import type { MultipartFile } from '@fastify/multipart';
 import { tablesRepository, type FindTablesOptions } from './tables.repository.js';
 import { readTableRows, extractRichTableData, generateInitialMetadataCard } from './tables.parser.js';
 import { cleanTabularRowsAndColumns, createCleanGzipStreamFromBuffer } from './tables.cleaner.js';
+import { hasDynamicTableFilters, applyDynamicTableFilters } from './tables.filter.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../shared/errors.js';
 import { generateShortCode } from '../../shared/shortcode.js';
@@ -165,84 +166,68 @@ export class TablesService {
     const records = await tablesRepository.findAll(findOptions);
     let total = records.length;
     if (options.page !== undefined || options.limit !== undefined) {
-      try {
-        total = await tablesRepository.count(findOptions);
-      } catch {
-        total = records.length;
-      }
+      try { total = await tablesRepository.count(findOptions); } catch { total = records.length; }
     }
 
     const effectiveLimit = limit || (total > 0 ? total : 50);
     const totalPages = Math.ceil(total / effectiveLimit) || 1;
 
     return {
-      tables: records.map(formatTableItem),
-      total,
-      page,
-      limit: effectiveLimit,
-      totalPages,
-      meta: {
-        page,
-        limit: effectiveLimit,
-        total,
-        totalPages,
-        hasNext: page < totalPages,
-      },
+      tables: records.map(formatTableItem), total, page, limit: effectiveLimit, totalPages,
+      meta: { page, limit: effectiveLimit, total, totalPages, hasNext: page < totalPages },
     };
   }
 
   async getTableByShortCode(shortCode: string) {
     const record = await tablesRepository.findByShortCode(shortCode);
-    if (!record) {
-      throw new AppError(404, 'Tabla no encontrada', 'NOT_FOUND');
-    }
-
+    if (!record) throw new AppError(404, 'Tabla no encontrada', 'NOT_FOUND');
     try {
       await fs.access(record.storagePath, fs.constants.R_OK);
     } catch {
       throw new AppError(404, 'El archivo físico de la tabla no existe en almacenamiento', 'FILE_NOT_FOUND');
     }
-
     return record;
   }
 
-  async getTableDataPaginated(shortCode: string, page = 1, limit = 100, includeStyles = false) {
+  async getTableDataPaginated(shortCode: string, page = 1, limit = 100, includeStyles = false, filterQuery?: Record<string, any>) {
     const record = await this.getTableByShortCode(shortCode);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
+    const hasFilters = hasDynamicTableFilters(filterQuery);
 
     let columns: string[] = (record.columnsSchema as string[]) || [];
-    let rows: Record<string, any>[] = [];
+    let allRows: Record<string, any>[] = [];
     let headers: string[][] | undefined;
     let merges: string[] | undefined;
     let cellStyles: any;
-    let total = record.rowCount;
+    let metadataCard: any = (record as any).metadataCard ?? null;
+    let loadedFullTable = false;
 
     try {
       const gzBuffer = await fs.readFile(gzPath);
       const cached = JSON.parse((await gunzipAsync(gzBuffer)).toString('utf-8'));
       const cleaned = cleanTabularRowsAndColumns(cached.columns || columns, cached.data || []);
-      total = cleaned.rowCount;
-      columns = cleaned.columns;
-      headers = cached.headers;
-      merges = cached.merges;
-      cellStyles = cached.cellStyles;
-      const startIndex = (page - 1) * limit;
-      rows = cleaned.rows.slice(startIndex, startIndex + limit);
+      columns = cleaned.columns; allRows = cleaned.rows;
+      headers = cached.headers; merges = cached.merges; cellStyles = cached.cellStyles;
+      metadataCard = cached.metadataCard ?? metadataCard;
+      loadedFullTable = true;
     } catch {
       const ext = path.extname(record.storagePath).toLowerCase();
-      const parsed = await readTableRows(record.storagePath, ext, page, limit);
+      const parsed = hasFilters ? await extractRichTableData(record.storagePath, ext) : await readTableRows(record.storagePath, ext, page, limit);
       const cleaned = cleanTabularRowsAndColumns(parsed.columns.length > 0 ? parsed.columns : columns, parsed.rows);
       columns = cleaned.columns;
-      rows = cleaned.rows;
+      allRows = cleaned.rows;
+      loadedFullTable = hasFilters;
     }
 
+    const filtered = applyDynamicTableFilters(columns, allRows, filterQuery, metadataCard);
+    columns = filtered.columns;
+    const total = loadedFullTable ? filtered.rows.length : record.rowCount;
+    const startIndex = (page - 1) * limit;
+    const rows = loadedFullTable ? filtered.rows.slice(startIndex, startIndex + limit) : filtered.rows;
     const totalPages = Math.ceil(total / limit) || 1;
+
     return {
-      id: record.id,
-      shortCode: record.shortCode,
-      tableName: record.tableName,
-      rowCount: total,
-      columns,
+      id: record.id, shortCode: record.shortCode, tableName: record.tableName, rowCount: total, columns,
       ...(includeStyles && headers ? { headers } : {}),
       ...(includeStyles && merges ? { merges } : {}),
       ...(includeStyles && cellStyles ? { cellStyles } : {}),

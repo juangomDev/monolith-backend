@@ -824,7 +824,12 @@ Entrega de datos tabulares limpios fila por fila o descarga binaria del archivo 
 - **Parámetros URL:** `short_code` (Código Base58 opaco de 10 caracteres).
 - **Query Params:**
   - `page`: Número de página (Default: `1`).
-  - `limit`: Filas por página (Default: `100`, máx. `500`).
+  - `limit`: Filas por página (Default: `100` sin filtros, hasta `5000` con filtros activos).
+  - **`<columna>` o `<alias_columnsMeta>` (Filtrado Dinámico Universal):** Cualquier query param con el nombre de una columna de la tabla o su alias en `columnsMeta` (ej. `?father=15`, `?father_id=15`, `?Estado=Miranda`, `?code=0101`).
+    - Raíces / vacíos: `?father=null` o `?father=empty` filtra filas donde la columna sea `null` o vacía.
+    - Múltiples valores: `?father=15,16` filtra filas cuyo valor coincida con cualquiera de la lista.
+  - `search` (o `q`): Búsqueda parcial de texto libre (insensible a mayúsculas y acentos) en cualquier columna de la tabla (ej. `?search=bolivar`).
+  - `select`: Proyección de columnas separadas por coma para devolver solo los campos requeridos (ej. `?select=id,name,code`).
   - `format`: Si es `'rows'`, devuelve **únicamente el array JSON puro fila por fila** (`[ { "col1": "val1", ... }, ... ]`) sin metadatos envolventes.
   - `includeStyles`: Si es `'true'`, incluye `headers`, `merges` y `cellStyles` de Excel (por defecto `false` para entregar solo los datos limpios sin relleno).
   - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original (`.xlsx`, `.csv` o `.json`) con cabecera `Content-Disposition`.
