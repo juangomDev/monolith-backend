@@ -2,6 +2,7 @@ import * as csv from 'fast-csv';
 import ExcelJS from 'exceljs';
 import fs from 'node:fs';
 import { AppError } from '../../shared/errors.js';
+import { cleanTabularRowsAndColumns } from './tables.cleaner.js';
 export { generateInitialMetadataCard, type TableMetadataCard } from './tables.metadata.service.js';
 
 export interface ParsedTableMetadata {
@@ -92,67 +93,48 @@ export async function readCsvRows(filePath: string, page: number, limit: number)
   });
 }
 
-/**
- * Extrae metadatos (columnas y conteo de filas) de un archivo Excel (.xlsx)
- */
 export async function parseXlsxMetadata(filePath: string): Promise<ParsedTableMetadata> {
   try {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const worksheet = workbook.worksheets[0];
     if (!worksheet) return { columns: [], rowCount: 0 };
-
-    const headerRow = worksheet.getRow(1);
     const columns: string[] = [];
-    headerRow.eachCell((cell) => {
+    worksheet.getRow(1).eachCell((cell) => {
       const val = cell.value !== undefined && cell.value !== null ? String(cell.value).trim() : '';
       if (val) columns.push(val);
     });
-
     return { columns, rowCount: Math.max(0, worksheet.rowCount - 1) };
   } catch (err: any) {
     throw new AppError(400, `Error procesando archivo Excel: ${err.message}`, 'PARSER_ERROR');
   }
 }
 
-/**
- * Lee filas paginadas de un archivo Excel (.xlsx)
- */
 export async function readXlsxRows(filePath: string, page: number, limit: number): Promise<PaginatedTableData> {
   try {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const worksheet = workbook.worksheets[0];
     if (!worksheet) return { columns: [], rows: [] };
-
-    const headerRow = worksheet.getRow(1);
     const columns: string[] = [];
-    headerRow.eachCell((cell, colNumber) => {
-      const val = cell.value !== undefined && cell.value !== null ? String(cell.value).trim() : `col_${colNumber}`;
-      columns.push(val);
+    worksheet.getRow(1).eachCell((cell, colNumber) => {
+      columns.push(cell.value !== undefined && cell.value !== null ? String(cell.value).trim() : `col_${colNumber}`);
     });
-
-    const startIndex = (page - 1) * limit + 2; // Fila 1 es cabecera, datos inician en fila 2
-    const totalRows = worksheet.rowCount;
-    const endIndex = Math.min(startIndex + limit - 1, totalRows);
+    const startIndex = (page - 1) * limit + 2;
+    const endIndex = Math.min(startIndex + limit - 1, worksheet.rowCount);
     const rows: Record<string, any>[] = [];
-
     for (let r = startIndex; r <= endIndex; r++) {
       const row = worksheet.getRow(r);
       const rowData: Record<string, any> = {};
       let hasValue = false;
-
       columns.forEach((colName, index) => {
-        const cell = row.getCell(index + 1);
-        let val: any = cell.value;
+        let val: any = row.getCell(index + 1).value;
         if (val && typeof val === 'object' && 'result' in val) val = (val as any).result;
         rowData[colName] = val !== undefined ? sanitizeFormulaCell(val) : null;
         if (val !== undefined && val !== null && val !== '') hasValue = true;
       });
-
       if (hasValue) rows.push(rowData);
     }
-
     return { columns, rows };
   } catch (err: any) {
     throw new AppError(400, `Error extrayendo filas de Excel: ${err.message}`, 'PARSER_ERROR');
@@ -272,6 +254,18 @@ export async function extractRichTableData(filePath: string, ext: string): Promi
           rows.push(rowData);
           if (Object.keys(rowStyles).length > 0) cellStyles[rowIndexKey] = rowStyles;
         }
+      }
+
+      if (columns.some((c) => /^(col_\d+|.+_\d+)$/i.test(c))) {
+        const cleaned = cleanTabularRowsAndColumns(columns, rows);
+        return {
+          columns: cleaned.columns,
+          rowCount: cleaned.rowCount,
+          headers: [cleaned.columns],
+          merges,
+          rows: cleaned.rows,
+          cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+        };
       }
 
       return {

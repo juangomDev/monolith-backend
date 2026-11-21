@@ -290,16 +290,22 @@ Al cargar un archivo Excel (`.xlsx`), CSV (`.csv`) o JSON estructurado (`.json`)
 2. **Artefacto Pre-calculado `.data.json.gz`:** En la subida, se extraen celdas combinadas (`merges`), estilos de celda (color de fondo) y encabezados, comprimiéndose en un archivo `.data.json.gz` adyacente.
 3. **Formatos JSON Nativos:** Se admiten arrays de objetos directos `[ { "id": 1, "nombre": "Item" } ]`, matrices estructuradas `{ "columns": ["id", "nombre"], "rows": [...] }` o contenedores con envoltorio `{ "data": [...] }` o `{ "rows": [...] }`. Todos se convierten transparentemente a tablas paginables con sanitización anti-fórmulas.
 
-### B. Consumo Instantáneo en el Frontend (`GET /t/:short_code`)
+### B. Consumo Instantáneo y Limpio Fila por Fila en el Frontend (`GET /t/:short_code`)
 Al consultar los datos para pintar la gráfica o tabla:
 ```typescript
-// En React / Vue / Vanilla JS:
+// 1. Modo estándar limpio (sin relleno de cellStyles, merges ni metadataCard):
 const res = await fetch(`http://localhost:3000/t/${shortCode}`);
-const { columns, headers, merges, cellStyles, data, meta } = await res.json();
+const { columns, data, rowCount, meta } = await res.json();
+// data: [ { col1: val1, col2: val2 }, ... ] (sin columnas fantasma col_N: null)
 
-// Para cuadros estadísticos con colores y merges:
-// merges: ['A1:B1'] -> Celdas combinadas nativas
-// cellStyles['0']['monto']: { bg: '#10b981', bold: true, align: 'right' } -> Estilos extraídos
+// 2. Modo directo "Solo Array de Filas" (?format=rows):
+const rowsRes = await fetch(`http://localhost:3000/t/${shortCode}?format=rows`);
+const rows = await rowsRes.json();
+// rows: [ { col1: val1, col2: val2 }, ... ]
+
+// 3. (Opcional) Si se requieren estilos de celda y celdas combinadas de Excel:
+const styledRes = await fetch(`http://localhost:3000/t/${shortCode}?includeStyles=true`);
+const { headers, merges, cellStyles } = await styledRes.json();
 ```
 - **Tiempo de Respuesta:** Responde en ~2 ms con 0% de CPU en lecturas, ya que transmite directamente el flujo precalculado.
 - **Paginación:** Si se especifican `?page=1&limit=50`, se entrega la porción solicitada con metadatos `{ page, limit, total, totalPages, hasNext }`.

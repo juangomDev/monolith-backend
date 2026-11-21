@@ -27,14 +27,23 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { short_code } = request.params as { short_code: string };
-      const query = request.query as { download?: string; page?: string; limit?: string; raw?: string };
+      const query = request.query as {
+        download?: string;
+        page?: string;
+        limit?: string;
+        raw?: string;
+        format?: string;
+        includeStyles?: string;
+      };
 
       if (query?.download === 'true') {
         const { record, fileStream } = await tablesService.getTableDownloadStream(short_code);
-        const isCsv = record.storagePath.toLowerCase().endsWith('.csv');
-        const contentType = isCsv
+        const lowerPath = record.storagePath.toLowerCase();
+        const contentType = lowerPath.endsWith('.csv')
           ? 'text/csv'
-          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          : lowerPath.endsWith('.json')
+            ? 'application/json'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
         reply.header('Content-Type', contentType);
         reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(record.tableName)}"`);
@@ -42,10 +51,22 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const isPaginated = query?.page !== undefined || query?.limit !== undefined;
+      const includeStyles = query?.includeStyles === 'true';
+
+      // Modo directo fila por fila: retorna únicamente el array JSON de filas [{...}, {...}]
+      if (query?.format === 'rows') {
+        const page = Math.max(1, parseInt(query?.page || '1', 10) || 1);
+        const limit = isPaginated
+          ? Math.min(5000, Math.max(1, parseInt(query?.limit || '100', 10) || 100))
+          : 100000;
+        const result = await tablesService.getTableDataPaginated(short_code, page, limit, false);
+        return reply.send(result.data);
+      }
+
       const acceptsGzip = Boolean(request.headers['accept-encoding']?.includes('gzip'));
 
-      // Entrega instantánea de artefacto precalculado (2 ms) si se pide raw o si el cliente acepta gzip sin paginar
-      if (query?.raw === 'true' || (acceptsGzip && !isPaginated)) {
+      // Entrega instantánea de artefacto precalculado limpio (2 ms) si se pide raw o si el cliente acepta gzip sin paginar
+      if (query?.raw === 'true' || (acceptsGzip && !isPaginated && !includeStyles)) {
         const precalc = await tablesService.getPrecalculatedGzipStream(short_code);
         if (precalc) {
           reply.header('Content-Type', 'application/json');
@@ -58,7 +79,7 @@ export const tablesRoutes: FastifyPluginAsync = async (fastify) => {
       const page = Math.max(1, parseInt(query?.page || '1', 10) || 1);
       const limit = Math.min(500, Math.max(1, parseInt(query?.limit || '100', 10) || 100));
 
-      const result = await tablesService.getTableDataPaginated(short_code, page, limit);
+      const result = await tablesService.getTableDataPaginated(short_code, page, limit, includeStyles);
       return reply.send(result);
     }
   );

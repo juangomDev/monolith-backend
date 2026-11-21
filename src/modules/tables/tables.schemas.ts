@@ -58,40 +58,21 @@ export const getTableByShortCodeRouteSchema: FastifySchema = {
     properties: {
       download: { type: 'string', enum: ['true', 'false'], description: 'Descargar archivo original' },
       raw: { type: 'string', enum: ['true', 'false'], description: 'Servir artefacto precalculado gzip directo' },
+      format: {
+        type: 'string',
+        enum: ['rows', 'json'],
+        description: 'Si es rows, devuelve únicamente el array JSON de filas ([{...}, {...}]) sin metadatos adicionales',
+      },
+      includeStyles: {
+        type: 'string',
+        enum: ['true', 'false'],
+        description: 'Si es true, incluye cellStyles, merges y headers de Excel (false por defecto para evitar relleno)',
+      },
       page: { type: 'integer', default: 1, description: 'Número de página a consultar' },
       limit: { type: 'integer', default: 100, maximum: 500, description: 'Registros por página (máx 500)' },
     },
   },
   response: {
-    200: {
-      description: 'Datos paginados o stream de descarga de dataset',
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        id: { type: 'string' },
-        shortCode: { type: 'string' },
-        tableName: { type: 'string' },
-        columns: { type: 'array', items: { type: 'string' } },
-        headers: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
-        merges: { type: 'array', items: { type: 'string' } },
-        cellStyles: { type: 'object', additionalProperties: true },
-        data: {
-          type: 'array',
-          items: { type: 'object', additionalProperties: true },
-        },
-        meta: {
-          type: 'object',
-          additionalProperties: true,
-          properties: {
-            page: { type: 'integer' },
-            limit: { type: 'integer' },
-            total: { type: 'integer' },
-            totalPages: { type: 'integer' },
-            hasNext: { type: 'boolean' },
-          },
-        },
-      },
-    },
     404: standardErrorResponses[404],
   },
 };

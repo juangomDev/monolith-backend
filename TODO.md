@@ -31,6 +31,7 @@
 | **Fase 19** | Sistema de Eventos Desacoplados y Notificaciones en Vivo (Tablas Abiertas, Bandeja In-App y SSE) | ✅ Completado |
 | **Fase 20** | Arquitectura Jerárquica Departamental (3 Niveles) y Bóveda Compartida (`shared`) | ✅ Completado |
 | **Fase 21** | Ingesta Nativa de Tablas JSON e Indicador de Origen en Respuestas de IA (`usedAi`) | ✅ Completado |
+| **Fase 22** | Entrega Limpia Fila por Fila y Eliminación de Relleno en Tablas (`GET /t/:short_code`) | ✅ Completado |
 
 ---
 
@@ -1125,6 +1126,20 @@
   - [x] `21.7.2` Eliminar `Content-Security-Policy: sandbox` vacío y `X-Frame-Options: DENY` en `GET /p/:short_code` (`pdfs.routes.ts`), configurando `Content-Security-Policy: frame-ancestors *` para habilitar tanto el visor PDF nativo del navegador como `<iframe />` en el frontend.
   - [x] `21.7.3` Unificar directorio con `env.STORAGE_DIR` y validar existencia física en disco (`404 FILE_NOT_FOUND`) en `pdfs.storage.ts` y `pdfs.service.ts`.
   - [x] `21.7.4` Pruebas automatizadas en `tests/modules/pdfs/pdfs.public-url.test.ts`.
+
+---
+
+## 🧹 FASE 22: Entrega Limpia Fila por Fila y Eliminación de Relleno en Tablas (`GET /t/:short_code`)
+
+- [x] **22.1 Módulo de Limpieza Tabular (`src/modules/tables/tables.cleaner.ts`)**
+  - [x] `22.1.1` Detección automática de la fila real de encabezados en hojas Excel con títulos combinados o decorativos en las primeras filas.
+  - [x] `22.1.2` Eliminación de columnas fantasma (`col_2`, `col_3`...) 100% vacías y filas en blanco.
+  - [x] `22.1.3` Transformación limpia al vuelo de artefactos `.data.json.gz` existentes (`createCleanGzipStreamFromBuffer`).
+
+- [x] **22.2 Respuesta Limpia sin Relleno y Modo Directo `?format=rows` (`tables.routes.ts`, `tables.service.ts`)**
+  - [x] `22.2.1` Omitir `cellStyles`, `metadataCard`, `merges` y `headers` por defecto en `GET /t/:short_code` (solo se incluyen si `?includeStyles=true`).
+  - [x] `22.2.2` Soportar `?format=rows` para devolver directamente el array JSON fila por fila (`[ { ... }, { ... } ]`).
+  - [x] `22.2.3` Pruebas automatizadas en `tests/modules/tables/tables.clean-rows.test.ts` y sincronización de `openapi.json`, `RUTAS.md`, `ENDPOINTS.md` y `docs/frontend-integration.md`.
 
 ---
 

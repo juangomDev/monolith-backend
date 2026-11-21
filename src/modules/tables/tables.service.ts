@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { MultipartFile } from '@fastify/multipart';
 import { tablesRepository, type FindTablesOptions } from './tables.repository.js';
 import { readTableRows, extractRichTableData, generateInitialMetadataCard } from './tables.parser.js';
+import { cleanTabularRowsAndColumns, createCleanGzipStreamFromBuffer } from './tables.cleaner.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../shared/errors.js';
 import { generateShortCode } from '../../shared/shortcode.js';
@@ -124,18 +125,10 @@ export class TablesService {
     // Generar y comprimir artefacto pre-calculado .data.json.gz (Doble Artefacto)
     try {
       const precalculatedPayload = {
-        id: record.id,
-        shortCode: record.shortCode,
-        tableName: record.tableName,
-        rowCount: richData.rowCount,
-        columns: richData.columns,
-        headers: richData.headers,
-        merges: richData.merges,
-        cellStyles: richData.cellStyles,
-        metadataCard,
-        data: richData.rows,
-        createdAt: record.createdAt,
-        updatedAt: (record as any).updatedAt ?? record.createdAt,
+        id: record.id, shortCode: record.shortCode, tableName: record.tableName,
+        rowCount: richData.rowCount, columns: richData.columns, headers: richData.headers,
+        merges: richData.merges, cellStyles: richData.cellStyles, metadataCard,
+        data: richData.rows, createdAt: record.createdAt, updatedAt: (record as any).updatedAt ?? record.createdAt,
       };
       const gzBuffer = await gzipAsync(Buffer.from(JSON.stringify(precalculatedPayload), 'utf-8'));
       await fs.writeFile(path.join(tablesDir, `${shortCode}.data.json.gz`), gzBuffer);
@@ -213,7 +206,7 @@ export class TablesService {
     return record;
   }
 
-  async getTableDataPaginated(shortCode: string, page = 1, limit = 100) {
+  async getTableDataPaginated(shortCode: string, page = 1, limit = 100, includeStyles = false) {
     const record = await this.getTableByShortCode(shortCode);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
 
@@ -227,18 +220,20 @@ export class TablesService {
     try {
       const gzBuffer = await fs.readFile(gzPath);
       const cached = JSON.parse((await gunzipAsync(gzBuffer)).toString('utf-8'));
-      total = cached.rowCount ?? cached.data?.length ?? record.rowCount;
-      columns = cached.columns || columns;
+      const cleaned = cleanTabularRowsAndColumns(cached.columns || columns, cached.data || []);
+      total = cleaned.rowCount;
+      columns = cleaned.columns;
       headers = cached.headers;
       merges = cached.merges;
       cellStyles = cached.cellStyles;
       const startIndex = (page - 1) * limit;
-      rows = (cached.data || []).slice(startIndex, startIndex + limit);
+      rows = cleaned.rows.slice(startIndex, startIndex + limit);
     } catch {
       const ext = path.extname(record.storagePath).toLowerCase();
       const parsed = await readTableRows(record.storagePath, ext, page, limit);
-      columns = parsed.columns.length > 0 ? parsed.columns : columns;
-      rows = parsed.rows;
+      const cleaned = cleanTabularRowsAndColumns(parsed.columns.length > 0 ? parsed.columns : columns, parsed.rows);
+      columns = cleaned.columns;
+      rows = cleaned.rows;
     }
 
     const totalPages = Math.ceil(total / limit) || 1;
@@ -246,10 +241,11 @@ export class TablesService {
       id: record.id,
       shortCode: record.shortCode,
       tableName: record.tableName,
+      rowCount: total,
       columns,
-      headers,
-      merges,
-      cellStyles,
+      ...(includeStyles && headers ? { headers } : {}),
+      ...(includeStyles && merges ? { merges } : {}),
+      ...(includeStyles && cellStyles ? { cellStyles } : {}),
       data: rows,
       meta: { page, limit, total, totalPages, hasNext: page < totalPages },
     };
@@ -259,8 +255,9 @@ export class TablesService {
     const record = await this.getTableByShortCode(shortCode);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
     try {
-      await fs.access(gzPath, fs.constants.R_OK);
-      return { record, stream: createReadStream(gzPath) };
+      const gzBuffer = await fs.readFile(gzPath);
+      const stream = await createCleanGzipStreamFromBuffer(gzBuffer, record);
+      return { record, stream };
     } catch {
       return null;
     }

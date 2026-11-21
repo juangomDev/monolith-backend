@@ -819,28 +819,24 @@ Elimina física y lógicamente el dataset. Destruye en disco tanto el archivo or
 - **Errores:** `400 Bad Request` (UUID inválido), `401 Unauthorized`, `403 Forbidden` (no propietario ni ADMIN), `404 Not Found`.
 
 #### `GET /t/:short_code` (Pública por Diseño)
-Entrega de datos tabulares enriquecidos o descarga binaria del archivo original del dataset.
+Entrega de datos tabulares limpios fila por fila o descarga binaria del archivo original del dataset.
 - **Autenticación:** Ninguna (Pública).
 - **Parámetros URL:** `short_code` (Código Base58 opaco de 10 caracteres).
 - **Query Params:**
   - `page`: Número de página (Default: `1`).
   - `limit`: Filas por página (Default: `100`, máx. `500`).
+  - `format`: Si es `'rows'`, devuelve **únicamente el array JSON puro fila por fila** (`[ { "col1": "val1", ... }, ... ]`) sin metadatos envolventes.
+  - `includeStyles`: Si es `'true'`, incluye `headers`, `merges` y `cellStyles` de Excel (por defecto `false` para entregar solo los datos limpios sin relleno).
   - `download`: Si es `'true'`, responde con stream binario para descarga del archivo original (`.xlsx`, `.csv` o `.json`) con cabecera `Content-Disposition`.
-  - `raw`: Si es `'true'` o si se envía con `Accept-Encoding: gzip` sin paginación, sirve directamente el stream precalculado ultra-rápido (2 ms) con cabecera `Content-Encoding: gzip`.
-- **Respuesta 200 OK (Modo JSON Enriquecido):**
+  - `raw`: Si es `'true'` o si se envía con `Accept-Encoding: gzip` sin paginación, sirve directamente el stream gzip limpio en ~2 ms con cabecera `Content-Encoding: gzip`.
+- **Respuesta 200 OK (Por defecto - Datos Limpios Fila por Fila):**
   ```json
   {
     "id": "66666666-6666-6666-6666-666666666666",
     "shortCode": "tab1234567",
     "tableName": "ventas_octubre.xlsx",
+    "rowCount": 1500,
     "columns": ["id", "producto", "monto", "fecha"],
-    "headers": [["id", "producto", "monto", "fecha"]],
-    "merges": ["A1:B1"],
-    "cellStyles": {
-      "0": {
-        "monto": { "bg": "#10b981", "bold": true, "align": "right" }
-      }
-    },
     "data": [
       { "id": 1, "producto": "Laptop Pro", "monto": 1200.50, "fecha": "2026-10-15" }
     ],

@@ -2541,6 +2541,32 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "rows",
+                "json"
+              ]
+            },
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "description": "Si es rows, devuelve únicamente el array JSON de filas ([{...}, {...}]) sin metadatos adicionales"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "includeStyles",
+            "required": false,
+            "description": "Si es true, incluye cellStyles, merges y headers de Excel (false por defecto para evitar relleno)"
+          },
+          {
+            "schema": {
               "type": "integer",
               "default": 1
             },
@@ -2574,82 +2600,6 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Datos paginados o stream de descarga de dataset",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Datos paginados o stream de descarga de dataset",
-                  "type": "object",
-                  "additionalProperties": true,
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "shortCode": {
-                      "type": "string"
-                    },
-                    "tableName": {
-                      "type": "string"
-                    },
-                    "columns": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "headers": {
-                      "type": "array",
-                      "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "merges": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "cellStyles": {
-                      "type": "object",
-                      "additionalProperties": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": true
-                      }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true,
-                      "properties": {
-                        "page": {
-                          "type": "integer"
-                        },
-                        "limit": {
-                          "type": "integer"
-                        },
-                        "total": {
-                          "type": "integer"
-                        },
-                        "totalPages": {
-                          "type": "integer"
-                        },
-                        "hasNext": {
-                          "type": "boolean"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
           "404": {
             "description": "Recurso no encontrado",
             "content": {
