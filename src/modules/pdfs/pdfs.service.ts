@@ -7,6 +7,8 @@ import { foldersRepository, type FoldersRepository } from '../folders/folders.re
 import { foldersSharesService, type FoldersSharesService } from '../folders/folders.shares.service.js';
 import { generateShortCode } from '../../shared/shortcode.js';
 import { auditService } from '../audit/audit.service.js';
+import { getChatCache } from '../chat/chat.provider.js';
+import { eventBus } from '../../shared/event-bus.js';
 import { AppError } from '../../shared/errors.js';
 import { env } from '../../config/env.js';
 
@@ -46,6 +48,9 @@ export class PdfsService {
   ) {}
 
   async uploadPdf(fileBuffer: Buffer, filename: string, folderId?: string, requester?: RequesterContext) {
+    if (requester?.role === Role.COLLABORATOR && !folderId) {
+      throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
+    }
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new AppError(400, 'El archivo PDF no puede estar vacío', 'EMPTY_FILE');
     }
@@ -57,12 +62,14 @@ export class PdfsService {
     const parsed = await parsePdfDocument(fileBuffer, filename);
 
     let targetFolderId = folderId;
+    let targetFolder: any = null;
     if (!targetFolderId && requester?.id) {
       const defaultFolder = await this.foldersRepo.findOrCreateDefaultFolder(requester.id, FolderType.PDF);
       targetFolderId = defaultFolder.id;
     } else if (targetFolderId && requester) {
       const folder = await this.foldersRepo.findFolderById(targetFolderId);
       if (!folder) throw new AppError(404, 'Carpeta destino no encontrada', 'FOLDER_NOT_FOUND');
+      targetFolder = folder;
       if (folder.type === FolderType.CONTAINER) {
         throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
       }
@@ -101,15 +108,10 @@ export class PdfsService {
 
     await this.storage.saveTextArtifact(shortCode, textArtifactPayload);
 
-    auditService.recordLog({
-      actorId: requester?.id,
-      actorUsername: requester?.role || 'system',
-      action: 'PDF_UPLOAD',
-      resourceType: 'PDF',
-      resourceId: record.id,
-      folderId: record.folderId,
-    });
-
+    auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'PDF_UPLOAD', resourceType: 'PDF', resourceId: record.id, folderId: record.folderId });
+    if (targetFolder?.userId && requester?.id && targetFolder.userId !== requester.id && record.folderId) {
+      eventBus.emitEvent('resource.uploaded', { resourceType: 'PDF', resourceId: record.id, resourceName: record.originalName, folderId: record.folderId, folderName: targetFolder.name, folderOwnerId: targetFolder.userId, uploadedById: requester.id, uploadedByRole: requester.role });
+    }
     return formatPdfItem(record);
   }
 
@@ -140,15 +142,21 @@ export class PdfsService {
 
   async listPdfs(options: FindPdfsOptions, requester: RequesterContext) {
     const isAdmin = requester.role === Role.ADMIN;
+    const page = options.page && options.page > 0 ? options.page : 1;
+    const limit = options.limit && options.limit > 0 ? options.limit : 50;
+    const findOpts = { ...options, page, limit, userId: requester.id, isAdmin, role: requester.role };
     const [records, total] = await Promise.all([
-      this.repo.findAll({ ...options, userId: requester.id, isAdmin }),
-      this.repo.count({ ...options, userId: requester.id, isAdmin }),
+      this.repo.findAll(findOpts),
+      this.repo.count(findOpts),
     ]);
+    const totalPages = Math.ceil(total / limit) || 1;
     return {
       pdfs: records.map(formatPdfItem),
       total,
-      page: options.page || 1,
-      limit: options.limit || 50,
+      page,
+      limit,
+      totalPages,
+      meta: { page, limit, total, totalPages, hasNext: page < totalPages },
     };
   }
 
@@ -214,6 +222,8 @@ export class PdfsService {
       metadataCard: mergedMetadata as any,
     });
 
+    try { getChatCache().clear(); } catch {}
+
     auditService.recordLog({
       actorId: requester.id,
       actorUsername: requester.role,
@@ -244,6 +254,9 @@ export class PdfsService {
       await this.storage.saveTextArtifact(pdf.shortCode, currentArtifact);
     }
 
+    try { getChatCache().clear(); } catch {}
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'PDF_METADATA_UPDATE', resourceType: 'PDF', resourceId: updated.id, folderId: updated.folderId });
+
     return formatPdfItem(updated);
   }
 
@@ -256,6 +269,7 @@ export class PdfsService {
 
     await this.repo.delete(id);
     await this.storage.deletePdfFiles(pdf.shortCode);
+    try { getChatCache().clear(); } catch {}
 
     auditService.recordLog({
       actorId: requester.id,

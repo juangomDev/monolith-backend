@@ -6,7 +6,7 @@ export const passValidator = () => () => true;
 export const getStorageStatsRouteSchema: FastifySchema = {
   tags: ['Stats'],
   summary: 'Monitoreo de cuotas, peso y salud del almacenamiento',
-  description: 'Expone estadísticas de imágenes y tablas en PostgreSQL y disco físico. ADMIN ve métricas globales y salud de disco; MANAGER ve sus carpetas.',
+  description: 'Expone estadísticas de imágenes, tablas y documentos PDF en PostgreSQL y disco físico. ADMIN ve métricas globales y salud de disco; MANAGER ve sus carpetas.',
   security: securityDualAuth,
   response: {
     200: {
@@ -31,6 +31,13 @@ export const getStorageStatsRouteSchema: FastifySchema = {
                 sizeBytes: { type: 'integer' },
               },
             },
+            pdfs: {
+              type: 'object',
+              properties: {
+                count: { type: 'integer' },
+                sizeBytes: { type: 'integer' },
+              },
+            },
             totalCount: { type: 'integer' },
             totalSizeBytes: { type: 'integer' },
           },
@@ -43,8 +50,12 @@ export const getStorageStatsRouteSchema: FastifySchema = {
             imagesFilesCount: { type: 'integer' },
             tablesBytes: { type: 'integer' },
             tablesFilesCount: { type: 'integer' },
+            pdfsBytes: { type: 'integer' },
+            pdfsFilesCount: { type: 'integer' },
             totalBytes: { type: 'integer' },
             totalFilesCount: { type: 'integer' },
+            maxStorageBytes: { type: 'integer' },
+            usagePercent: { type: 'number' },
           },
         },
         topFolders: {
@@ -58,6 +69,15 @@ export const getStorageStatsRouteSchema: FastifySchema = {
               totalBytes: { type: 'integer' },
               itemsCount: { type: 'integer' },
             },
+          },
+        },
+        summary: {
+          type: 'object',
+          properties: {
+            activeUsersCount: { type: 'integer' },
+            formsCount: { type: 'integer' },
+            pendingEntriesCount: { type: 'integer' },
+            resolvedEntriesCount: { type: 'integer' },
           },
         },
         warning: { type: 'boolean' },

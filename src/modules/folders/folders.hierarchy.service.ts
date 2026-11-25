@@ -64,6 +64,68 @@ export class FoldersHierarchyService {
     return { targetUserId };
   }
 
+  async validateParentMove(
+    folder: { id: string; type: FolderType; parentId?: string | null },
+    newParentId: string | null,
+    requester: RequesterContext
+  ): Promise<void> {
+    if (newParentId === null) {
+      if (requester.role === Role.COLLABORATOR) {
+        throw new AppError(403, 'Los colaboradores no pueden mover carpetas al nivel raíz', 'FORBIDDEN');
+      }
+      return;
+    }
+
+    if (newParentId === folder.id) {
+      throw new AppError(400, 'Una carpeta no puede ser padre de sí misma', 'INVALID_FOLDER_HIERARCHY');
+    }
+
+    const parentAccess = await this.sharesService.assertFolderAccess(newParentId, requester, FolderPermission.EDIT);
+    const targetParent = parentAccess.folder;
+
+    if (targetParent.type !== FolderType.CONTAINER && targetParent.type !== folder.type) {
+      throw new AppError(
+        400,
+        `Una subcarpeta dentro de una carpeta ${targetParent.type} debe ser de tipo ${targetParent.type}`,
+        'INVALID_FOLDER_TYPE'
+      );
+    }
+
+    // Verificar ciclos y profundidad del nuevo ancestro (Nivel 1 -> 2 -> 3)
+    let parentDepth = 1;
+    let currParent: string | null = targetParent.parentId;
+    while (currParent) {
+      if (currParent === folder.id) {
+        throw new AppError(400, 'No se permite crear ciclos moviendo una carpeta dentro de un descendiente', 'INVALID_FOLDER_HIERARCHY');
+      }
+      parentDepth++;
+      const ancestor = await this.repo.findFolderById(currParent);
+      currParent = ancestor?.parentId ?? null;
+    }
+
+    // Calcular altura del subárbol de la carpeta que se mueve
+    let subtreeHeight = 0;
+    const directChildren = (await this.repo.findChildFolderIds?.(folder.id)) ?? [];
+    if (directChildren.length > 0) {
+      subtreeHeight = 1;
+      for (const child of directChildren) {
+        const grandChildren = (await this.repo.findChildFolderIds?.(child.id)) ?? [];
+        if (grandChildren.length > 0) {
+          subtreeHeight = 2;
+          break;
+        }
+      }
+    }
+
+    if (parentDepth + 1 + subtreeHeight > 3) {
+      throw new AppError(
+        400,
+        'La jerarquía de carpetas no puede superar 3 niveles de profundidad',
+        'MAX_FOLDER_DEPTH_EXCEEDED'
+      );
+    }
+  }
+
   buildTree(folders: FormattedFolder[]): FolderTreeNode[] {
     const nodeMap = new Map<string, FolderTreeNode>();
     const roots: FolderTreeNode[] = [];

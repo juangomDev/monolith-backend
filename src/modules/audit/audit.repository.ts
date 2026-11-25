@@ -7,6 +7,10 @@ export interface FindAuditLogsOptions {
   action?: string;
   resourceType?: string;
   folderId?: string;
+  actorId?: string;
+  from?: Date;
+  to?: Date;
+  search?: string;
   managerScope?: {
     ownFolderIds: string[];
     collaboratorIds: string[];
@@ -32,6 +36,28 @@ export class AuditRepository {
 
     if (options.folderId) {
       conditions.push({ folderId: options.folderId });
+    }
+
+    if (options.actorId) {
+      conditions.push({ actorId: options.actorId });
+    }
+
+    if (options.from || options.to) {
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (options.from) createdAt.gte = options.from;
+      if (options.to) createdAt.lte = options.to;
+      conditions.push({ createdAt });
+    }
+
+    if (options.search) {
+      conditions.push({
+        OR: [
+          { actorUsername: { contains: options.search, mode: 'insensitive' } },
+          { action: { contains: options.search, mode: 'insensitive' } },
+          { resourceType: { contains: options.search, mode: 'insensitive' } },
+          { resourceId: { contains: options.search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (options.managerScope) {
@@ -77,4 +103,3 @@ export class AuditRepository {
 }
 
 export const auditRepository = new AuditRepository();
-

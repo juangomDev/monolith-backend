@@ -4,6 +4,7 @@ import { foldersRepository, type FoldersRepository } from './folders.repository.
 import { usersRepository, type UsersRepository } from '../users/users.repository.js';
 import { AppError } from '../../shared/errors.js';
 import { auditService } from '../audit/audit.service.js';
+import { eventBus } from '../../shared/event-bus.js';
 import type { RequesterContext } from './folders.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -135,6 +136,15 @@ export class FoldersSharesService {
       resourceType: 'FOLDER',
       folderId,
       metadata: { targetUserId, permission },
+    });
+
+    eventBus.emitEvent('folder.shared', {
+      folderId,
+      folderName: folder.name,
+      targetUserId,
+      permission,
+      sharedById: caller.id,
+      sharedByRole: caller.role,
     });
 
     return member;

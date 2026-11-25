@@ -49,6 +49,11 @@ export class NotificationsService {
     return { success: true };
   }
 
+  async clearReadNotifications(userId: string): Promise<{ deletedCount: number }> {
+    const deletedCount = await this.repo.deleteReadNotifications(userId);
+    return { deletedCount };
+  }
+
   async subscribeToForm(
     userId: string,
     formId: string,

@@ -113,6 +113,13 @@ export class NotificationsRepository {
     return true;
   }
 
+  async deleteReadNotifications(userId: string): Promise<number> {
+    const result = await prisma.notification.deleteMany({
+      where: { userId, read: true },
+    });
+    return result.count;
+  }
+
   // --- Subscriptions ---
   async findSubscription(userId: string, formId: string): Promise<FormSubscription | null> {
     return prisma.formSubscription.findUnique({

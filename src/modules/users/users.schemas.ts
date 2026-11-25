@@ -194,14 +194,27 @@ export const createUserRouteSchema: FastifySchema = {
 export const listUsersRouteSchema: FastifySchema = {
   tags: ['Users'],
   summary: 'Listar usuarios según jerarquía',
-  description: 'ADMIN lista todos los usuarios; MANAGER lista sus colaboradores vinculados.',
+  description: 'ADMIN lista todos los usuarios; MANAGER lista sus colaboradores vinculados. Soporta filtros por search, role, isActive y paginación.',
   security: securityBearerAuth,
+  querystring: {
+    type: 'object',
+    properties: {
+      search: { type: 'string', description: 'Buscar por username' },
+      role: { type: 'string', enum: ['ADMIN', 'MANAGER', 'COLLABORATOR'], description: 'Filtrar por rol' },
+      isActive: { type: 'boolean', description: 'Filtrar por estado activo/inactivo' },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+    },
+  },
   response: {
     200: {
       description: 'Listado de usuarios',
       type: 'object',
+      additionalProperties: true,
       properties: {
         users: { type: 'array', items: { type: 'object', properties: userObjectProperties } },
+        total: { type: 'integer' }, page: { type: 'integer' }, limit: { type: 'integer' }, totalPages: { type: 'integer' },
+        meta: { type: 'object', properties: { page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' }, totalPages: { type: 'integer' }, hasNext: { type: 'boolean' } } },
       },
       required: ['users'],
     },
@@ -215,27 +228,11 @@ export const updateUserStatusRouteSchema: FastifySchema = {
   summary: 'Activar o suspender usuario',
   description: 'Permite al ADMIN o MANAGER habilitar o deshabilitar una cuenta de usuario.',
   security: securityBearerAuth,
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: { id: { type: 'string', format: 'uuid' } },
-  },
-  body: {
-    type: 'object',
-    required: ['isActive'],
-    properties: { isActive: { type: 'boolean' } },
-  },
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+  body: { type: 'object', required: ['isActive'], properties: { isActive: { type: 'boolean' } } },
   response: {
-    200: {
-      description: 'Estado actualizado',
-      type: 'object',
-      properties: { user: { type: 'object', properties: userObjectProperties } },
-      required: ['user'],
-    },
-    400: standardErrorResponses[400],
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
+    200: { description: 'Estado actualizado', type: 'object', properties: { user: { type: 'object', properties: userObjectProperties } }, required: ['user'] },
+    400: standardErrorResponses[400], 401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404],
   },
 };
 
@@ -244,27 +241,11 @@ export const resetUserPasswordRouteSchema: FastifySchema = {
   summary: 'Restablecer contraseña de usuario por superior',
   description: 'Permite al ADMIN o MANAGER reasignar la contraseña de un colaborador o usuario.',
   security: securityBearerAuth,
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: { id: { type: 'string', format: 'uuid' } },
-  },
-  body: {
-    type: 'object',
-    required: ['newPassword'],
-    properties: { newPassword: { type: 'string', minLength: 6 } },
-  },
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+  body: { type: 'object', required: ['newPassword'], properties: { newPassword: { type: 'string', minLength: 6 } } },
   response: {
-    200: {
-      description: 'Contraseña restablecida exitosamente',
-      type: 'object',
-      properties: { message: { type: 'string', example: 'Contraseña restablecida exitosamente' } },
-      required: ['message'],
-    },
-    400: standardErrorResponses[400],
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
+    200: { description: 'Contraseña restablecida exitosamente', type: 'object', properties: { message: { type: 'string', example: 'Contraseña restablecida exitosamente' } }, required: ['message'] },
+    400: standardErrorResponses[400], 401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404],
   },
 };
 
@@ -273,21 +254,9 @@ export const deleteUserRouteSchema: FastifySchema = {
   summary: 'Eliminar usuario del sistema',
   description: 'ADMIN elimina usuarios; MANAGER elimina sus propios colaboradores vinculados.',
   security: securityBearerAuth,
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: { id: { type: 'string', format: 'uuid' } },
-  },
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
   response: {
-    200: {
-      description: 'Usuario eliminado exitosamente',
-      type: 'object',
-      properties: { deleted: { type: 'boolean' } },
-      required: ['deleted'],
-    },
-    400: standardErrorResponses[400],
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
+    200: { description: 'Usuario eliminado exitosamente', type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] },
+    400: standardErrorResponses[400], 401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404],
   },
 };

@@ -139,7 +139,7 @@ Permite al propietario de la carpeta o a un `ADMIN` actualizar sus metadatos:
 ### C. Listado, Búsqueda y Paginación (`GET /api/v1/folders`)
 Soporta filtrado por tipo, búsqueda insensible a mayúsculas/minúsculas y paginación estructurada:
 - **Query Params:**
-  - `type`: `'IMAGE' | 'TABLE'` (opcional)
+  - `type`: `'CONTAINER' | 'IMAGE' | 'TABLE' | 'PDF'` (opcional)
   - `search`: Texto a buscar en el nombre de la carpeta (opcional, insensible a mayúsculas)
   - `page`: Número de página `>= 1` (opcional)
   - `limit`: Cantidad por página `1..100` (opcional, por defecto 20 si se envía `page`)
@@ -781,9 +781,9 @@ await fetch(`${API_URL}/api/v1/api-keys/${keyId}`, {
 ```
 
 ### 16.3. Monitor de Cuotas y Salud de Almacenamiento (`GET /api/v1/stats/storage`)
-Expone métricas agregadas de imágenes y tablas en PostgreSQL, desglose de carpetas más pesadas y estado del disco físico:
-- `ADMIN`: Acceso a métricas globales y salud del disco (`disk: { imagesBytes, tablesBytes, totalBytes }`), con indicador preventivo `warning: true` si se supera el umbral operativo.
-- `MANAGER`: Acceso restringido a sus propias carpetas y datasets (campo `disk: null`).
+Expone métricas agregadas de imágenes, tablas y documentos PDF en PostgreSQL, desglose de carpetas más pesadas (`IMAGE`, `TABLE` y `PDF`) y estado del disco físico:
+- `ADMIN`: Acceso a métricas globales y salud del disco (`disk: { imagesBytes, imagesFilesCount, tablesBytes, tablesFilesCount, pdfsBytes, pdfsFilesCount, totalBytes, totalFilesCount }`), con indicador preventivo `warning: true` si se supera el umbral operativo.
+- `MANAGER`: Acceso restringido a sus propias carpetas y recursos (campo `disk: null`).
 
 ```typescript
 const statsRes = await fetch(`${API_URL}/api/v1/stats/storage`, {
@@ -792,8 +792,19 @@ const statsRes = await fetch(`${API_URL}/api/v1/stats/storage`, {
 const stats = await statsRes.json();
 // stats: {
 //   isAdmin: true,
-//   database: { images: { count, sizeBytes }, tables: { count, sizeBytes }, totalCount, totalSizeBytes },
-//   disk: { imagesBytes, tablesBytes, totalBytes, totalFilesCount },
+//   database: {
+//     images: { count, sizeBytes },
+//     tables: { count, sizeBytes },
+//     pdfs: { count, sizeBytes },
+//     totalCount,
+//     totalSizeBytes
+//   },
+//   disk: {
+//     imagesBytes, imagesFilesCount,
+//     tablesBytes, tablesFilesCount,
+//     pdfsBytes, pdfsFilesCount,
+//     totalBytes, totalFilesCount
+//   },
 //   topFolders: [{ id, name, type, totalBytes, itemsCount }],
 //   warning: false,
 //   warningMessage: null
@@ -1152,7 +1163,29 @@ const { tree, total } = await res.json();
 
 ---
 
-## 21. 📚 Guías y Casos de Uso Avanzados
+## 21. 🚀 Paridad Operativa, Herencia RBAC y Extensiones (Fases 25–27)
+
+### 21.1. Visibilidad Heredada de 3 Niveles para `COLLABORATOR`
+- Cuando un `MANAGER` comparte una carpeta Nivel 1 o Nivel 2 con un `COLLABORATOR`, el permiso (`READ` o `EDIT`) se hereda automáticamente a todas las subcarpetas (incluso las creadas por el propio colaborador) y a todos los recursos (`images`, `tables`, `pdfs`, `forms`, `chat`).
+- Al revocar el acceso en la carpeta padre, el colaborador pierde visibilidad en todo el subárbol al instante.
+- Las subidas (`POST /api/v1/images`, `/tables`, `/pdfs`, `/forms`) exigen coincidencia estricta de `folder.type` (`400 INVALID_FOLDER_TYPE`) y bloquean a `COLLABORATOR` sin `folderId` (`403 FORBIDDEN`).
+
+### 21.2. Nuevos Endpoints y Contratos Sincronizados
+- **Imágenes:** `GET /i/:short_code?download=true` (descarga `attachment`) y `PATCH /api/v1/images/:id/metadata` (`title`, `alt`, `description`, `tags`, `custom`).
+- **PDFs:** `POST /api/v1/pdfs/bulk-delete`, `POST /api/v1/pdfs/bulk-move`, `PATCH /api/v1/pdfs/:id/folder` (`{ "folderId": "uuid" }`), y `GET /api/v1/pdfs` con `totalPages` y `meta`.
+- **Chat RAG:** `GET /api/v1/chat/suggestions` (autenticado con RBAC), sugerencias públicas desde Tablas + PDFs, fusión multi-fuente Tabla + PDF e invalidación automática de caché tras mutaciones.
+- **Formularios:** `PATCH /api/v1/forms/:id`, `DELETE /api/v1/forms/:id` y paginación `meta` en `GET /api/v1/forms` y `GET /api/v1/forms/:id/entries`.
+- **Carpetas:** `PATCH /api/v1/folders/:id` soporta reubicación jerárquica `parentId` (validando ciclos, tipo y profundidad ≤ 3), Auth Dual en `/folders/:id/shares` y auditoría de mutaciones.
+- **Stats:** `GET /api/v1/stats/storage` usa cuota dinámica `env.MAX_STORAGE_GB` (`disk.maxStorageBytes`, `disk.usagePercent`) y expone `summary` (`activeUsersCount`, `formsCount`, `pendingEntriesCount`, `resolvedEntriesCount`).
+- **Auditoría, API Keys, Usuarios y Notificaciones:**
+  - `GET /api/v1/audit-logs` y `GET /api/v1/audit-logs/export?format=csv|xlsx` con filtros `from`, `to`, `actorId`, `search` (CSV/Excel sanitizado anti-fórmulas).
+  - `PATCH /api/v1/api-keys/:id` (pausar/reactivar `isActive`, editar `name`/`rateLimit`) y paginación en `GET /api/v1/api-keys`.
+  - `GET /api/v1/users?search=&role=&isActive=&page=&limit=` con `meta`.
+  - `DELETE /api/v1/notifications/read` y eventos SSE en vivo `FOLDER_SHARED`, `RESOURCE_UPLOADED` y `STORAGE_QUOTA_WARNING`.
+
+---
+
+## 22. 📚 Guías y Casos de Uso Avanzados
 Para ver la implementación completa y el código de integración de un catálogo multimedia en 1 solo clic (portadas + PDFs + tablas abiertas), consulta:
 - **[Guía de Integración: Librería Digital y Carga Multimedia Compuesta](file:///c:/Users/Windows%2011/Documents/pro-n/monolith-backend/docs/guia-libreria-digital-flujo-compuesto.md)**
 - **[Prototipo Web Autónomo](file:///c:/Users/Windows%2011/Documents/pro-n/monolith-backend/formulario_libro.html)**

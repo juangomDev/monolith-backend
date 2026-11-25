@@ -18,6 +18,8 @@ import { foldersRepository } from '../folders/folders.repository.js';
 import { foldersSharesService } from '../folders/folders.shares.service.js';
 import type { RequesterContext } from '../folders/folders.service.js';
 import { auditService } from '../audit/audit.service.js';
+import { getChatCache } from '../chat/chat.provider.js';
+import { eventBus } from '../../shared/event-bus.js';
 
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
@@ -44,10 +46,15 @@ export class TablesService {
     if (requesterCtx?.role === Role.COLLABORATOR && !folderId) {
       throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
     }
+    let targetFolder: any = null;
     if (folderId && requesterCtx) {
       const access = await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
-      if (access?.folder?.type === FolderType.CONTAINER) {
+      targetFolder = access?.folder ?? null;
+      if (targetFolder?.type === FolderType.CONTAINER) {
         throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
+      }
+      if (targetFolder?.type && targetFolder.type !== FolderType.TABLE) {
+        throw new AppError(400, "Incompatibilidad: las tablas solo pueden subirse a carpetas de tipo 'TABLE'", 'INVALID_FOLDER_TYPE');
       }
     }
 
@@ -136,6 +143,9 @@ export class TablesService {
     } catch {}
 
     auditService.recordLog({ actorId: requesterCtx?.id, actorUsername: requesterCtx?.role || 'system', action: 'TABLE_UPLOAD', resourceType: 'TABLE', resourceId: record.id, folderId });
+    if (targetFolder?.userId && requesterCtx?.id && targetFolder.userId !== requesterCtx.id && folderId) {
+      eventBus.emitEvent('resource.uploaded', { resourceType: 'TABLE', resourceId: record.id, resourceName: record.tableName, folderId, folderName: targetFolder.name, folderOwnerId: targetFolder.userId, uploadedById: requesterCtx.id, uploadedByRole: requesterCtx.role });
+    }
     return formatTableItem(record);
   }
 
@@ -159,7 +169,7 @@ export class TablesService {
 
     const findOptions: FindTablesOptions = {
       page, limit, folderId: options.folderId,
-      userId: requester?.id, isAdmin: requester?.role === Role.ADMIN,
+      userId: requester?.id, isAdmin: requester?.role === Role.ADMIN, role: requester?.role,
       search: options.search,
     };
 
@@ -271,6 +281,7 @@ export class TablesService {
     await tablesRepository.deleteById(id);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
     await Promise.allSettled([fs.unlink(gzPath), fs.unlink(record.storagePath)]);
+    try { getChatCache().clear(); } catch {}
     auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'TABLE_DELETE', resourceType: 'TABLE', resourceId: id });
     return { deleted: true };
   }

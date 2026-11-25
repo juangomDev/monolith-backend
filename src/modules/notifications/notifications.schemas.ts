@@ -104,6 +104,22 @@ export const markAllReadRouteSchema: FastifySchema = {
   },
 };
 
+export const clearReadNotificationsRouteSchema: FastifySchema = {
+  tags: ['Notifications'],
+  summary: 'Eliminar todas las notificaciones ya leídas del usuario',
+  description: 'Limpia en lote todas las notificaciones con estado read=true de la bandeja del usuario autenticado.',
+  security: securityAuth,
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        deletedCount: { type: 'integer', example: 8 },
+      },
+    },
+    ...standardErrorResponses,
+  },
+};
+
 export const deleteNotificationRouteSchema: FastifySchema = {
   tags: ['Notifications'],
   summary: 'Eliminar una notificación de la bandeja',

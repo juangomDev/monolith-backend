@@ -32,6 +32,7 @@ model ImageRegistry {
   sizeBytes    Int      @map("size_bytes")
   width        Int?     @map("width")
   height       Int?     @map("height")
+  metadataCard Json?    @map("metadata_card") @db.JsonB
   storagePath  String   @map("storage_path")
   folderId     String?  @map("folder_id") @db.Uuid
   folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)

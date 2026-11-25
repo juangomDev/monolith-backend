@@ -807,4 +807,146 @@ describe('Módulo Carpetas: FoldersService', () => {
     assert.strictEqual(result.folders.length, 1);
     assert.strictEqual(result.folders[0].name, 'Reportes Fiscales');
   });
+
+  // ==========================================
+  // 9. Alineación de Carpetas PDF (itemCount)
+  // ==========================================
+  it('listFolders: carpetas de tipo PDF calculan itemCount a partir de _count.pdfs', async () => {
+    const mockFolders = [
+      {
+        id: validFolderId,
+        name: 'Contratos PDF',
+        type: FolderType.PDF,
+        color: '#ef4444',
+        isPrivate: false,
+        isSystem: false,
+        parentId: null,
+        userId: ownerUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 4 },
+        user: { id: ownerUserId, username: 'owner' },
+      },
+      {
+        id: targetFolderId,
+        name: 'PDFs Vacía',
+        type: FolderType.PDF,
+        color: null,
+        isPrivate: false,
+        isSystem: false,
+        parentId: null,
+        userId: ownerUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 0 },
+        user: { id: ownerUserId, username: 'owner' },
+      },
+    ];
+
+    mock.method(foldersRepository, 'findFolders', async (filter: any) => {
+      assert.strictEqual(filter.type, FolderType.PDF);
+      return mockFolders;
+    });
+
+    const result = await foldersService.listFolders(userRequester, FolderType.PDF);
+
+    assert.strictEqual(result.total, 2);
+    assert.strictEqual(result.folders[0].itemCount, 4);
+    assert.strictEqual(result.folders[1].itemCount, 0);
+  });
+
+  it('getFolderTree: preserva itemCount real de subcarpetas PDF dentro del árbol jerárquico', async () => {
+    const mockFolders = [
+      {
+        id: validFolderId,
+        name: 'Contenedor Legal',
+        type: FolderType.CONTAINER,
+        color: null,
+        isPrivate: false,
+        isSystem: false,
+        parentId: null,
+        userId: ownerUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 0 },
+        user: { id: ownerUserId, username: 'owner' },
+      },
+      {
+        id: targetFolderId,
+        name: 'Manuales PDF',
+        type: FolderType.PDF,
+        color: '#dc2626',
+        isPrivate: false,
+        isSystem: false,
+        parentId: validFolderId,
+        userId: ownerUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 3 },
+        user: { id: ownerUserId, username: 'owner' },
+      },
+    ];
+
+    mock.method(foldersRepository, 'findFolders', async () => mockFolders);
+    mock.method(foldersRepository, 'countFolders', async () => mockFolders.length);
+
+    const result = await foldersService.getFolderTree(userRequester);
+
+    assert.strictEqual(result.total, 2);
+    assert.strictEqual(result.tree.length, 1);
+    assert.strictEqual(result.tree[0].itemCount, 0);
+    assert.strictEqual(result.tree[0].children.length, 1);
+    assert.strictEqual(result.tree[0].children[0].type, FolderType.PDF);
+    assert.strictEqual(result.tree[0].children[0].itemCount, 3);
+  });
+
+  it('getFolderById: carpeta de tipo PDF retorna itemCount basado en _count.pdfs', async () => {
+    mock.method(foldersRepository, 'findFolderById', async () => ({
+      id: validFolderId,
+      name: 'Archivo Normativo',
+      type: FolderType.PDF,
+      color: '#dc2626',
+      isPrivate: false,
+      isSystem: false,
+      parentId: null,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 0, pdfs: 7 },
+      user: { id: ownerUserId, username: 'owner' },
+    }));
+
+    const result = await foldersService.getFolderById(validFolderId, userRequester);
+
+    assert.strictEqual(result.id, validFolderId);
+    assert.strictEqual(result.type, FolderType.PDF);
+    assert.strictEqual(result.itemCount, 7);
+  });
+
+  it('updateFolder: carpeta de tipo PDF preserva itemCount real tras actualizar metadatos', async () => {
+    const existingPdfFolder = {
+      id: validFolderId,
+      name: 'Resoluciones',
+      type: FolderType.PDF,
+      color: '#ef4444',
+      isPrivate: false,
+      isSystem: false,
+      parentId: null,
+      userId: ownerUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 0, pdfs: 2 },
+      user: { id: ownerUserId, username: 'owner' },
+    };
+
+    mock.method(foldersRepository, 'findFolderById', async () => existingPdfFolder);
+    mock.method(foldersRepository, 'updateFolder', async (_id: string, data: any) => ({
+      ...existingPdfFolder,
+      name: data.name ?? existingPdfFolder.name,
+    }));
+
+    const result = await foldersService.updateFolder(
+      validFolderId,
+      { name: 'Resoluciones 2026' },
+      userRequester
+    );
+
+    assert.strictEqual(result.name, 'Resoluciones 2026');
+    assert.strictEqual(result.type, FolderType.PDF);
+    assert.strictEqual(result.itemCount, 2);
+  });
 });

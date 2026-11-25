@@ -1,5 +1,6 @@
 import { prisma } from '../../config/db.js';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
+import { buildResourceFolderVisibilityWhere } from '../../shared/folder-visibility.js';
 
 export interface FindTablesOptions {
   page?: number;
@@ -7,6 +8,7 @@ export interface FindTablesOptions {
   folderId?: string;
   userId?: string;
   isAdmin?: boolean;
+  role?: Role;
   search?: string;
 }
 
@@ -18,13 +20,12 @@ function buildTableWhere(options?: FindTablesOptions): Prisma.TableRegistryWhere
   }
 
   if (options && !options.isAdmin) {
-    conditions.push({
-      OR: [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-      ],
+    const visibility = buildResourceFolderVisibilityWhere({
+      userId: options.userId,
+      isAdmin: options.isAdmin,
+      role: options.role,
     });
+    if (visibility) conditions.push(visibility);
   }
 
   if (options?.search) {

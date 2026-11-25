@@ -24,6 +24,7 @@ export const imageItemSchema = {
     sizeBytes: { type: 'integer', example: 204850 },
     width: { type: 'integer', nullable: true, example: 1920 },
     height: { type: 'integer', nullable: true, example: 1080 },
+    metadataCard: { type: 'object', additionalProperties: true, nullable: true },
     folderId: { type: 'string', format: 'uuid', nullable: true },
     url: { type: 'string', format: 'uri', example: 'http://localhost:3000/i/abc1234567' },
     urlWithVersion: { type: 'string', format: 'uri', example: 'http://localhost:3000/i/abc1234567?v=1730335800000' },
@@ -59,6 +60,11 @@ export const getPublicImageSchema: FastifySchema = {
         enum: ['thumb', 'original'],
         default: 'original',
         description: 'Variante de imagen a servir: thumb (miniatura WebP 320px) u original',
+      },
+      download: {
+        type: 'string',
+        enum: ['true', 'false'],
+        description: 'Si es true, fuerza descarga con Content-Disposition: attachment',
       },
     },
   },
@@ -171,6 +177,31 @@ export const renameImageRouteSchema: FastifySchema = {
       properties: imageItemSchema.properties,
       required: ['id', 'shortCode', 'originalName', 'mimeType', 'sizeBytes'],
     },
+    400: standardErrorResponses[400],
+    401: standardErrorResponses[401],
+    403: standardErrorResponses[403],
+    404: standardErrorResponses[404],
+  },
+};
+
+export const updateImageMetadataRouteSchema: FastifySchema = {
+  tags: ['Images'],
+  summary: 'Actualizar metadatos semánticos de una imagen',
+  description: 'Actualiza parcialmente la tarjeta metadataCard (title, alt, description, tags, custom) de una imagen. Requiere permiso EDIT.',
+  security: securityDualAuth,
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+  body: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 200 },
+      alt: { type: 'string', maxLength: 500 },
+      description: { type: 'string', maxLength: 2000 },
+      tags: { type: 'array', items: { type: 'string', maxLength: 50 }, maxItems: 50 },
+      custom: { type: 'object', additionalProperties: { type: 'string' } },
+    },
+  },
+  response: {
+    200: { description: 'Metadatos actualizados exitosamente', type: 'object', additionalProperties: true, properties: imageItemSchema.properties },
     400: standardErrorResponses[400],
     401: standardErrorResponses[401],
     403: standardErrorResponses[403],

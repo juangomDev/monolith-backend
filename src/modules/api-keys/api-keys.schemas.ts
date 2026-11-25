@@ -51,19 +51,74 @@ export const createApiKeyRouteSchema: FastifySchema = {
 export const listApiKeysRouteSchema: FastifySchema = {
   tags: ['ApiKeys'],
   summary: 'Listar todas las API Keys registradas (Exclusivo ADMIN)',
-  description: 'Retorna el catálogo de llaves autorizadas ocultando el secreto criptográfico.',
+  description: 'Retorna el catálogo paginado de llaves autorizadas ocultando el secreto criptográfico.',
   security: securityDualAuth,
+  querystring: {
+    type: 'object',
+    properties: {
+      page: { type: 'integer', minimum: 1, default: 1, description: 'Número de página' },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 50, description: 'Registros por página' },
+    },
+  },
   response: {
     200: {
       description: 'Catálogo de API Keys obtenido exitosamente',
       type: 'object',
+      additionalProperties: true,
       properties: {
         keys: { type: 'array', items: apiKeyItemSchema },
+        total: { type: 'integer' },
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        totalPages: { type: 'integer' },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            hasNext: { type: 'boolean' },
+          },
+        },
       },
       required: ['keys'],
     },
     401: standardErrorResponses[401],
     403: standardErrorResponses[403],
+  },
+};
+
+export const updateApiKeyRouteSchema: FastifySchema = {
+  tags: ['ApiKeys'],
+  summary: 'Actualizar configuración o estado de una API Key (Exclusivo ADMIN)',
+  description: 'Permite pausar/reactivar (isActive), renombrar o ajustar rateLimit sin revocar la llave criptográfica.',
+  security: securityDualAuth,
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string', format: 'uuid', description: 'UUID de la API Key a modificar' },
+    },
+  },
+  body: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 100 },
+      description: { type: 'string', maxLength: 255, nullable: true },
+      rateLimit: { type: 'integer', minimum: 1 },
+      isActive: { type: 'boolean' },
+    },
+  },
+  response: {
+    200: {
+      description: 'API Key actualizada exitosamente',
+      ...apiKeyItemSchema,
+    },
+    400: standardErrorResponses[400],
+    401: standardErrorResponses[401],
+    403: standardErrorResponses[403],
+    404: standardErrorResponses[404],
   },
 };
 
@@ -94,4 +149,3 @@ export const revokeApiKeyRouteSchema: FastifySchema = {
     404: standardErrorResponses[404],
   },
 };
-

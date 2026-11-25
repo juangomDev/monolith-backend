@@ -1,31 +1,13 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { promisify } from 'node:util';
 import { Role, type User } from '@prisma/client';
 import { prisma } from '../../config/db.js';
-import { usersRepository, type UsersRepository } from './users.repository.js';
+import { usersRepository, type UsersRepository, type ListUsersFilter } from './users.repository.js';
+import { hashPassword, verifyPassword, cleanupUserStorageFiles } from './users.helpers.js';
 import { AppError } from '../../shared/errors.js';
 import { auditService } from '../audit/audit.service.js';
 
-const scryptAsync = promisify(crypto.scrypt);
+export { hashPassword, verifyPassword };
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString('hex')}`;
-}
-
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  const parts = storedHash.split(':');
-  if (parts.length !== 2) return false;
-  const [salt, keyHex] = parts;
-  const keyBuffer = Buffer.from(keyHex, 'hex');
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  if (keyBuffer.length !== derivedKey.length) return false;
-  return crypto.timingSafeEqual(keyBuffer, derivedKey);
-}
 
 export interface UserSessionPayload {
   id: string;
@@ -37,6 +19,14 @@ export interface UserSessionPayload {
 export interface CallerContext {
   id: string;
   role: Role;
+}
+
+export interface ListUsersQueryOptions {
+  search?: string;
+  role?: Role;
+  isActive?: boolean;
+  page?: number;
+  limit?: number;
 }
 
 export class UsersService {
@@ -89,6 +79,14 @@ export class UsersService {
     const passwordHash = await hashPassword(newPassword);
     await this.repo.update(userId, { passwordHash });
     await this.repo.incrementTokenVersion(userId);
+
+    auditService.recordLog({
+      actorId: userId,
+      actorUsername: user.username,
+      action: 'USER_PASSWORD_CHANGE',
+      resourceType: 'USER',
+      resourceId: userId,
+    });
   }
 
   async createUser(
@@ -152,7 +150,6 @@ export class UsersService {
       metadata: { username: newUser.username, role: newUser.role },
     });
 
-    // Creación automática de carpeta raíz departamental para nuevos Managers (Nivel 1)
     if (newUser.role === Role.MANAGER && (prisma as any).folder?.create) {
       await (prisma as any).folder
         .create({
@@ -174,14 +171,31 @@ export class UsersService {
     return safeUser;
   }
 
-  async listUsers(caller: CallerContext): Promise<Omit<User, 'passwordHash'>[]> {
+  private buildListFilter(caller: CallerContext, options?: ListUsersQueryOptions): ListUsersFilter | undefined {
+    const filter: ListUsersFilter = {};
+    if (caller.role !== Role.ADMIN) filter.createdById = caller.id;
+    if (options?.search) filter.search = options.search;
+    if (options?.role) filter.role = options.role;
+    if (options?.isActive !== undefined) filter.isActive = options.isActive;
+    if (options?.page !== undefined) filter.page = options.page;
+    if (options?.limit !== undefined) filter.limit = options.limit;
+    return Object.keys(filter).length > 0 ? filter : undefined;
+  }
+
+  async listUsers(caller: CallerContext, options?: ListUsersQueryOptions): Promise<Omit<User, 'passwordHash'>[]> {
     if (caller.role === Role.COLLABORATOR) {
       throw new AppError(403, 'No tienes permiso para listar usuarios', 'FORBIDDEN');
     }
-    if (caller.role === Role.ADMIN) {
-      return this.repo.listAll();
+    const filter = this.buildListFilter(caller, options);
+    return filter ? this.repo.listAll(filter) : this.repo.listAll();
+  }
+
+  async countUsers(caller: CallerContext, options?: ListUsersQueryOptions): Promise<number> {
+    if (caller.role === Role.COLLABORATOR) {
+      throw new AppError(403, 'No tienes permiso para listar usuarios', 'FORBIDDEN');
     }
-    return this.repo.listAll({ createdById: caller.id });
+    const filter = this.buildListFilter(caller, options);
+    return this.repo.count(filter);
   }
 
   async updateUserStatus(caller: CallerContext, targetUserId: string, isActive: boolean): Promise<Omit<User, 'passwordHash'>> {
@@ -194,7 +208,6 @@ export class UsersService {
     if (!isActive && targetUser.username === 'ai_manager') {
       throw new AppError(400, 'No se puede desactivar la cuenta estructural de servicio de IA', 'SYSTEM_USER_PROTECTED');
     }
-
     if (caller.role === Role.MANAGER && targetUser.createdById !== caller.id) {
       throw new AppError(403, 'No tienes permiso para modificar este colaborador', 'FORBIDDEN');
     }
@@ -203,9 +216,8 @@ export class UsersService {
     }
 
     const updated = await this.repo.update(targetUserId, { isActive });
-    if (!isActive) {
-      await this.repo.incrementTokenVersion(targetUserId);
-    }
+    if (!isActive) await this.repo.incrementTokenVersion(targetUserId);
+
     auditService.recordLog({
       actorId: caller.id,
       actorUsername: caller.role,
@@ -227,7 +239,6 @@ export class UsersService {
     if (targetUser.role === Role.ADMIN && caller.id !== targetUser.id) {
       throw new AppError(403, 'No se puede restablecer la contraseña del Administrador General', 'FORBIDDEN');
     }
-
     if (caller.role === Role.MANAGER && targetUser.createdById !== caller.id) {
       throw new AppError(403, 'No tienes permiso para restablecer la contraseña de este colaborador', 'FORBIDDEN');
     }
@@ -238,6 +249,15 @@ export class UsersService {
     const passwordHash = await hashPassword(newPassword);
     await this.repo.update(targetUserId, { passwordHash });
     await this.repo.incrementTokenVersion(targetUserId);
+
+    auditService.recordLog({
+      actorId: caller.id,
+      actorUsername: caller.role,
+      action: 'USER_PASSWORD_RESET',
+      resourceType: 'USER',
+      resourceId: targetUserId,
+      metadata: { targetUsername: targetUser.username },
+    });
   }
 
   async deleteUser(caller: CallerContext, targetUserId: string): Promise<{ deleted: boolean }> {
@@ -250,7 +270,6 @@ export class UsersService {
     if (targetUser.username === 'ai_manager' || targetUser.username === 'admin') {
       throw new AppError(400, 'No se pueden eliminar las cuentas estructurales del sistema', 'CANNOT_DELETE_SYSTEM_USER');
     }
-
     if (caller.role === Role.MANAGER && targetUser.createdById !== caller.id) {
       throw new AppError(403, 'No tienes permiso para eliminar este colaborador', 'FORBIDDEN');
     }
@@ -270,21 +289,7 @@ export class UsersService {
       metadata: { targetUsername: targetUser.username },
     });
 
-    if (storagePaths.length > 0) {
-      await Promise.allSettled(
-        storagePaths.flatMap((filePath) => {
-          const paths = [filePath];
-          const parsed = path.parse(filePath);
-          if (filePath.includes('tables')) {
-            paths.push(path.join(parsed.dir, `${parsed.name}.data.json.gz`));
-          } else if (filePath.includes('images')) {
-            paths.push(path.join(parsed.dir, 'thumbs', `${parsed.name}.webp`));
-          }
-          return paths.map((p) => fs.unlink(p).catch(() => {}));
-        })
-      );
-    }
-
+    await cleanupUserStorageFiles(storagePaths);
     return { deleted: true };
   }
 }

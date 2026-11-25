@@ -5,12 +5,14 @@ import { foldersRepository, type FoldersRepository, type FolderWithDetails } fro
 import { foldersSharesService, type FoldersSharesService } from './folders.shares.service.js';
 import { foldersMovementService, FoldersMovementService } from './folders.movement.service.js';
 import { FoldersHierarchyService } from './folders.hierarchy.service.js';
+import { auditService } from '../audit/audit.service.js';
 import { AppError } from '../../shared/errors.js';
 import {
   UUID_REGEX,
   createFolderSchema,
   updateFolderSchema,
   moveResourceSchema,
+  resolveEffectiveFolderPermission,
   type RequesterContext,
   type FormattedFolder,
   type ListFoldersQueryOptions,
@@ -40,18 +42,13 @@ export class FoldersService {
   }
 
   private formatFolder(
-    folder: FolderWithDetails | (Folder & { _count?: { images: number; tables: number }; user?: { id: string; username: string }; members?: { permission: string }[] }),
+    folder: FolderWithDetails | (Folder & { _count?: { images: number; tables: number; pdfs?: number }; user?: { id: string; username: string }; members?: { permission: string }[]; parent?: any }),
     requester?: RequesterContext
   ): FormattedFolder {
     const imagesCount = folder._count?.images ?? 0;
     const tablesCount = folder._count?.tables ?? 0;
-    let myPermission: string | undefined;
-    if (requester) {
-      if (requester.role === Role.ADMIN) myPermission = 'ADMIN';
-      else if (folder.userId === requester.id) myPermission = 'EDIT';
-      else if ((folder as any).members?.[0]?.permission) myPermission = (folder as any).members[0].permission;
-      else if (!folder.isPrivate) myPermission = 'READ';
-    }
+    const pdfsCount = folder._count?.pdfs ?? 0;
+    const myPermission = resolveEffectiveFolderPermission(folder as any, requester);
 
     return {
       id: folder.id,
@@ -61,7 +58,7 @@ export class FoldersService {
       isPrivate: folder.isPrivate,
       isSystem: (folder as any).isSystem ?? false,
       parentId: (folder as any).parentId ?? null,
-      itemCount: folder.type === FolderType.IMAGE ? imagesCount : tablesCount,
+      itemCount: imagesCount + tablesCount + pdfsCount,
       userId: folder.userId,
       owner: folder.user ? { id: folder.user.id, username: folder.user.username } : undefined,
       myPermission,
@@ -91,20 +88,9 @@ export class FoldersService {
       parentId: parentId ?? null,
       userId: targetUserId,
     });
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'FOLDER_CREATE', resourceType: 'FOLDER', resourceId: created.id, folderId: created.id, metadata: { name, type, parentId: parentId ?? null } });
 
-    return {
-      id: created.id,
-      name: created.name,
-      type: created.type,
-      color: created.color ?? null,
-      isPrivate: created.isPrivate,
-      isSystem: (created as any).isSystem ?? false,
-      parentId: (created as any).parentId ?? null,
-      itemCount: 0,
-      userId: created.userId,
-      myPermission: 'EDIT',
-      createdAt: created.createdAt,
-    };
+    return { ...this.formatFolder(created, requester), itemCount: 0, myPermission: 'EDIT' };
   }
 
   async updateFolder(id: string, rawInput: unknown, requester: RequesterContext): Promise<FormattedFolder> {
@@ -139,7 +125,12 @@ export class FoldersService {
       throw new AppError(400, 'No se permite cambiar el nombre o modificar la carpeta de sistema', 'CANNOT_MODIFY_SYSTEM_FOLDER');
     }
 
+    if (parseResult.data.parentId !== undefined) {
+      await this.hierarchyService.validateParentMove(folder, parseResult.data.parentId ?? null, requester);
+    }
+
     const updated = await this.repo.updateFolder(id, parseResult.data);
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'FOLDER_UPDATE', resourceType: 'FOLDER', resourceId: id, folderId: id, metadata: parseResult.data });
     return this.formatFolder(updated, requester);
   }
 
@@ -210,12 +201,16 @@ export class FoldersService {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    const folder = await this.repo.findFolderById(id);
+    const folder = await this.repo.findFolderById(id, requester.id);
     if (!folder) {
       throw new AppError(404, 'Carpeta no encontrada', 'NOT_FOUND');
     }
 
-    if (folder.isPrivate && requester.role !== Role.ADMIN && folder.userId !== requester.id) {
+    const effectivePermission = resolveEffectiveFolderPermission(folder as any, requester);
+    if (!effectivePermission) {
+      if (requester.role === Role.COLLABORATOR) {
+        throw new AppError(403, 'Esta carpeta no ha sido compartida contigo', 'FORBIDDEN');
+      }
       throw new AppError(403, 'Acceso denegado a esta carpeta privada', 'FORBIDDEN');
     }
 
@@ -262,6 +257,8 @@ export class FoldersService {
       })
     );
 
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'FOLDER_DELETE', resourceType: 'FOLDER', resourceId: id, folderId: id, metadata: { name: folder.name, deletedCount: deleteResult.storagePaths.length } });
+
     return {
       message: 'Carpeta y archivos asociados eliminados exitosamente',
       deletedCount: deleteResult.storagePaths.length,
@@ -282,6 +279,10 @@ export class FoldersService {
 
   async moveTableToFolder(tableId: string, rawInput: unknown, requester: RequesterContext) {
     return this.movementService.moveTableToFolder(tableId, rawInput, requester);
+  }
+
+  async movePdfToFolder(pdfId: string, rawInput: unknown, requester: RequesterContext) {
+    return this.movementService.movePdfToFolder(pdfId, rawInput, requester);
   }
 
   async getOrCreateDefaultFolder(userId: string, type: FolderType): Promise<Folder> {

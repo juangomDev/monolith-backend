@@ -1,5 +1,6 @@
 import { prisma } from '../../config/db.js';
-import type { Prisma, PdfRegistry } from '@prisma/client';
+import type { Prisma, PdfRegistry, Role } from '@prisma/client';
+import { buildResourceFolderVisibilityWhere } from '../../shared/folder-visibility.js';
 
 export interface FindPdfsOptions {
   page?: number;
@@ -7,6 +8,7 @@ export interface FindPdfsOptions {
   folderId?: string;
   userId?: string;
   isAdmin?: boolean;
+  role?: Role;
   search?: string;
 }
 
@@ -18,14 +20,12 @@ function buildPdfWhere(options?: FindPdfsOptions): Prisma.PdfRegistryWhereInput 
   }
 
   if (options && !options.isAdmin && options.userId) {
-    conditions.push({
-      OR: [
-        { folderId: null },
-        { folder: { isPrivate: false } },
-        { folder: { userId: options.userId } },
-        { folder: { members: { some: { userId: options.userId } } } },
-      ],
+    const visibility = buildResourceFolderVisibilityWhere({
+      userId: options.userId,
+      isAdmin: options.isAdmin,
+      role: options.role,
     });
+    if (visibility) conditions.push(visibility);
   }
 
   if (options?.search) {

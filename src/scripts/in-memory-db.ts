@@ -58,21 +58,65 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
     return idx >= 0 ? state.users.splice(idx, 1)[0] : null;
   };
 
-  function fmtFolder(f: any, filterUserId?: string) {
+  function fmtFolder(f: any, filterUserId?: string, includeParent: boolean = false): any {
     const u = state.users.find((usr) => usr.id === f.userId);
     const member = filterUserId ? state.folderMembers.find((m) => m.folderId === f.id && m.userId === filterUserId) : undefined;
+    const parentFolder = includeParent && f.parentId ? state.folders.find((p) => p.id === f.parentId) : null;
+    const grandParentFolder = parentFolder?.parentId ? state.folders.find((gp) => gp.id === parentFolder.parentId) : null;
+    const parentMember = parentFolder && filterUserId ? state.folderMembers.find((m) => m.folderId === parentFolder.id && m.userId === filterUserId) : undefined;
+    const grandParentMember = grandParentFolder && filterUserId ? state.folderMembers.find((m) => m.folderId === grandParentFolder.id && m.userId === filterUserId) : undefined;
     return {
       ...f,
-      _count: { images: state.images.filter((i) => i.folderId === f.id).length, tables: state.tables.filter((t) => t.folderId === f.id).length },
+      _count: {
+        images: state.images.filter((i) => i.folderId === f.id).length,
+        tables: state.tables.filter((t) => t.folderId === f.id).length,
+        pdfs: state.pdfs.filter((p) => p.folderId === f.id).length,
+      },
       user: { id: u?.id || f.userId, username: u?.username || 'user' },
       members: member ? [{ permission: member.permission }] : [],
+      ...(includeParent
+        ? {
+            parent: parentFolder
+              ? {
+                  id: parentFolder.id,
+                  userId: parentFolder.userId,
+                  parentId: parentFolder.parentId ?? null,
+                  members: parentMember ? [{ permission: parentMember.permission }] : [],
+                  parent: grandParentFolder
+                    ? {
+                        id: grandParentFolder.id,
+                        userId: grandParentFolder.userId,
+                        members: grandParentMember ? [{ permission: grandParentMember.permission }] : [],
+                      }
+                    : null,
+                }
+              : null,
+          }
+        : {}),
     };
+  }
+
+  function matchesFolderCondition(f: any, c: any): boolean {
+    if (c.isSystem === true) return Boolean(f.isSystem);
+    if (c.isPrivate === false) return !f.isPrivate;
+    if (c.userId) return f.userId === c.userId;
+    if (c.members?.some?.userId) {
+      return state.folderMembers.some((m) => m.folderId === f.id && m.userId === c.members.some.userId);
+    }
+    if (c.parent?.members?.some?.userId) {
+      return Boolean(f.parentId && state.folderMembers.some((m) => m.folderId === f.parentId && m.userId === c.parent.members.some.userId));
+    }
+    if (c.parent?.parent?.members?.some?.userId) {
+      const parent = f.parentId ? state.folders.find((p) => p.id === f.parentId) : null;
+      return Boolean(parent?.parentId && state.folderMembers.some((m) => m.folderId === parent.parentId && m.userId === c.parent.parent.members.some.userId));
+    }
+    return false;
   }
 
   (prisma.folder as any).findUnique = async ({ where, include }: any) => {
     const f = state.folders.find((x) => x.id === where.id);
     if (!f) return null;
-    const res = fmtFolder(f);
+    const res = fmtFolder(f, include?.members?.where?.userId, Boolean(include?.parent));
     if (include?.images) res.images = state.images.filter((i) => i.folderId === f.id);
     if (include?.tables) res.tables = state.tables.filter((t) => t.folderId === f.id);
     if (include?.pdfs) res.pdfs = state.pdfs.filter((p) => p.folderId === f.id);
@@ -87,22 +131,23 @@ export async function setupInMemoryE2EDb(): Promise<{ state: InMemoryDb; teardow
       if (where?.name?.contains && !f.name.toLowerCase().includes(where.name.contains.toLowerCase())) return false;
       if (where?.members?.some?.userId) return state.folderMembers.some((m) => m.folderId === f.id && m.userId === where.members.some.userId);
       if (where?.OR) {
-        return where.OR.some((c: any) => (!c.isPrivate && !f.isPrivate) || (c.userId && f.userId === c.userId) || (c.members?.some?.userId && state.folderMembers.some((m) => m.folderId === f.id && m.userId === c.members.some.userId)));
+        return where.OR.some((c: any) => matchesFolderCondition(f, c));
       }
       return true;
     });
     if (skip) list = list.slice(skip);
     if (take) list = list.slice(0, take);
     return list.map((f) => {
-      const res = fmtFolder(f, where?.members?.where?.userId);
+      const res = fmtFolder(f, include?.members?.where?.userId, Boolean(include?.parent));
       if (include?.images) res.images = state.images.filter((i) => i.folderId === f.id);
       if (include?.tables) res.tables = state.tables.filter((t) => t.folderId === f.id);
+      if (include?.pdfs) res.pdfs = state.pdfs.filter((p) => p.folderId === f.id);
       return res;
     });
   };
   (prisma.folder as any).count = async () => state.folders.length;
   (prisma.folder as any).create = async ({ data }: any) => {
-    const f = { id: data.id || crypto.randomUUID(), name: data.name, type: data.type, color: data.color || null, isPrivate: data.isPrivate ?? false, userId: data.userId, createdAt: new Date(), updatedAt: new Date() };
+    const f = { id: data.id || crypto.randomUUID(), name: data.name, type: data.type, color: data.color || null, isPrivate: data.isPrivate ?? false, isSystem: data.isSystem ?? false, parentId: data.parentId ?? null, userId: data.userId, createdAt: new Date(), updatedAt: new Date() };
     state.folders.push(f);
     return f;
   };

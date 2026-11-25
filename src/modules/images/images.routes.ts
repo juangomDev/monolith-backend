@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { imagesService } from './images.service.js';
 import { imagesBulkService } from './images.bulk.service.js';
+import { imagesMetadataService } from './images.metadata.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import {
@@ -9,6 +10,7 @@ import {
   listImagesRouteSchema,
   uploadImageRouteSchema,
   renameImageRouteSchema,
+  updateImageMetadataRouteSchema,
   replaceImageRouteSchema,
   deleteImageRouteSchema,
   renameImageBodySchema,
@@ -17,7 +19,7 @@ import {
 import { bulkDeleteImagesRouteSchema, bulkMoveImagesRouteSchema } from './images.bulk.schemas.js';
 
 export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /i/:short_code (Entrega pública con capability URL y soporte de miniaturas)
+  // GET /i/:short_code (Entrega pública con capability URL, miniaturas y descarga forzada)
   fastify.get(
     '/i/:short_code',
     {
@@ -26,12 +28,16 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { short_code } = request.params as { short_code: string };
-      const { variant } = (request.query as { variant?: 'thumb' | 'original' }) || {};
+      const { variant, download } = (request.query as { variant?: 'thumb' | 'original'; download?: string }) || {};
       const result = (await imagesService.getImageFileByShortCode(short_code, variant)) as any;
       const mimeType = result.mimeType || result.record?.mimeType || 'application/octet-stream';
 
       reply.header('Content-Type', mimeType);
       reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      if (download === 'true' || download === '1') {
+        const filename = result.record?.originalName || `${short_code}.img`;
+        reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      }
       if (mimeType === 'image/svg+xml') {
         reply.header('Content-Security-Policy', "default-src 'none'");
       }
@@ -116,6 +122,22 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const requester = await extractRequester(request);
       const result = await imagesService.renameImage(id, parseResult.data.originalName, requester);
+      return reply.status(200).send(result);
+    }
+  );
+
+  // PATCH /api/v1/images/:id/metadata (Actualizar tarjeta de metadatos alt, tags, description, title)
+  fastify.patch(
+    '/api/v1/images/:id/metadata',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: updateImageMetadataRouteSchema,
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const requester = extractRequester(request);
+      const result = await imagesMetadataService.updateMetadata(id, request.body, requester);
       return reply.status(200).send(result);
     }
   );

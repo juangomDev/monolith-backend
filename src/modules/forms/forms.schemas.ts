@@ -97,6 +97,20 @@ export const listFormsRouteSchema: FastifySchema = {
             },
           },
         },
+        total: { type: 'integer' },
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        totalPages: { type: 'integer' },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            hasNext: { type: 'boolean' },
+          },
+        },
       },
     },
     401: standardErrorResponses[401],
@@ -215,6 +229,19 @@ export const listEntriesRouteSchema: FastifySchema = {
       type: 'object',
       properties: {
         total: { type: 'integer' },
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        totalPages: { type: 'integer' },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            hasNext: { type: 'boolean' },
+          },
+        },
         entries: {
           type: 'array',
           items: {

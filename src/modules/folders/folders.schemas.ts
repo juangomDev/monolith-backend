@@ -56,7 +56,7 @@ export const listFoldersRouteSchema: FastifySchema = {
   tags: ['Folders'],
   summary: 'Listar carpetas respetando reglas de privacidad',
   description:
-    'Retorna las carpetas visibles para el usuario. Usuarios comunes ven carpetas públicas y privadas propias; ADMIN ve todas. Permite filtrar con ?type=IMAGE|TABLE, buscar por texto con ?search y paginar con ?page y ?limit.',
+    'Retorna las carpetas visibles para el usuario. Usuarios comunes ven carpetas públicas y privadas propias; ADMIN ve todas. Permite filtrar con ?type=CONTAINER|IMAGE|TABLE|PDF, buscar por texto con ?search y paginar con ?page y ?limit.',
   security: securityDualAuth,
   querystring: {
     type: 'object',
@@ -120,7 +120,7 @@ export const listFoldersRouteSchema: FastifySchema = {
 
 export const createFolderRouteSchema: FastifySchema = {
   tags: ['Folders'],
-  summary: 'Crear nueva carpeta de imágenes o tablas',
+  summary: 'Crear nueva carpeta de imágenes, tablas, PDFs o contenedora',
   description:
     'Registra una nueva carpeta asignada al usuario creador con su política de privacidad (pública o privada) y color identificador.',
   security: securityDualAuth,
@@ -192,6 +192,12 @@ export const updateFolderRouteSchema: FastifySchema = {
         example: true,
         description: 'Modificar visibilidad privada',
       },
+      parentId: {
+        type: 'string',
+        format: 'uuid',
+        nullable: true,
+        description: 'Reubicar la carpeta bajo otra carpeta padre o en raíz (null)',
+      },
     },
   },
   response: {
@@ -242,7 +248,7 @@ export const deleteFolderRouteSchema: FastifySchema = {
   tags: ['Folders'],
   summary: 'Eliminar carpeta en cascada física y lógica',
   description:
-    'Elimina la carpeta de PostgreSQL y destruye físicamente en disco todos los archivos (imágenes o tablas) contenidos en ella. Requiere ser propietario o ADMIN. Prohibido eliminar la carpeta General.',
+    'Elimina la carpeta de PostgreSQL y destruye físicamente en disco todos los archivos (imágenes, tablas o PDFs) contenidos en ella. Requiere ser propietario o ADMIN. Prohibido eliminar la carpeta General.',
   security: securityDualAuth,
   params: {
     type: 'object',

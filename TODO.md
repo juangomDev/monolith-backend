@@ -33,6 +33,10 @@
 | **Fase 21** | Ingesta Nativa de Tablas JSON e Indicador de Origen en Respuestas de IA (`usedAi`) | ✅ Completado |
 | **Fase 22** | Entrega Limpia Fila por Fila y Eliminación de Relleno en Tablas (`GET /t/:short_code`) | ✅ Completado |
 | **Fase 23** | Filtrado Dinámico Universal por Columnas, Jerarquía Padre-Hijo (`father`), Búsqueda y Proyección en `/t/:short_code` | ✅ Completado |
+| **Fase 24** | Alineación de Soporte PDF en Carpetas (`itemCount`) y Monitor de Almacenamiento (`/api/v1/stats/storage`) | ✅ Completado |
+| **Fase 25** | Visibilidad Heredada para Colaboradores en Subcarpetas, Blindaje RBAC y Paridad de Seguridad entre Módulos | ✅ Completado |
+| **Fase 26** | Paridad de API y UX entre Módulos (`PDFs` Bulk/Meta, `Chat` Caché/Sugerencias, `Forms` CRUD, `Stats` Cuota Dinámica) | ✅ Completado |
+| **Fase 27** | Paridad Avanzada de Producto (`Images`, `Audit`, `API Keys`, `Notifications`, `Users`) y Limpieza del Módulo `custom` | ✅ Completado |
 
 ---
 
@@ -1158,6 +1162,112 @@
 
 ---
 
+## 📑 FASE 24: Alineación de Soporte PDF en Carpetas y Monitor de Almacenamiento (Completado)
+
+- [x] **24.1 Conteo Real de PDFs en Carpetas (`src/modules/folders/`)**
+  - [x] `24.1.1` Verificar `_count: { select: { images: true, tables: true, pdfs: true } }` en `folders.repository.ts` (`findFolders`, `findFolderById`, `updateFolder`).
+  - [x] `24.1.2` Actualizar `formatFolder()` en `folders.service.ts` para sumar `images + tables + pdfs` en `itemCount` y reflejar conteo real en `/api/v1/folders`, `/api/v1/folders/tree`, `/api/v1/folders/:id` y `PATCH /api/v1/folders/:id`.
+  - [x] `24.1.3` Actualizar descripciones OpenAPI en `folders.schemas.ts`.
+
+- [x] **24.2 Paridad de PDFs en Estadísticas (`src/modules/stats/`)**
+  - [x] `24.2.1` Incorporar `prisma.pdfRegistry.aggregate` (global para `ADMIN`, aislado por propietario para `MANAGER`), exponer `database.pdfs` y sumar a `totalCount` / `totalSizeBytes`.
+  - [x] `24.2.2` Escanear `./storage/pdfs` en `disk` (exclusivo `ADMIN`), exponer `pdfsBytes` / `pdfsFilesCount` y sumarlos a `totalBytes` / `totalFilesCount`.
+  - [x] `24.2.3` Incluir `pdfs: { select: { sizeBytes: true } }` en `topFolders` y actualizar el schema Fastify/OpenAPI en `stats.schemas.ts`.
+  - [x] `24.2.4` Añadir pruebas en `folders.service.test.ts`, `folders.routes.test.ts` y `stats.test.ts`, regenerar `openapi.json` y sincronizar `ENDPOINTS.md`, `RUTAS.md` y `docs/frontend-integration.md`.
+
+---
+
+## 🔐 FASE 25: Visibilidad Heredada para Colaboradores, Blindaje RBAC y Paridad de Seguridad (Completado)
+
+> **Objetivo:** Corregir la invisibilidad de subcarpetas creadas por colaboradores (o heredadas desde carpetas padre compartidas) y cerrar todas las brechas de seguridad/RBAC detectadas al comparar los 12 módulos del backend.
+
+- [x] **25.1 Corrección de Visibilidad Heredada de Subcarpetas para `COLLABORATOR` (`src/modules/folders/`)**
+  - [x] `25.1.1` **Herencia SQL de 3 niveles en `FoldersRepository.buildWhereClause` (`folders.repository.ts`, `src/shared/folder-visibility.ts`):** Ampliar la cláusula `where.OR` (para `COLLABORATOR` y `MANAGER`) para incluir carpetas compartidas directamente (`members`), vía padre (`parent.members`) o vía abuelo (`parent.parent.members`), alineado con la jerarquía máxima de 3 niveles de `FoldersSharesService.assertFolderAccess`.
+  - [x] `25.1.2` **Resolución de `myPermission` heredado en `findFolders` y `formatFolder` (`folders.repository.ts`, `folders.service.ts`, `folders.validation.ts`):** Incluir `members` del `parent` y `parent.parent` (filtrados por `userId`) y resolver el permiso efectivo en `formatFolder()` (directo → padre → abuelo) para que el colaborador reciba `myPermission: 'EDIT'` o `'READ'` en subcarpetas heredadas y recién creadas.
+  - [x] `25.1.3` **Acceso heredado en `GET /api/v1/folders/:id` (`folders.service.ts`):** Resolver el permiso efectivo heredado (3 niveles) en `getFolderById()` evitando falsos `403 FORBIDDEN` en subcarpetas privadas compartidas o creadas por colaboradores.
+  - [x] `25.1.4` **Pruebas obligatorias (`tests/modules/folders/folders.inherited-visibility.test.ts`):** Verificado que un `COLLABORATOR` con permiso `EDIT` en una carpeta padre (Nivel 1 o 2) que crea una subcarpeta puede verla inmediatamente en `GET /api/v1/folders`, `GET /api/v1/folders/tree` y `GET /api/v1/folders/:id` con `myPermission: 'EDIT'`, y que al revocar el acceso pierde visibilidad en todo el subárbol.
+
+- [x] **25.2 Paridad de Visibilidad Compartida y Heredada en Listados de Recursos (`images`, `tables`, `pdfs`, `forms`, `chat`)**
+  - [x] `25.2.1` Actualizado `buildImageWhere` en `src/modules/images/images.repository.ts` usando `buildResourceFolderVisibilityWhere` (membresías directas y heredadas 3 niveles).
+  - [x] `25.2.2` Actualizado `buildTableWhere` en `src/modules/tables/tables.repository.ts` con la misma lógica.
+  - [x] `25.2.3` Extendidos `buildPdfWhere` (`pdfs.repository.ts`), `listForms` (`forms.repository.ts`) y filtros de `chat.service.ts` a membresías heredadas de 3 niveles.
+  - [x] `25.2.4` Pruebas unitarias de visibilidad compartida y heredada agregadas y verificadas.
+
+- [x] **25.3 Validaciones Estrictas de Subida y Tipo de Carpeta (`pdfs`, `images`, `tables`, `forms`)**
+  - [x] `25.3.1` **Bloqueo de `COLLABORATOR` sin `folderId` en `POST /api/v1/pdfs` (`pdfs.service.ts`):** Lanza `403 FORBIDDEN`.
+  - [x] `25.3.2` **Validación de `folder.type` exacto al subir/crear:** `images.service.ts` (`IMAGE`), `tables.service.ts` (`TABLE`), `forms.service.ts` (`TABLE`) rechazan con `400 INVALID_FOLDER_TYPE`.
+  - [x] `25.3.3` Pruebas unitarias de rechazo `403` y `400 INVALID_FOLDER_TYPE` agregadas.
+
+- [x] **25.4 Limpieza Física Completa de PDFs al Eliminar Usuario (`src/modules/users/`)**
+  - [x] `25.4.1` Incluido `pdfs: { select: { storagePath: true, textArtifactPath: true } }` en `usersRepository.getUserStoragePaths()`.
+  - [x] `25.4.2` Eliminación física de ambos artefactos (`.pdf` y `.text.json.gz`) garantizada en `usersService.deleteUser()` / `cleanupUserStorageFiles()`.
+  - [x] `25.4.3` Prueba unitaria verificando el borrado físico de PDFs al eliminar un usuario agregada.
+
+- [x] **25.5 Validación y Documentación de Fase 25**
+  - [x] `25.5.1` Regenerado `openapi.json` y actualizados `ENDPOINTS.md`, `RUTAS.md` y `docs/frontend-integration.md`.
+  - [x] `25.5.2` Verificados `npm test` (0 fallos), `npm run build` (código 0) y `npm audit` (0 vulnerabilidades).
+
+---
+
+## 🔄 FASE 26: Paridad de API y UX entre Módulos (`PDFs`, `Chat`, `Forms`, `Stats`, `Folders`) (Completado)
+
+> **Objetivo:** Equiparar las capacidades operativas que el frontend consume de forma homogénea en todos los recursos principales.
+
+- [x] **26.1 Paridad Operativa en Módulo `PDFs` (`src/modules/pdfs/`)**
+  - [x] `26.1.1` Creados `pdfs.bulk.service.ts` y `pdfs.bulk.schemas.ts` implementando `POST /api/v1/pdfs/bulk-delete` y `POST /api/v1/pdfs/bulk-move` (máx. 50 IDs, validación `FolderType.PDF`, borrado `.pdf` + `.text.json.gz`, limpieza de caché Chat y auditoría `PDF_BULK_DELETE` / `PDF_BULK_MOVE`).
+  - [x] `26.1.2` Estandarizada respuesta paginada de `GET /api/v1/pdfs` con `totalPages` y `meta`.
+  - [x] `26.1.3` Expuesto `movePdfToFolder` en la fachada `FoldersService` y corregido `folderId` en `ENDPOINTS.md` / `RUTAS.md`.
+  - [x] `26.1.4` Contratos de `DELETE /api/v1/pdfs/:id` y `PATCH /api/v1/pdfs/:id/folder` preservados en 100% compatibilidad con tests congelados.
+  - [x] `26.1.5` Pruebas unitarias y de rutas agregadas en `tests/modules/shared/fase26-parity.test.ts`.
+
+- [x] **26.2 Coherencia de Caché y Sugerencias en Módulo `Chat` (`src/modules/chat/`, `pdfs`, `tables`)**
+  - [x] `26.2.1` Invalidado `getChatCache().clear()` tras `replacePdf`, `updateMetadataCard`, `deletePdf`, `pdfsBulkService.bulkDelete`, `tablesService.deleteTable` y `formsMutationService.deleteForm`.
+  - [x] `26.2.2` Extendido `GET /api/v1/public/chat/suggestions` a Tablas y PDFs (`chat.suggestions.ts`).
+  - [x] `26.2.3` Implementado `GET /api/v1/chat/suggestions` (autenticado con RBAC).
+  - [x] `26.2.4` Fusión multi-fuente (Tabla + PDF) implementada mediante `mergeMultiSourceChatAnswers`.
+  - [x] `26.2.5` Pruebas unitarias y de rutas agregadas en `tests/modules/shared/fase26-parity.test.ts`.
+
+- [x] **26.3 Ciclo CRUD Completo y Paginación Uniforme en Módulo `Forms` (`src/modules/forms/`)**
+  - [x] `26.3.1` Implementado `PATCH /api/v1/forms/:id` en `forms.mutation.service.ts` con RBAC `EDIT` y auditoría `FORM_UPDATE`.
+  - [x] `26.3.2` Implementado `DELETE /api/v1/forms/:id` con limpieza de tabla vinculada + `.data.json.gz`, invalidación caché Chat y auditoría `FORM_DELETE`.
+  - [x] `26.3.3` Añadidos `total`, `page`, `limit`, `totalPages`, `meta` a `GET /api/v1/forms` y `GET /api/v1/forms/:id/entries`.
+  - [x] `26.3.4` Pruebas de servicio y rutas agregadas en `tests/modules/shared/fase26-parity.test.ts`.
+
+- [x] **26.4 Cuota Dinámica y Métricas Ampliadas en Módulo `Stats` (`src/modules/stats/`)**
+  - [x] `26.4.1` Umbral dinámico 80% de `env.MAX_STORAGE_GB`, exponiendo `disk.maxStorageBytes` y `disk.usagePercent`.
+  - [x] `26.4.2` Añadido `summary` (`activeUsersCount` para `ADMIN`, `formsCount`, `pendingEntriesCount`, `resolvedEntriesCount`).
+  - [x] `26.4.3` Pruebas agregadas y verificadas.
+
+- [x] **26.5 Paridad en `Folders` (`shares` Auth Dual, Reubicación y Auditoría)**
+  - [x] `26.5.1` Habilitada autenticación dual (`authenticateUserOrApiKey`) en `folders.shares.routes.ts`.
+  - [x] `26.5.2` Soportado cambio de `parentId` en `PATCH /api/v1/folders/:id` (`validateParentMove` en `folders.hierarchy.service.ts`).
+  - [x] `26.5.3` Registrados eventos `FOLDER_CREATE`, `FOLDER_UPDATE`, `FOLDER_DELETE`, `IMAGE_MOVE`, `TABLE_MOVE`, `PDF_MOVE` en `AuditLog`.
+  - [x] `26.5.4` Pruebas, OpenAPI y documentación sincronizados y validados.
+
+---
+
+## ✨ FASE 27: Paridad Avanzada de Producto y Limpieza Arquitectónica (Completado)
+
+> **Objetivo:** Completar funcionalidades transversales presentes en otros módulos y sanear código inactivo o asimétrico.
+
+- [x] **27.1 Mejoras de Paridad en `Images` (`src/modules/images/`)**
+  - [x] `27.1.1` Soportado `?download=true` (`Content-Disposition: attachment`) en `GET /i/:short_code`.
+  - [x] `27.1.2` Incorporado `metadataCard` (`Json? @map("metadata_card") @db.JsonB`) en `ImageRegistry` + `npx prisma generate` + `PATCH /api/v1/images/:id/metadata` (`images.metadata.service.ts`) con RBAC `EDIT` y auditoría `IMAGE_METADATA_UPDATE`.
+
+- [x] **27.2 Mejoras en `Audit`, `API Keys`, `Users` y `Notifications`**
+  - [x] `27.2.1` **`Audit`:** Añadidos filtros `from`, `to`, `actorId`, `search` y exportación `GET /api/v1/audit-logs/export?format=csv|xlsx` (`audit.export.service.ts`) con sanitización anti-inyección de fórmulas (`=`, `+`, `-`, `@`).
+  - [x] `27.2.2` **`API Keys`:** Implementado `PATCH /api/v1/api-keys/:id` (`name`, `description`, `rateLimit`, `isActive`), paginación en `GET /api/v1/api-keys` y auditoría completa (`API_KEY_CREATE`, `API_KEY_UPDATE`, `API_KEY_REVOKE`).
+  - [x] `27.2.3` **`Users`:** Añadidos `?search=`, `?role=`, `?isActive=` y paginación `meta` a `GET /api/v1/users`; auditados `USER_PASSWORD_CHANGE` y `USER_PASSWORD_RESET`; extraídos helpers a `users.helpers.ts`.
+  - [x] `27.2.4` **`Notifications`:** Conectados eventos `folder.shared`, `resource.uploaded` y `storage.quota.warning` al `AppEventBus` + `NotificationsListener` (con SSE y cooldown anti-spam), y añadido `DELETE /api/v1/notifications/read`.
+
+- [x] **27.3 Saneamiento del Módulo `custom` (`src/modules/custom/`)**
+  - [x] `27.3.1` Confirmado sin referencias en `src/` ni `tests/` (stubs inactivos de Fase 4 no registrados en `router.ts`); retirado limpiamente del repositorio conforme a la regla de cero código muerto.
+
+- [x] **27.4 Validación y Cierre de Fase 27**
+  - [x] `27.4.1` Pruebas completas agregadas en `tests/modules/shared/fase27-parity.test.ts`, `openapi.json` regenerado, `ENDPOINTS.md` / `RUTAS.md` / `docs/frontend-integration.md` sincronizados, y `npm test` + `npm run build` + `npm audit` verificados en verde.
+
+---
+
 ## 🏛️ Backlog de Alertas de Refactorización y Deuda Técnica (Umbrales de Arquitectura)
 
 > **Regla de Referencia:** [`.agents/rules/modular-refactoring-evolution.md`](.agents/rules/modular-refactoring-evolution.md)  
@@ -1173,26 +1283,22 @@
   - **Solución futura:** Restringir `DOKPLOY_SSLIP_REGEX` en `src/gateway/cors.ts` para que opere exclusivamente cuando `process.env.NODE_ENV !== 'production'` o comparar contra el subdominio específico asignado al contenedor.
 
 ### 📊 Estado de Módulos (Semáforo Saludable: 0 archivos > 300 LOC en todo el repositorio)
-- [x] **`src/modules/tables/tables.service.ts`**: 299 líneas (Blindado: nuevos métodos delegados a `tables.mutation.service.ts` y `tables.bulk.service.ts`).
-- [x] **`src/modules/images/images.service.ts`**: 296 líneas (Blindado: nuevos métodos delegados a `images.bulk.service.ts`).
-- [x] **`src/modules/users/users.schemas.ts`**: 294 líneas.
-- [x] **`src/modules/tables/tables.parser.ts`**: 286 líneas.
-- [x] **`src/scripts/smoke-test.ts`**: 272 líneas.
-- [x] **`src/modules/folders/folders.service.ts`**: 267 líneas (Reducido desde 341 LOC).
-- [x] **`src/modules/chat/chat.engine.ts`**: 263 líneas.
-- [x] **`src/modules/folders/folders.schemas.ts`**: 257 líneas.
-- [x] **`src/modules/tables/tables.schemas.ts`**: 248 líneas.
-- [x] **`src/modules/folders/folders.repository.ts`**: 246 líneas.
-- [x] **`src/modules/images/images.schemas.ts`**: 245 líneas.
-- [x] **`src/modules/users/users.service.ts`**: 241 líneas.
-- [x] **`src/modules/folders/folders.shares.routes.ts`**: 226 líneas.
-- [x] **`src/modules/chat/chat.service.ts`**: 219 líneas.
-- [x] **`src/modules/users/users.routes.ts`**: 210 líneas.
-- [x] **`src/modules/chat/chat.provider.ts`**: 171 líneas.
-- [x] **`src/app.ts`**: 169 líneas.
-- [x] **`src/modules/tables/tables.metadata.service.ts`**: 154 líneas.
-- [x] **`src/modules/images/images.routes.ts`**: 145 líneas.
-- [x] **`src/modules/tables/tables.routes.ts`**: 139 líneas.
+- [x] **`src/modules/users/users.service.ts`**: 297 líneas (helpers extraídos a `users.helpers.ts`).
+- [x] **`src/modules/folders/folders.schemas.ts`**: 295 líneas.
+- [x] **`src/modules/folders/folders.service.ts`**: 293 líneas (delegado en `folders.movement.service.ts` y `folders.hierarchy.service.ts`).
+- [x] **`src/modules/tables/tables.service.ts`**: 290 líneas (delegado en `tables.mutation.service.ts`, `tables.bulk.service.ts` y `tables.metadata.service.ts`).
+- [x] **`src/modules/pdfs/pdfs.service.ts`**: 288 líneas (operaciones en lote delegadas a `pdfs.bulk.service.ts`).
+- [x] **`src/modules/forms/forms.service.ts`**: 288 líneas (mutaciones delegadas a `forms.mutation.service.ts`).
+- [x] **`src/modules/images/images.service.ts`**: 288 líneas (delegado en `images.bulk.service.ts` e `images.metadata.service.ts`).
+- [x] **`src/modules/forms/forms.schemas.ts`**: 286 líneas.
+- [x] **`src/modules/tables/tables.parser.ts`**: 285 líneas.
+- [x] **`src/modules/chat/chat.service.ts`**: 281 líneas (sugerencias y fusión multi-fuente en `chat.suggestions.ts`).
+- [x] **`src/modules/images/images.schemas.ts`**: 276 líneas.
+- [x] **`src/scripts/smoke-test.ts`**: 271 líneas.
+- [x] **`src/modules/chat/chat.engine.ts`**: 262 líneas.
+- [x] **`src/modules/users/users.schemas.ts`**: 262 líneas.
+- [x] **`src/modules/pdfs/pdfs.routes.ts`**: 253 líneas.
+- [x] **`src/modules/folders/folders.repository.ts`**: 203 líneas.
 - [x] **`src/modules/folders/folders.routes.ts`**: 129 líneas.
 - [x] **`src/modules/tables/tables.repository.ts`**: 123 líneas.
 - [x] **`src/modules/chat/chat.schemas.ts`**: 118 líneas.

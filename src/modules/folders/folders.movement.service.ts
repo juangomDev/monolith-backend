@@ -1,6 +1,7 @@
 import { FolderType, Role, FolderPermission } from '@prisma/client';
 import { foldersRepository, type FoldersRepository } from './folders.repository.js';
 import { foldersSharesService, type FoldersSharesService } from './folders.shares.service.js';
+import { auditService } from '../audit/audit.service.js';
 import { AppError } from '../../shared/errors.js';
 import {
   UUID_REGEX,
@@ -49,6 +50,7 @@ export class FoldersMovementService {
     }
 
     const updated = await this.repo.moveImageToFolder(imageId, folderId);
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'IMAGE_MOVE', resourceType: 'IMAGE', resourceId: imageId, folderId });
     return {
       id: updated.id,
       shortCode: updated.shortCode,
@@ -94,6 +96,7 @@ export class FoldersMovementService {
     }
 
     const updated = await this.repo.moveTableToFolder(tableId, folderId);
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'TABLE_MOVE', resourceType: 'TABLE', resourceId: tableId, folderId });
     return {
       id: updated.id,
       shortCode: updated.shortCode,
@@ -139,6 +142,7 @@ export class FoldersMovementService {
     }
 
     const updated = await this.repo.movePdfToFolder(pdfId, folderId);
+    auditService.recordLog({ actorId: requester.id, actorUsername: requester.role, action: 'PDF_MOVE', resourceType: 'PDF', resourceId: pdfId, folderId });
     return {
       id: updated.id,
       shortCode: updated.shortCode,

@@ -1,6 +1,7 @@
 import { prisma } from '../../config/db.js';
 import { Role } from '@prisma/client';
 import { AppError } from '../../shared/errors.js';
+import { buildFolderMemberOrConditions } from '../../shared/folder-visibility.js';
 import type { RequesterContext } from '../folders/folders.service.js';
 import {
   matchTablesByMetadata,
@@ -10,6 +11,7 @@ import {
 } from './chat.engine.js';
 import { processQuestionWithPdfs } from './chat.pdf.engine.js';
 import { chatProvider } from './chat.provider.js';
+import { buildSuggestionsFromDocuments, mergeMultiSourceChatAnswers } from './chat.suggestions.js';
 
 export interface ChatAskInput {
   question: string;
@@ -72,34 +74,39 @@ async function resolveAiManagerId(): Promise<string | null> {
 }
 
 export class ChatService {
+  private buildInternalWhere(requester: RequesterContext, folderId?: string, shortCode?: string): any {
+    let where: any = {};
+    if (requester.role === Role.ADMIN) {
+      where = {};
+    } else if (requester.role === Role.MANAGER) {
+      where = {
+        OR: [
+          { folderId: null },
+          { folder: { isSystem: true } },
+          { folder: { isPrivate: false } },
+          { folder: { userId: requester.id } },
+          ...buildFolderMemberOrConditions(requester.id).map((cond) => ({ folder: cond })),
+        ],
+      };
+    } else {
+      where = {
+        folder: {
+          OR: [{ isSystem: true }, ...buildFolderMemberOrConditions(requester.id)],
+        },
+      };
+    }
+    if (folderId) where.folderId = folderId;
+    if (shortCode) where.shortCode = shortCode;
+    return where;
+  }
+
   async askInternal(input: ChatAskInput, requester: RequesterContext): Promise<ChatAnswerResponse> {
     const question = input.question?.trim();
     if (!question || question.length < 3) {
       throw new AppError(400, 'La pregunta debe contener al menos 3 caracteres', 'BAD_REQUEST');
     }
 
-    let where: any = {};
-    if (requester.role === Role.ADMIN) {
-      // ADMIN tiene acceso a todas las tablas
-      where = {};
-    } else if (requester.role === Role.MANAGER) {
-      where = {
-        OR: [
-          { folderId: null },
-          { folder: { isPrivate: false } },
-          { folder: { userId: requester.id } },
-          { folder: { members: { some: { userId: requester.id } } } },
-        ],
-      };
-    } else {
-      // COLLABORATOR solo tablas en carpetas compartidas
-      where = {
-        folder: { members: { some: { userId: requester.id } } },
-      };
-    }
-
-    if (input.folderId) where.folderId = input.folderId;
-    if (input.shortCode) where.shortCode = input.shortCode;
+    const where = this.buildInternalWhere(requester, input.folderId, input.shortCode);
 
     const [tables, pdfs] = await Promise.all([
       prisma.tableRegistry.findMany({
@@ -112,13 +119,12 @@ export class ChatService {
       }),
     ]);
 
-    const tableRes = await this.processQuestionWithTables(question, tables);
-    if (tableRes.foundInSystem) return tableRes;
+    const [tableRes, pdfRes] = await Promise.all([
+      this.processQuestionWithTables(question, tables),
+      processQuestionWithPdfs(question, pdfs, chatProvider),
+    ]);
 
-    const pdfRes = await processQuestionWithPdfs(question, pdfs, chatProvider);
-    if (pdfRes && pdfRes.foundInSystem) return pdfRes;
-
-    return CIRCUIT_BREAKER_ANSWER;
+    return mergeMultiSourceChatAnswers(tableRes, pdfRes) ?? CIRCUIT_BREAKER_ANSWER;
   }
 
   async askPublic(input: ChatAskInput): Promise<ChatAnswerResponse> {
@@ -137,7 +143,7 @@ export class ChatService {
       folder: {
         OR: [
           { userId: aiManagerId },
-          { members: { some: { userId: aiManagerId } } },
+          ...buildFolderMemberOrConditions(aiManagerId),
         ],
       },
     };
@@ -156,13 +162,12 @@ export class ChatService {
       }),
     ]);
 
-    const tableRes = await this.processQuestionWithTables(question, tables);
-    if (tableRes.foundInSystem) return tableRes;
+    const [tableRes, pdfRes] = await Promise.all([
+      this.processQuestionWithTables(question, tables),
+      processQuestionWithPdfs(question, pdfs, chatProvider),
+    ]);
 
-    const pdfRes = await processQuestionWithPdfs(question, pdfs, chatProvider);
-    if (pdfRes && pdfRes.foundInSystem) return pdfRes;
-
-    return CIRCUIT_BREAKER_ANSWER;
+    return mergeMultiSourceChatAnswers(tableRes, pdfRes) ?? CIRCUIT_BREAKER_ANSWER;
   }
 
   async getPublicSuggestions(folderId?: string): Promise<{ suggestions: string[] }> {
@@ -175,47 +180,40 @@ export class ChatService {
       folder: {
         OR: [
           { userId: aiManagerId },
-          { members: { some: { userId: aiManagerId } } },
+          ...buildFolderMemberOrConditions(aiManagerId),
         ],
       },
     };
     if (folderId) where.folderId = folderId;
 
-    const tables = await prisma.tableRegistry.findMany({
-      where,
-      select: {
-        tableName: true,
-        metadataCard: true,
-      },
-      take: 10,
-    });
+    const [tables, pdfs] = await Promise.all([
+      prisma.tableRegistry.findMany({ where, select: { tableName: true, metadataCard: true }, take: 10 }).catch(() => []),
+      prisma.pdfRegistry.findMany({ where, select: { originalName: true, metadataCard: true }, take: 10 }).catch(() => []),
+    ]);
 
-    const suggestions: string[] = [];
+    return {
+      suggestions: buildSuggestionsFromDocuments(
+        tables,
+        pdfs,
+        '¿Cuáles son los datos más relevantes de las tablas públicas?'
+      ),
+    };
+  }
 
-    for (const tbl of tables) {
-      const card = (tbl.metadataCard as any) || {};
-      const title = card.title || tbl.tableName.replace(/\.[^/.]+$/, '');
-      const entities: string[] = card.entities || [];
-      const columns = Object.keys(card.columnsMeta || {});
+  async getInternalSuggestions(requester: RequesterContext, folderId?: string): Promise<{ suggestions: string[] }> {
+    const where = this.buildInternalWhere(requester, folderId);
+    const [tables, pdfs] = await Promise.all([
+      prisma.tableRegistry.findMany({ where, select: { tableName: true, metadataCard: true }, take: 10 }).catch(() => []),
+      prisma.pdfRegistry.findMany({ where, select: { originalName: true, metadataCard: true }, take: 10 }).catch(() => []),
+    ]);
 
-      if (entities.length > 0 && columns.length > 0) {
-        const ent = entities[0];
-        const col = columns[0];
-        suggestions.push(`¿Cuál es el valor de ${col} para ${ent} en ${title}?`);
-      } else if (entities.length > 0) {
-        suggestions.push(`¿Qué información hay sobre ${entities[0]} en ${title}?`);
-      } else {
-        suggestions.push(`¿Cuál es el resumen estadístico de ${title}?`);
-      }
-
-      if (suggestions.length >= 5) break;
-    }
-
-    if (suggestions.length === 0) {
-      suggestions.push('¿Cuáles son los datos más relevantes de las tablas públicas?');
-    }
-
-    return { suggestions };
+    return {
+      suggestions: buildSuggestionsFromDocuments(
+        tables,
+        pdfs,
+        '¿Cuáles son los datos más relevantes de tus tablas y documentos?'
+      ),
+    };
   }
 
   private async processQuestionWithTables(

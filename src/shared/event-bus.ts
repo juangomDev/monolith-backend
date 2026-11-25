@@ -22,9 +22,39 @@ export interface FormEntryResolvedEvent {
   resolvedAt: Date;
 }
 
+export interface FolderSharedEvent {
+  folderId: string;
+  folderName: string;
+  targetUserId: string;
+  permission: string;
+  sharedById: string;
+  sharedByRole: string;
+}
+
+export interface ResourceUploadedEvent {
+  resourceType: 'IMAGE' | 'TABLE' | 'PDF';
+  resourceId: string;
+  resourceName: string;
+  folderId: string;
+  folderName?: string;
+  folderOwnerId: string;
+  uploadedById: string;
+  uploadedByRole?: string;
+}
+
+export interface StorageQuotaWarningEvent {
+  totalBytes: number;
+  maxStorageBytes: number;
+  usagePercent: number;
+  message: string;
+}
+
 export interface AppEvents {
   'form.entry.created': FormEntryCreatedEvent;
   'form.entry.resolved': FormEntryResolvedEvent;
+  'folder.shared': FolderSharedEvent;
+  'resource.uploaded': ResourceUploadedEvent;
+  'storage.quota.warning': StorageQuotaWarningEvent;
 }
 
 export class AppEventBus extends EventEmitter {
@@ -50,4 +80,3 @@ export class AppEventBus extends EventEmitter {
 }
 
 export const eventBus = new AppEventBus();
-

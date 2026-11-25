@@ -8,6 +8,7 @@ import {
   getUnreadCountRouteSchema,
   markReadRouteSchema,
   markAllReadRouteSchema,
+  clearReadNotificationsRouteSchema,
   deleteNotificationRouteSchema,
   streamNotificationsRouteSchema,
   subscribeFormRouteSchema,
@@ -92,7 +93,22 @@ export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // 5. Eliminar una notificación
+  // 5. Limpiar todas las notificaciones leídas
+  fastify.delete(
+    '/api/v1/notifications/read',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: clearReadNotificationsRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const result = await notificationsService.clearReadNotifications(caller.id);
+      return reply.send(result);
+    }
+  );
+
+  // 5.1 Eliminar una notificación
   fastify.delete(
     '/api/v1/notifications/:id',
     {

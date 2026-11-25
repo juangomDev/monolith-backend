@@ -53,6 +53,9 @@ export class FormsService {
     if (access?.folder?.type === FolderType.CONTAINER) {
       throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
     }
+    if (access?.folder?.type && access.folder.type !== FolderType.TABLE) {
+      throw new AppError(400, "Incompatibilidad: los formularios solo pueden crearse en carpetas de tipo 'TABLE'", 'INVALID_FOLDER_TYPE');
+    }
 
     const cleanSlug = dto.slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     if (!cleanSlug) throw new AppError(400, 'El slug del formulario no es válido', 'INVALID_SLUG');
@@ -85,14 +88,7 @@ export class FormsService {
       console.error('[FormsService] Error inicializando tabla abierta:', err);
     }
 
-    auditService.recordLog({
-      actorId: caller.id,
-      actorUsername: caller.role,
-      action: 'FORM_CREATE',
-      resourceType: 'FORM',
-      resourceId: form.id,
-      folderId: form.folderId,
-    });
+    auditService.recordLog({ actorId: caller.id, actorUsername: caller.role, action: 'FORM_CREATE', resourceType: 'FORM', resourceId: form.id, folderId: form.folderId });
 
     return (await this.repo.findFormById(form.id)) || form;
   }
@@ -103,6 +99,17 @@ export class FormsService {
       ...options,
       userId: caller.id,
       isAdmin: isGlobal,
+      role: caller.role,
+    });
+  }
+
+  async countForms(options: ListFormsOptions, caller: CallerContext): Promise<number> {
+    const isGlobal = caller.role === Role.ADMIN;
+    return this.repo.countForms({
+      ...options,
+      userId: caller.id,
+      isAdmin: isGlobal,
+      role: caller.role,
     });
   }
 
@@ -135,15 +142,7 @@ export class FormsService {
       console.error('[FormsService] Error sincronizando entrada a tabla abierta:', err);
     });
 
-    auditService.recordLog({
-      actorId: null,
-      actorUsername: 'public_user',
-      action: 'FORM_ENTRY_SUBMIT',
-      resourceType: 'FORM_ENTRY',
-      resourceId: entry.id,
-      folderId: form.folderId,
-      ipAddress,
-    });
+    auditService.recordLog({ actorId: null, actorUsername: 'public_user', action: 'FORM_ENTRY_SUBMIT', resourceType: 'FORM_ENTRY', resourceId: entry.id, folderId: form.folderId, ipAddress });
 
     eventBus.emitEvent('form.entry.created', {
       formId: form.id,
@@ -195,15 +194,7 @@ export class FormsService {
       });
     }
 
-    auditService.recordLog({
-      actorId: caller.id,
-      actorUsername: caller.role,
-      action: 'FORM_ENTRY_RESOLVE',
-      resourceType: 'FORM_ENTRY',
-      resourceId: updated.id,
-      folderId: entry.form.folderId,
-      ipAddress,
-    });
+    auditService.recordLog({ actorId: caller.id, actorUsername: caller.role, action: 'FORM_ENTRY_RESOLVE', resourceType: 'FORM_ENTRY', resourceId: updated.id, folderId: entry.form.folderId, ipAddress });
 
     eventBus.emitEvent('form.entry.resolved', {
       formId: entry.form.id,
@@ -256,12 +247,23 @@ export class FormsService {
 
     await this.sharesService.assertFolderAccess(form.folderId, caller, FolderPermission.READ);
 
+    const page = options.page && options.page > 0 ? options.page : 1;
+    const limit = options.limit && options.limit > 0 ? options.limit : 50;
+
     const [entries, total] = await Promise.all([
-      this.repo.listEntries({ ...options, formId }),
+      this.repo.listEntries({ ...options, page, limit, formId }),
       this.repo.countEntries({ ...options, formId }),
     ]);
 
-    return { entries, total };
+    const totalPages = Math.ceil(total / limit) || 1;
+    return {
+      entries,
+      total,
+      page,
+      limit,
+      totalPages,
+      meta: { page, limit, total, totalPages, hasNext: page < totalPages },
+    };
   }
 
   async exportEntries(formId: string, options: { month?: string; status?: string; format?: 'xlsx' | 'csv' }, caller: CallerContext) {

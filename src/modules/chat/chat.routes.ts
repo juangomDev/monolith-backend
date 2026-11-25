@@ -7,6 +7,7 @@ import {
   askChatInternalRouteSchema,
   askChatPublicRouteSchema,
   getPublicSuggestionsRouteSchema,
+  getInternalSuggestionsRouteSchema,
 } from './chat.schemas.js';
 
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
@@ -63,6 +64,24 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { folderId } = request.query as { folderId?: string };
       const result = await chatService.getPublicSuggestions(folderId);
+      return reply.send(result);
+    }
+  );
+
+  // 4. GET /api/v1/chat/suggestions (Sugerencias dinámicas internas con RBAC)
+  fastify.get(
+    '/api/v1/chat/suggestions',
+    {
+      validatorCompiler: passValidator,
+      preHandler: [authenticateUserOrApiKey],
+      schema: getInternalSuggestionsRouteSchema,
+    },
+    async (request, reply) => {
+      const requester = request.user
+        ? { id: request.user.id, role: request.user.role }
+        : { id: request.apiClient?.id ?? '00000000-0000-0000-0000-000000000000', role: Role.ADMIN };
+      const { folderId } = request.query as { folderId?: string };
+      const result = await chatService.getInternalSuggestions(requester, folderId);
       return reply.send(result);
     }
   );

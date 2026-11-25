@@ -15,14 +15,17 @@ export const chatAnswerSchema = {
     },
     sources: {
       type: 'array',
-      description: 'Tablas utilizadas como fuentes para la respuesta',
+      description: 'Tablas y/o documentos PDF utilizados como fuentes para la respuesta',
       items: {
         type: 'object',
         properties: {
+          type: { type: 'string', enum: ['TABLE', 'PDF'] },
           tableId: { type: 'string', format: 'uuid' },
           tableName: { type: 'string' },
           shortCode: { type: 'string' },
           title: { type: 'string' },
+          url: { type: 'string' },
+          pages: { type: 'array', items: { type: 'integer' } },
         },
         required: ['tableId', 'tableName', 'shortCode'],
       },
@@ -93,7 +96,7 @@ export const askChatPublicRouteSchema: FastifySchema = {
 export const getPublicSuggestionsRouteSchema: FastifySchema = {
   tags: ['Public Chat'],
   summary: 'Sugerencias de preguntas para el widget público',
-  description: 'Retorna preguntas recomendadas basadas en las Fichas Técnicas de las tablas públicas disponibles.',
+  description: 'Retorna preguntas recomendadas basadas en las Fichas Técnicas de las tablas y documentos PDF publicados en la bóveda de ai_manager.',
   querystring: {
     type: 'object',
     properties: {
@@ -113,5 +116,29 @@ export const getPublicSuggestionsRouteSchema: FastifySchema = {
       required: ['suggestions'],
     },
     429: standardErrorResponses[429],
+  },
+};
+
+export const getInternalSuggestionsRouteSchema: FastifySchema = {
+  tags: ['Chat'],
+  summary: 'Sugerencias de preguntas internas respetando RBAC',
+  description: 'Retorna preguntas sugeridas a partir de las tablas y documentos PDF accesibles para el usuario autenticado.',
+  security: securityDualAuth,
+  querystring: {
+    type: 'object',
+    properties: {
+      folderId: { type: 'string', format: 'uuid', description: 'Filtrar sugerencias por carpeta específica' },
+    },
+  },
+  response: {
+    200: {
+      description: 'Lista de preguntas sugeridas',
+      type: 'object',
+      properties: {
+        suggestions: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['suggestions'],
+    },
+    401: standardErrorResponses[401],
   },
 };

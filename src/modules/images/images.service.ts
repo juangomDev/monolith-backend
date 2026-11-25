@@ -12,6 +12,7 @@ import { foldersRepository } from '../folders/folders.repository.js';
 import { foldersSharesService } from '../folders/folders.shares.service.js';
 import type { RequesterContext } from '../folders/folders.service.js';
 import { auditService } from '../audit/audit.service.js';
+import { eventBus } from '../../shared/event-bus.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -25,7 +26,8 @@ export function formatImageItem(record: any) {
     id: record.id, shortCode: record.shortCode, url: `${env.BASE_URL}/i/${record.shortCode}`,
     urlWithVersion: `${env.BASE_URL}/i/${record.shortCode}?v=${dateForVersion.getTime()}`,
     originalName: record.originalName, mimeType: record.mimeType, sizeBytes: record.sizeBytes,
-    width: record.width ?? null, height: record.height ?? null, folderId: (record as any).folderId ?? null,
+    width: record.width ?? null, height: record.height ?? null, metadataCard: record.metadataCard ?? null,
+    folderId: (record as any).folderId ?? null,
     createdAt: record.createdAt, updatedAt: record.updatedAt ?? record.createdAt,
   };
 }
@@ -36,10 +38,15 @@ export class ImagesService {
     if (requesterCtx?.role === Role.COLLABORATOR && !folderId) {
       throw new AppError(403, 'Los colaboradores solo pueden subir archivos a carpetas compartidas con permiso de edición', 'FORBIDDEN');
     }
+    let targetFolder: any = null;
     if (folderId && requesterCtx) {
       const access = await foldersSharesService.assertFolderAccess(folderId, requesterCtx, FolderPermission.EDIT);
-      if (access?.folder?.type === FolderType.CONTAINER) {
+      targetFolder = access?.folder ?? null;
+      if (targetFolder?.type === FolderType.CONTAINER) {
         throw new AppError(400, 'No se permite subir archivos a una carpeta contenedora. Debe crear o seleccionar una subcarpeta.', 'CANNOT_UPLOAD_TO_CONTAINER_FOLDER');
+      }
+      if (targetFolder?.type && targetFolder.type !== FolderType.IMAGE) {
+        throw new AppError(400, "Incompatibilidad: las imágenes solo pueden subirse a carpetas de tipo 'IMAGE'", 'INVALID_FOLDER_TYPE');
       }
     }
 
@@ -99,15 +106,10 @@ export class ImagesService {
       folderId,
     });
 
-    auditService.recordLog({
-      actorId: requesterCtx?.id,
-      actorUsername: requesterCtx?.role || 'system',
-      action: 'IMAGE_UPLOAD',
-      resourceType: 'IMAGE',
-      resourceId: record.id,
-      folderId,
-    });
-
+    auditService.recordLog({ actorId: requesterCtx?.id, actorUsername: requesterCtx?.role || 'system', action: 'IMAGE_UPLOAD', resourceType: 'IMAGE', resourceId: record.id, folderId });
+    if (targetFolder?.userId && requesterCtx?.id && targetFolder.userId !== requesterCtx.id && folderId) {
+      eventBus.emitEvent('resource.uploaded', { resourceType: 'IMAGE', resourceId: record.id, resourceName: record.originalName, folderId, folderName: targetFolder.name, folderOwnerId: targetFolder.userId, uploadedById: requesterCtx.id, uploadedByRole: requesterCtx.role });
+    }
     return formatImageItem(record);
   }
 
@@ -123,6 +125,7 @@ export class ImagesService {
       page, limit, folderId: options?.folderId,
       userId: effectiveRequester?.id,
       isAdmin: effectiveRequester?.role === Role.ADMIN,
+      role: effectiveRequester?.role,
       search: options?.search,
     };
 
@@ -162,28 +165,15 @@ export class ImagesService {
 
     if (variant === 'thumb') {
       const thumbPath = imagesProcessor.getThumbnailPath(shortCode);
-      const isThumbAccessible = await imagesStorage.isAccessible(thumbPath);
-      if (isThumbAccessible) {
-        return {
-          record,
-          fileStream: imagesStorage.createReadStream(thumbPath),
-          mimeType: 'image/webp',
-          isThumbnail: true,
-        };
+      if (await imagesStorage.isAccessible(thumbPath)) {
+        return { record, fileStream: imagesStorage.createReadStream(thumbPath), mimeType: 'image/webp', isThumbnail: true };
       }
     }
 
-    const isOriginalAccessible = await imagesStorage.isAccessible(record.storagePath);
-    if (!isOriginalAccessible) {
+    if (!(await imagesStorage.isAccessible(record.storagePath))) {
       throw new AppError(404, 'El archivo físico de la imagen no existe en almacenamiento', 'FILE_NOT_FOUND');
     }
-
-    return {
-      record,
-      fileStream: imagesStorage.createReadStream(record.storagePath),
-      mimeType: record.mimeType,
-      isThumbnail: false,
-    };
+    return { record, fileStream: imagesStorage.createReadStream(record.storagePath), mimeType: record.mimeType, isThumbnail: false };
   }
 
   async getImageByShortCode(shortCode: string) {

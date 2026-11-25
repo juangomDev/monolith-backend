@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Role } from '@prisma/client';
 import { pdfsService } from './pdfs.service.js';
+import { pdfsBulkService } from './pdfs.bulk.service.js';
 import { foldersMovementService } from '../folders/folders.movement.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
@@ -15,6 +16,7 @@ import {
   deletePdfRouteSchema,
   movePdfRouteSchema,
 } from './pdfs.schemas.js';
+import { bulkDeletePdfsRouteSchema, bulkMovePdfsRouteSchema } from './pdfs.bulk.schemas.js';
 
 function extractRequester(request: FastifyRequest): { id: string; role: Role } {
   if (request.user) {
@@ -213,6 +215,38 @@ export const pdfsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string };
       const updated = await foldersMovementService.movePdfToFolder(id, request.body, caller);
       return reply.send(updated);
+    }
+  );
+
+  // 9. Eliminación masiva en lote de PDFs
+  fastify.post(
+    '/api/v1/pdfs/bulk-delete',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: bulkDeletePdfsRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { ids } = request.body as { ids: string[] };
+      const result = await pdfsBulkService.bulkDelete(ids, caller);
+      return reply.send(result);
+    }
+  );
+
+  // 10. Movimiento masivo en lote de PDFs
+  fastify.post(
+    '/api/v1/pdfs/bulk-move',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: bulkMovePdfsRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { ids, targetFolderId } = request.body as { ids: string[]; targetFolderId: string };
+      const result = await pdfsBulkService.bulkMove(ids, targetFolderId, caller);
+      return reply.send(result);
     }
   );
 };

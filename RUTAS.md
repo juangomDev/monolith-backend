@@ -19,72 +19,81 @@
 | **7** | `GET` | `/api/v1/auth/me` | Auth | Bearer JWT | `COLLABORATOR` | Retorna los datos de sesión activa del usuario autenticado. |
 | **8** | `PATCH` | `/api/v1/auth/password` | Auth | Bearer JWT | `COLLABORATOR` | Permite al usuario cambiar su propia contraseña. |
 | **9** | `POST` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Registro de nuevos usuarios respetando jerarquía (`ADMIN > MANAGER > COLLABORATOR`). |
-| **10** | `GET` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Listado de usuarios (`ADMIN` ve todos; `MANAGER` sus colaboradores + `ai_manager`). |
+| **10** | `GET` | `/api/v1/users` | Users | Bearer JWT | `MANAGER` | Listado paginado y filtrado de usuarios (`?search=&role=&isActive=&page=&limit=`). |
 | **11** | `PATCH` | `/api/v1/users/:id/status` | Users | Bearer JWT | `MANAGER` | Activa o suspende una cuenta de usuario (protege cuentas del sistema). |
-| **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico. |
-| **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos. |
-| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles con conteo y permiso (`?type=&search=&parentId=&page=&limit=`). |
+| **12** | `PATCH` | `/api/v1/users/:id/password` | Users | Bearer JWT | `MANAGER` | Restablecimiento forzado de contraseña por superior jerárquico (auditado). |
+| **13** | `DELETE` | `/api/v1/users/:id` | Users | Bearer JWT | `MANAGER` | Eliminación de usuario y limpieza en cascada de sus archivos (imágenes, tablas y PDFs). |
+| **14** | `GET` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Lista carpetas visibles (herencia 3 niveles) con conteo y permiso (`?type=&search=&parentId=&page=&limit=`). |
 | **15** | `GET` | `/api/v1/folders/tree` | Folders | Dual (JWT / Key) | `COLLABORATOR` | Retorna el árbol jerárquico anidado de todas las carpetas visibles. |
-| **16** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Crea una carpeta o subcarpeta (`CONTAINER`, `IMAGE`, `TABLE`, `PDF`). |
-| **17** | `PATCH` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Actualiza propiedades (nombre, color o privacidad) de la carpeta. |
-| **18** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta (evalúa membresía o privacidad). |
-| **19** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos. |
-| **20** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador con permiso `READ` o `EDIT`. |
+| **16** | `POST` | `/api/v1/folders` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Crea una carpeta o subcarpeta (`CONTAINER`, `IMAGE`, `TABLE`, `PDF`) con auditoría. |
+| **17** | `PATCH` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Actualiza propiedades (`name`, `color`, `isPrivate`, `parentId`) validando ciclos/profundidad. |
+| **18** | `GET` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Detalle de carpeta con resolución de permiso heredado 3 niveles. |
+| **19** | `DELETE` | `/api/v1/folders/:id` | Folders | Dual (JWT / Key) | `MANAGER`* | Eliminación en cascada física y lógica de la carpeta y archivos (auditado). |
+| **20** | `POST` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Comparte carpeta asignando colaborador (`READ`/`EDIT`) y notifica vía SSE. |
 | **21** | `GET` | `/api/v1/folders/:id/shares` | Folders | Dual (JWT / Key) | `MANAGER`* | Lista colaboradores y niveles de acceso a la carpeta. |
 | **22** | `PATCH` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Modifica nivel de permiso (`READ` <-> `EDIT`) del colaborador. |
 | **23** | `DELETE` | `/api/v1/folders/:id/shares/:userId` | Folders | Dual (JWT / Key) | `MANAGER`* | Revoca acceso y expulsa al colaborador de la carpeta. |
-| **23** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=&search=`). |
-| **24** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (requiere permiso `EDIT` si es colaborador). |
-| **25** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
-| **26** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
-| **27** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
-| **28** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
-| **29** | `POST` | `/api/v1/images/bulk-delete` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de imágenes (máx. 50 IDs). |
-| **30** | `POST` | `/api/v1/images/bulk-move` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de imágenes a otra carpeta de tipo `IMAGE`. |
-| **31** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública con capability URL (`?variant=thumb` o `original`). |
-| **32** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados (`?page=&limit=&folderId=&search=`). |
-| **33** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (requiere permiso `EDIT` si es colaborador). |
-| **34** | `PATCH` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `tableName` validando permiso de edición. |
-| **35** | `PUT` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente (Hot-Swap) preservando shortCode, folderId y URL pública. |
-| **36** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset y archivo origen. |
-| **37** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
-| **38** | `POST` | `/api/v1/tables/bulk-delete` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de datasets tabulares (máx. 50 IDs). |
-| **39** | `POST` | `/api/v1/tables/bulk-move` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de tablas a otra carpeta de tipo `TABLE`. |
-| **40** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`) o descarga (`?download=true`). |
-| **41** | `PATCH` | `/api/v1/tables/:id/metadata` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza la Ficha Técnica (`metadataCard`) de la tabla. |
-| **42** | `POST` | `/api/v1/chat/ask` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Consulta analítica interna con control RBAC sobre tablas permitidas. |
-| **43** | `POST` | `/api/v1/public/chat/ask` | Public Chat | Pública (Rate Limit) | Anónimo | Widget público para páginas web externas (restringido a bóveda de `ai_manager`). |
-| **44** | `GET` | `/api/v1/public/chat/suggestions` | Public Chat | Pública (Rate Limit) | Anónimo | Sugerencias de preguntas dinámicas basadas en bóveda de `ai_manager`. |
-| **45** | `GET` | `/api/v1/audit-logs` | Audit | Dual (JWT / Key) | `MANAGER`* | Consultar historial de auditoría (`ADMIN` global, `MANAGER` carpetas/colaboradores). |
-| **46** | `POST` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Crear una nueva API Key de integración (retorna secreto plano una sola vez). |
-| **47** | `GET` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Listar API Keys autorizadas (oculta secretos criptográficos). |
-| **48** | `DELETE` | `/api/v1/api-keys/:id` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Revocar y destruir una API Key inmediatamente. |
-| **49** | `GET` | `/api/v1/stats/storage` | Stats | Dual (JWT / Key) | `MANAGER`* | Métricas de cuota, salud de disco físico (`ADMIN`) y desglose de carpetas. |
-| **50** | `POST` | `/api/v1/public/forms/:slug/entries` | Forms | Pública (Rate Limit) | Anónimo | Envío público de datos de formulario (Endpoint 1: status NEW). |
-| **51** | `POST` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Crea formulario customizable y genera tabla abierta vinculada. |
-| **52** | `GET` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR` | Lista formularios accesibles con conteo de respuestas y tabla. |
-| **53** | `GET` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene el detalle de un formulario por ID o slug. |
-| **54** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID o INVALID). |
-| **55** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
-| **56** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista las entradas de un formulario (`?month=YYYY-MM&status=`). |
-| **57** | `GET` | `/api/v1/forms/:id/export` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Exporta respuestas a Excel (.xlsx) o CSV (.csv) con filtro mensual. |
-| **58** | `GET` | `/p/:short_code` | Pdfs | Pública (Capability URL) | Anónimo | Entrega pública inmutable de PDF (`inline`, `?download=true` o texto `?format=text`). |
-| **59** | `GET` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR` | Listar catálogo de PDFs con filtros (`folderId`, `search`), paginación y metadataCard. |
-| **60** | `POST` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Subida multipart de PDF, validación de exploits, extracción de texto y doble artefacto. |
-| **61** | `PATCH` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Renombrar nombre original del archivo PDF (`originalName`). |
-| **62** | `PUT` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en Caliente (Hot-Swap) de PDF conservando ID, shortCode y URL pública. |
-| **63** | `PATCH` | `/api/v1/pdfs/:id/metadata` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Actualizar ficha técnica (`metadataCard`: category, summary, keywords, custom). |
-| **64** | `DELETE` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación de PDF en base de datos y borrado físico de sus 2 artefactos en disco. |
-| **65** | `PATCH` | `/api/v1/pdfs/:id/folder` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Mover documento PDF a otra carpeta verificando que sea de tipo `PDF`. |
-| **66** | `GET` | `/api/v1/notifications` | Notifications | Dual (JWT / Key) | Autenticado | Listado paginado de notificaciones del usuario (`?page=&limit=&unreadOnly=`). |
-| **67** | `GET` | `/api/v1/notifications/unread-count` | Notifications | Dual (JWT / Key) | Autenticado | Conteo rápido de notificaciones pendientes (badge de campana). |
-| **68** | `PATCH` | `/api/v1/notifications/:id/read` | Notifications | Dual (JWT / Key) | Autenticado | Marcar una notificación individual como leída. |
-| **69** | `PATCH` | `/api/v1/notifications/read-all` | Notifications | Dual (JWT / Key) | Autenticado | Marcar todas las notificaciones de la bandeja como leídas. |
-| **70** | `DELETE` | `/api/v1/notifications/:id` | Notifications | Dual (JWT / Key) | Autenticado | Eliminar una notificación de la bandeja. |
-| **71** | `GET` | `/api/v1/notifications/stream` | Notifications | Dual (JWT / Key) | Autenticado | Conexión Server-Sent Events (SSE) para recepción de alertas en vivo. |
-| **72** | `POST` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Suscribirse o actualizar alertas de nuevas entradas/resoluciones de un formulario. |
-| **73** | `DELETE` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Cancelar suscripción a las alertas de un formulario. |
-| **74** | `GET` | `/api/v1/forms/:id/subscription` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Consultar el estado de suscripción del usuario en un formulario. |
+| **24** | `GET` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR` | Listado paginado y filtrado de imágenes (`?page=&limit=&folderId=&search=`). |
+| **25** | `POST` | `/api/v1/images` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de imagen (valida `FolderType.IMAGE` y permiso `EDIT`). |
+| **26** | `PATCH` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `originalName` validando permiso de edición. |
+| **27** | `PATCH` | `/api/v1/images/:id/metadata` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza tarjeta semántica `metadataCard` (`title`, `alt`, `description`, `tags`, `custom`). |
+| **28** | `PUT` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente de binario preservando shortCode y URL pública. |
+| **29** | `DELETE` | `/api/v1/images/:id` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica de imagen y su miniatura WebP. |
+| **30** | `PATCH` | `/api/v1/images/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna una imagen a otra carpeta de tipo `IMAGE`. |
+| **31** | `POST` | `/api/v1/images/bulk-delete` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de imágenes (máx. 50 IDs). |
+| **32** | `POST` | `/api/v1/images/bulk-move` | Images | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de imágenes a otra carpeta de tipo `IMAGE`. |
+| **33** | `GET` | `/i/:short_code` | Images | Pública | Anónimo | Entrega pública inmutable (`?variant=thumb|original`, `?download=true`). |
+| **34** | `GET` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR` | Listado de datasets tabulares registrados (`?page=&limit=&folderId=&search=`). |
+| **35** | `POST` | `/api/v1/tables` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Carga multipart de dataset (valida `FolderType.TABLE` y permiso `EDIT`). |
+| **36** | `PATCH` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Renombra `tableName` validando permiso de edición. |
+| **37** | `PUT` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en caliente (Hot-Swap) preservando shortCode, folderId y URL pública. |
+| **38** | `DELETE` | `/api/v1/tables/:id` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Destrucción física y lógica del dataset, archivo origen e invalidación de caché Chat. |
+| **39** | `PATCH` | `/api/v1/tables/:id/folder` | Folders | Dual (JWT / Key) | `COLLABORATOR`* | Reasigna un dataset a otra carpeta de tipo `TABLE`. |
+| **40** | `POST` | `/api/v1/tables/bulk-delete` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de datasets tabulares (máx. 50 IDs). |
+| **41** | `POST` | `/api/v1/tables/bulk-move` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de tablas a otra carpeta de tipo `TABLE`. |
+| **42** | `GET` | `/t/:short_code` | Tables | Pública | Anónimo | Consulta paginada (`?page=&limit=`), filtrado universal o descarga (`?download=true`). |
+| **43** | `PATCH` | `/api/v1/tables/:id/metadata` | Tables | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza la Ficha Técnica (`metadataCard`) de la tabla. |
+| **44** | `POST` | `/api/v1/chat/ask` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Consulta analítica interna multi-fuente (Tablas + PDFs) con RBAC heredado. |
+| **45** | `GET` | `/api/v1/chat/suggestions` | Chat | Dual (JWT / Key) | `COLLABORATOR` | Sugerencias dinámicas autenticadas desde Tablas y PDFs accesibles por RBAC. |
+| **46** | `POST` | `/api/v1/public/chat/ask` | Public Chat | Pública (Rate Limit) | Anónimo | Widget público multi-fuente (Tablas + PDFs en bóveda de `ai_manager`). |
+| **47** | `GET` | `/api/v1/public/chat/suggestions` | Public Chat | Pública (Rate Limit) | Anónimo | Sugerencias dinámicas basadas en Tablas y PDFs de la bóveda de `ai_manager`. |
+| **48** | `GET` | `/api/v1/audit-logs` | Audit | Dual (JWT / Key) | `MANAGER`* | Historial de auditoría (`?from=&to=&actorId=&search=&action=&resourceType=&folderId=`). |
+| **49** | `GET` | `/api/v1/audit-logs/export` | Audit | Dual (JWT / Key) | `MANAGER`* | Exporta auditoría filtrada en `.csv` o `.xlsx` con sanitización anti-fórmulas. |
+| **50** | `POST` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Crear una nueva API Key de integración (retorna secreto plano una sola vez). |
+| **51** | `GET` | `/api/v1/api-keys` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Listar API Keys autorizadas con paginación opcional (`?page=&limit=`). |
+| **52** | `PATCH` | `/api/v1/api-keys/:id` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Pausar/reactivar (`isActive`), renombrar o ajustar `rateLimit` sin revocar la llave. |
+| **53** | `DELETE` | `/api/v1/api-keys/:id` | ApiKeys | Dual (JWT / Key) | `ADMIN` | Revocar y destruir una API Key inmediatamente. |
+| **54** | `GET` | `/api/v1/stats/storage` | Stats | Dual (JWT / Key) | `MANAGER`* | Cuota dinámica (`MAX_STORAGE_GB`), uso de disco (`ADMIN`), `topFolders` y `summary`. |
+| **55** | `POST` | `/api/v1/public/forms/:slug/entries` | Forms | Pública (Rate Limit) | Anónimo | Envío público de datos de formulario (Endpoint 1: status NEW). |
+| **56** | `POST` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Crea formulario customizable (en carpeta `TABLE`) y genera tabla abierta vinculada. |
+| **57** | `GET` | `/api/v1/forms` | Forms | Dual (JWT / Key) | `COLLABORATOR` | Lista formularios accesibles con paginación `meta`, conteo y tabla vinculada. |
+| **58** | `GET` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene el detalle de un formulario por ID o slug. |
+| **59** | `PATCH` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza configuración segura del formulario (`title`, `allowedResolutionStates`, `externalTargetUrl`). |
+| **60** | `DELETE` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `MANAGER`* | Elimina formulario, tabla abierta vinculada y artefacto `.data.json.gz`. |
+| **61** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID o INVALID). |
+| **62** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
+| **63** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista paginada con `meta` de entradas (`?month=YYYY-MM&status=&page=&limit=`). |
+| **64** | `GET` | `/api/v1/forms/:id/export` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Exporta respuestas a Excel (.xlsx) o CSV (.csv) con filtro mensual. |
+| **65** | `GET` | `/p/:short_code` | Pdfs | Pública (Capability URL) | Anónimo | Entrega pública inmutable de PDF (`inline`, `?download=true` o texto `?format=text`). |
+| **66** | `GET` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR` | Catálogo paginado de PDFs (`pdfs`, `total`, `totalPages`, `meta`, `?folderId=&search=`). |
+| **67** | `POST` | `/api/v1/pdfs` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Subida multipart de PDF (colaborador requiere `folderId` tipo `PDF` con `EDIT`). |
+| **68** | `PATCH` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Renombrar nombre original del archivo PDF (`originalName`). |
+| **69** | `PUT` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Reemplazo en Caliente (Hot-Swap) de PDF e invalidación de caché Chat. |
+| **70** | `PATCH` | `/api/v1/pdfs/:id/metadata` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Actualizar `metadataCard`, invalidar caché Chat y auditar `PDF_METADATA_UPDATE`. |
+| **71** | `DELETE` | `/api/v1/pdfs/:id` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación de PDF, sus 2 artefactos en disco e invalidación de caché Chat. |
+| **72** | `PATCH` | `/api/v1/pdfs/:id/folder` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Mover documento PDF a otra carpeta tipo `PDF` (`{ "folderId": "uuid" }`). |
+| **73** | `POST` | `/api/v1/pdfs/bulk-delete` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Eliminación masiva en lote de PDFs y sus 2 artefactos en disco (máx. 50 IDs). |
+| **74** | `POST` | `/api/v1/pdfs/bulk-move` | Pdfs | Dual (JWT / Key) | `COLLABORATOR`* | Movimiento masivo en lote de PDFs a otra carpeta de tipo `PDF` (máx. 50 IDs). |
+| **75** | `GET` | `/api/v1/notifications` | Notifications | Dual (JWT / Key) | Autenticado | Listado paginado de notificaciones del usuario (`?page=&limit=&unreadOnly=`). |
+| **76** | `GET` | `/api/v1/notifications/unread-count` | Notifications | Dual (JWT / Key) | Autenticado | Conteo rápido de notificaciones pendientes (badge de campana). |
+| **77** | `PATCH` | `/api/v1/notifications/:id/read` | Notifications | Dual (JWT / Key) | Autenticado | Marcar una notificación individual como leída. |
+| **78** | `PATCH` | `/api/v1/notifications/read-all` | Notifications | Dual (JWT / Key) | Autenticado | Marcar todas las notificaciones de la bandeja como leídas. |
+| **79** | `DELETE` | `/api/v1/notifications/read` | Notifications | Dual (JWT / Key) | Autenticado | Limpiar en lote todas las notificaciones leídas (`read=true`) del usuario. |
+| **80** | `DELETE` | `/api/v1/notifications/:id` | Notifications | Dual (JWT / Key) | Autenticado | Eliminar una notificación de la bandeja. |
+| **81** | `GET` | `/api/v1/notifications/stream` | Notifications | Dual (JWT / Key) | Autenticado | Conexión Server-Sent Events (SSE) para alertas en vivo (`FORM_*`, `FOLDER_SHARED`, `RESOURCE_UPLOADED`, `STORAGE_QUOTA_WARNING`). |
+| **82** | `POST` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Suscribirse o actualizar alertas de nuevas respuestas/resoluciones de un formulario. |
+| **83** | `DELETE` | `/api/v1/forms/:id/subscribe` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Cancelar suscripción a las alertas de un formulario. |
+| **84** | `GET` | `/api/v1/forms/:id/subscription` | Notifications | Dual (JWT / Key) | `COLLABORATOR`* | Consultar el estado de suscripción del usuario en un formulario. |
 
 *\*Nota: Los endpoints marcados con `*` verifican propiedad y permisos RBAC: un `COLLABORATOR` requiere membresía explícita con permiso `EDIT` para mutar o subir archivos; un `MANAGER` opera sobre recursos propios o compartidos; un `ADMIN` tiene acceso irrestricto.*
 
@@ -961,8 +970,14 @@ Endpoint sin autenticación con Rate Limiting estricto (30 req/min por IP) para 
 - **Respuesta 200 OK:** Misma estructura `ChatAnswer` que `/api/v1/chat/ask`.
 - **Errores:** `400 Bad Request`, `429 Too Many Requests`.
 
+#### `GET /api/v1/chat/suggestions` (Protegida)
+Sugerencias dinámicas contextuales basadas en las Fichas Técnicas de Tablas y PDFs accesibles para el usuario autenticado (con RBAC heredado).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Query Params:** `folderId` (UUID opcional).
+- **Respuesta 200 OK:** `{ "suggestions": [...] }`.
+
 #### `GET /api/v1/public/chat/suggestions` (Pública por Diseño)
-Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las tablas públicas disponibles.
+Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las Tablas y PDFs publicados en la bóveda de `ai_manager`.
 - **Autenticación:** Ninguna (Pública con Rate Limiting: 30 req/min por IP).
 - **Query Params:** `folderId` (UUID opcional para limitar sugerencias a una carpeta).
 - **Respuesta 200 OK:**
@@ -970,7 +985,7 @@ Sugerencias dinámicas de preguntas basadas en las Fichas Técnicas de las tabla
   {
     "suggestions": [
       "¿Cuál es el valor de Hombres para Brasil en Censo Sudamérica 2024?",
-      "¿Qué información hay sobre Argentina en Censo Sudamérica 2024?"
+      "¿Qué establece el Manual Operativo respecto a tiempos de respuesta?"
     ]
   }
   ```
@@ -1021,7 +1036,11 @@ Crea una definición de formulario y genera automáticamente un `TableRegistry` 
 - **Errores:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `409 Conflict` (slug duplicado).
 
 #### `GET /api/v1/forms` y `GET /api/v1/forms/:id` (Protegida)
-Consulta el catálogo de formularios accesibles con sus esquemas, tabla abierta asociada y conteo de respuestas.
+Consulta el catálogo paginado de formularios accesibles (`forms`, `total`, `page`, `limit`, `totalPages`, `meta`) con sus esquemas, tabla abierta asociada y conteo de respuestas.
+
+#### `PATCH /api/v1/forms/:id` y `DELETE /api/v1/forms/:id` (Protegida)
+- `PATCH /api/v1/forms/:id`: Actualiza configuración segura (`title`, `allowedResolutionStates`, `externalTargetUrl`, `autoResolveWithAi`) con control RBAC `EDIT` y auditoría `FORM_UPDATE`.
+- `DELETE /api/v1/forms/:id`: Elimina el formulario, su tabla vinculada y el artefacto `.data.json.gz`, limpia la caché del chat y registra auditoría `FORM_DELETE` (requiere propietario o `ADMIN`).
 
 #### `PATCH /api/v1/forms/entries/:id/resolve` (Protegida - Endpoint 2: Regla Write-Once)
 Completa los campos de `resolutionFieldsSchema` y transiciona el estado de `"NEW"` a `"VALID"` o `"INVALID"`.
@@ -1061,7 +1080,7 @@ Carga un documento PDF en memoria, valida magic bytes `%PDF-` y escanea el búfe
 
 #### `GET /api/v1/pdfs` (Protegida - Catálogo de Documentos)
 Consulta paginada de PDFs con soporte para búsqueda textual en nombre y metadatos (`?search=`), filtrado por carpeta (`?folderId=`) y paginación (`?page=1&limit=50`).
-- **Respuesta 200 OK:** `{ "data": [...], "meta": { "total": N, "page": 1, "limit": 50, "totalPages": N } }`.
+- **Respuesta 200 OK:** `{ "pdfs": [...], "total": N, "page": 1, "limit": 50, "totalPages": N, "meta": { "page": 1, "limit": 50, "total": N, "totalPages": N, "hasNext": false } }`.
 
 #### `PATCH /api/v1/pdfs/:id` (Protegida - Renombrar)
 Modifica el campo `originalName` del documento PDF sin alterar sus artefactos en disco ni su `shortCode`.
@@ -1091,8 +1110,12 @@ Elimina el registro en PostgreSQL / Prisma y borra físicamente de `./storage/pd
 
 #### `PATCH /api/v1/pdfs/:id/folder` (Protegida - Mover PDF)
 Mueve el PDF a otra carpeta del sistema, validando estrictamente que la carpeta destino sea de tipo `FolderType.PDF`.
-- **Cuerpo JSON:** `{ "targetFolderId": "uuid-carpeta-pdf" }`.
+- **Cuerpo JSON:** `{ "folderId": "uuid-carpeta-pdf" }`.
 - **Respuesta 200 OK:** Registro actualizado.
+
+#### `POST /api/v1/pdfs/bulk-delete` y `POST /api/v1/pdfs/bulk-move` (Protegidas - Operaciones en Lote)
+- `POST /api/v1/pdfs/bulk-delete` con `{ "ids": ["uuid1", ...] }` (máx. 50 IDs): elimina registros en BD, borra `.pdf` + `.text.json.gz`, limpia caché del Chat y audita `PDF_BULK_DELETE`.
+- `POST /api/v1/pdfs/bulk-move` con `{ "ids": ["uuid1", ...], "targetFolderId": "uuid" }` (máx. 50 IDs): valida `FolderType.PDF` + permiso `EDIT` y audita `PDF_BULK_MOVE`.
 
 ---
 
@@ -1116,12 +1139,16 @@ Marca una notificación específica del usuario como leída (`read: true`).
 Marca todas las notificaciones pendientes del usuario como leídas.
 - **Respuesta 200 OK:** `{ "updatedCount": 5 }`.
 
+#### `DELETE /api/v1/notifications/read` (Protegida)
+Limpia en lote todas las notificaciones con estado `read: true` de la bandeja del usuario autenticado.
+- **Respuesta 200 OK:** `{ "deletedCount": 8 }`.
+
 #### `DELETE /api/v1/notifications/:id` (Protegida)
 Elimina una notificación de la bandeja personal del usuario.
 - **Respuesta 200 OK:** `{ "success": true }`.
 
 #### `GET /api/v1/notifications/stream` (Protegida - Server-Sent Events SSE)
-Establece una conexión persistente unidireccional de baja latencia (`text/event-stream`) con reconexión automática y heartbeats de keep-alive cada 25 segundos. Empuja eventos `event: notification` en tiempo real a los clientes conectados tan pronto se registran nuevas respuestas o resoluciones.
+Establece una conexión persistente unidireccional de baja latencia (`text/event-stream`) con reconexión automática y heartbeats de keep-alive cada 25 segundos. Empuja eventos `event: notification` en tiempo real para `FORM_ENTRY_NEW`, `FORM_ENTRY_RESOLVED`, `FOLDER_SHARED`, `RESOURCE_UPLOADED` y `STORAGE_QUOTA_WARNING`.
 
 #### `POST /api/v1/forms/:id/subscribe` (Protegida)
 Suscribe al usuario autenticado a las alertas de un formulario específico (validando que tenga al menos acceso `READ` en la carpeta donde reside).
@@ -1135,6 +1162,73 @@ Cancela la suscripción a las alertas del formulario.
 #### `GET /api/v1/forms/:id/subscription` (Protegida)
 Consulta si el usuario actual está suscrito al formulario y sus preferencias de alerta activas.
 - **Respuesta 200 OK:** `{ "subscribed": true, "subscription": { ... } }`.
+
+---
+
+### 3.11 Módulo de Estadísticas y Monitor de Almacenamiento (`/api/v1/stats/storage`)
+
+#### `GET /api/v1/stats/storage` (Protegida - `ADMIN` / `MANAGER`)
+Expone métricas agregadas de imágenes, tablas y documentos PDF en PostgreSQL, desglose de las 5 carpetas más pesadas (`topFolders`, incluyendo carpetas `IMAGE`, `TABLE` y `PDF`) y ocupación del disco físico (`./storage/images`, `./storage/tables` y `./storage/pdfs`).
+- **Autenticación:** Dual (`Bearer JWT` o `X-API-Key`).
+- **Control de Acceso:** `ADMIN` recibe métricas globales y `disk` poblado; `MANAGER` recibe métricas de sus propias carpetas con `disk: null`; `COLLABORATOR` recibe `403 FORBIDDEN`.
+- **Respuesta 200 OK:**
+  ```json
+  {
+    "isAdmin": true,
+    "database": {
+      "images": { "count": 10, "sizeBytes": 1048576 },
+      "tables": { "count": 5, "sizeBytes": 524288 },
+      "pdfs": { "count": 4, "sizeBytes": 2097152 },
+      "totalCount": 19,
+      "totalSizeBytes": 3670016
+    },
+    "disk": {
+      "imagesBytes": 1150000,
+      "imagesFilesCount": 20,
+      "tablesBytes": 600000,
+      "tablesFilesCount": 10,
+      "pdfsBytes": 2200000,
+      "pdfsFilesCount": 8,
+      "totalBytes": 3950000,
+      "totalFilesCount": 38,
+      "maxStorageBytes": 21474836480,
+      "usagePercent": 0.02
+    },
+    "topFolders": [
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "name": "Contratos PDF",
+        "type": "PDF",
+        "totalBytes": 2097152,
+        "itemsCount": 4
+      }
+    ],
+    "summary": {
+      "activeUsersCount": 6,
+      "formsCount": 3,
+      "pendingEntriesCount": 4,
+      "resolvedEntriesCount": 12
+    },
+    "warning": false,
+    "warningMessage": null
+  }
+  ```
+- **Errores:** `401 Unauthorized`, `403 Forbidden`.
+
+---
+
+### 3.12 Módulo de Auditoría, API Keys e Imágenes Avanzadas (Fase 27)
+
+#### `GET /api/v1/audit-logs` y `GET /api/v1/audit-logs/export` (Protegidas - `ADMIN` / `MANAGER`)
+- **Query Params:** `action`, `resourceType`, `folderId`, `actorId`, `from` (ISO 8601), `to` (ISO 8601), `search` (texto libre), más `page`/`limit` en listado o `format=csv|xlsx` en exportación.
+- **Seguridad:** Exportación con sanitización anti-inyección de fórmulas (`=`, `+`, `-`, `@`). `COLLABORATOR` recibe `403 FORBIDDEN`.
+
+#### `PATCH /api/v1/api-keys/:id` (Exclusivo `ADMIN`)
+Actualiza `name`, `description`, `rateLimit` o `isActive` (pausar/reactivar) sin revocar la llave. Audita `API_KEY_UPDATE`.
+
+#### `PATCH /api/v1/images/:id/metadata` (Protegida) y `GET /i/:short_code?download=true` (Pública)
+- `PATCH /api/v1/images/:id/metadata`: actualiza parcialmente `metadataCard` (`title`, `alt`, `description`, `tags`, `custom`) validando permiso `EDIT` y auditando `IMAGE_METADATA_UPDATE`.
+- `GET /i/:short_code?download=true`: fuerza descarga binaria con `Content-Disposition: attachment; filename="..."`.
 
 ---
 

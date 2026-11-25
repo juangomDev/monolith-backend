@@ -150,13 +150,42 @@ export const usersRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/users (Listado jerárquico)
+  // GET /api/v1/users (Listado jerárquico con filtros opcionales y paginación)
   fastify.get(
     '/api/v1/users',
-    { preHandler: [authenticateJwt, requireRole([Role.ADMIN, Role.MANAGER])], schema: listUsersRouteSchema },
+    { validatorCompiler: passValidator, preHandler: [authenticateJwt, requireRole([Role.ADMIN, Role.MANAGER])], schema: listUsersRouteSchema },
     async (request, reply) => {
-      const users = await usersService.listUsers(request.user);
-      return reply.status(200).send({ users });
+      const query = (request.query as any) || {};
+      const search = query.search ? String(query.search).trim() : undefined;
+      const role = query.role && Object.values(Role).includes(query.role) ? (query.role as Role) : undefined;
+      const isActive =
+        query.isActive === true || query.isActive === 'true'
+          ? true
+          : query.isActive === false || query.isActive === 'false'
+            ? false
+            : undefined;
+      const pageRaw = query.page !== undefined ? parseInt(String(query.page), 10) : undefined;
+      const limitRaw = query.limit !== undefined ? parseInt(String(query.limit), 10) : undefined;
+      const page = pageRaw !== undefined && !isNaN(pageRaw) && pageRaw > 0 ? pageRaw : undefined;
+      const limit = limitRaw !== undefined && !isNaN(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : undefined;
+
+      const hasOpts = search !== undefined || role !== undefined || isActive !== undefined || page !== undefined || limit !== undefined;
+      const opts = hasOpts ? { search, role, isActive, page, limit } : undefined;
+
+      const users = await usersService.listUsers(request.user, opts);
+      const total = hasOpts ? await usersService.countUsers(request.user, opts).catch(() => users.length) : users.length;
+      const activePage = page ?? 1;
+      const activeLimit = limit ?? (total > 0 ? total : 50);
+      const totalPages = Math.ceil(total / activeLimit) || 1;
+
+      return reply.status(200).send({
+        users,
+        total,
+        page: activePage,
+        limit: activeLimit,
+        totalPages,
+        meta: { page: activePage, limit: activeLimit, total, totalPages, hasNext: activePage < totalPages },
+      });
     }
   );
 

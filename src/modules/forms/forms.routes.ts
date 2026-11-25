@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { Role } from '@prisma/client';
 import { formsService } from './forms.service.js';
+import { formsMutationService } from './forms.mutation.service.js';
 import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import {
   passValidator,
@@ -13,6 +14,7 @@ import {
   listEntriesRouteSchema,
   exportEntriesRouteSchema,
 } from './forms.schemas.js';
+import { updateFormRouteSchema, deleteFormRouteSchema } from './forms.mutation.schemas.js';
 
 function extractRequester(request: FastifyRequest): { id: string; role: Role } {
   if (request.user) {
@@ -72,16 +74,20 @@ export const formsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const caller = extractRequester(request);
       const query = request.query as any;
-      const forms = await formsService.listForms(
-        {
-          folderId: query.folderId,
-          search: query.search,
-          page: query.page ? parseInt(query.page, 10) : 1,
-          limit: query.limit ? parseInt(query.limit, 10) : 50,
-        },
-        caller
-      );
-      return reply.send({ forms });
+      const page = query.page ? parseInt(query.page, 10) : 1;
+      const limit = query.limit ? parseInt(query.limit, 10) : 50;
+      const listOpts = { folderId: query.folderId, search: query.search, page, limit };
+      const forms = await formsService.listForms(listOpts, caller);
+      const total = await formsService.countForms(listOpts, caller).catch(() => forms.length);
+      const totalPages = Math.ceil(total / limit) || 1;
+      return reply.send({
+        forms,
+        total,
+        page,
+        limit,
+        totalPages,
+        meta: { page, limit, total, totalPages, hasNext: page < totalPages },
+      });
     }
   );
 
@@ -98,6 +104,38 @@ export const formsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string };
       const form = await formsService.getForm(id, caller);
       return reply.send(form);
+    }
+  );
+
+  // 4.1 Actualizar configuración de formulario (Protegido)
+  fastify.patch(
+    '/api/v1/forms/:id',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: updateFormRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { id } = request.params as { id: string };
+      const updated = await formsMutationService.updateForm(id, request.body as any, caller);
+      return reply.send(updated);
+    }
+  );
+
+  // 4.2 Eliminar formulario y limpiar tabla vinculada (Protegido)
+  fastify.delete(
+    '/api/v1/forms/:id',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: deleteFormRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { id } = request.params as { id: string };
+      const result = await formsMutationService.deleteForm(id, caller);
+      return reply.send(result);
     }
   );
 

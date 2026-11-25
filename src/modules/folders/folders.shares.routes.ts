@@ -2,10 +2,11 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { FolderPermission } from '@prisma/client';
 import { foldersSharesService } from './folders.shares.service.js';
-import { authenticateJwt } from '../../gateway/auth.js';
+import { authenticateUserOrApiKey } from '../../gateway/auth.js';
 import { AppError } from '../../shared/errors.js';
 import { passValidator } from '../users/users.schemas.js';
-import { standardErrorResponses, securityBearerAuth } from '../../shared/schemas.js';
+import { extractRequester } from './folders.schemas.js';
+import { standardErrorResponses, securityDualAuth } from '../../shared/schemas.js';
 
 const shareBodySchema = z.object({
   userId: z.string().uuid('El userId debe ser un UUID válido'),
@@ -22,11 +23,11 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/v1/folders/:id/shares',
     {
       validatorCompiler: passValidator,
-      preHandler: [authenticateJwt],
+      preHandler: [authenticateUserOrApiKey],
       schema: {
         tags: ['Folders'],
         summary: 'Compartir carpeta con un usuario colaborador',
-        security: securityBearerAuth,
+        security: securityDualAuth,
         params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
         body: {
           type: 'object',
@@ -68,9 +69,10 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError(400, parseResult.error.issues[0]?.message || 'Datos de compartición inválidos', 'BAD_REQUEST');
       }
 
+      const requester = await extractRequester(request);
       const share = await foldersSharesService.shareFolder(
         id,
-        request.user,
+        requester,
         parseResult.data.userId,
         parseResult.data.permission as FolderPermission
       );
@@ -82,11 +84,11 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     '/api/v1/folders/:id/shares',
     {
-      preHandler: [authenticateJwt],
+      preHandler: [authenticateUserOrApiKey],
       schema: {
         tags: ['Folders'],
         summary: 'Listar colaboradores de una carpeta',
-        security: securityBearerAuth,
+        security: securityDualAuth,
         params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
         response: {
           200: {
@@ -125,7 +127,8 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const shares = await foldersSharesService.listShares(id, request.user);
+      const requester = await extractRequester(request);
+      const shares = await foldersSharesService.listShares(id, requester);
       return reply.status(200).send({ shares });
     }
   );
@@ -135,11 +138,11 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/v1/folders/:id/shares/:userId',
     {
       validatorCompiler: passValidator,
-      preHandler: [authenticateJwt],
+      preHandler: [authenticateUserOrApiKey],
       schema: {
         tags: ['Folders'],
         summary: 'Modificar nivel de permiso de un colaborador en la carpeta',
-        security: securityBearerAuth,
+        security: securityDualAuth,
         params: {
           type: 'object',
           required: ['id', 'userId'],
@@ -179,9 +182,10 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
       const parseResult = updateShareBodySchema.safeParse(request.body);
       if (!parseResult.success) throw new AppError(400, 'Permiso requerido (READ o EDIT)', 'BAD_REQUEST');
 
+      const requester = await extractRequester(request);
       const share = await foldersSharesService.updateSharePermission(
         id,
-        request.user,
+        requester,
         userId,
         parseResult.data.permission as FolderPermission
       );
@@ -193,11 +197,11 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete(
     '/api/v1/folders/:id/shares/:userId',
     {
-      preHandler: [authenticateJwt],
+      preHandler: [authenticateUserOrApiKey],
       schema: {
         tags: ['Folders'],
         summary: 'Revocar acceso de un colaborador a la carpeta',
-        security: securityBearerAuth,
+        security: securityDualAuth,
         params: {
           type: 'object',
           required: ['id', 'userId'],
@@ -218,7 +222,8 @@ export const foldersSharesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { id, userId } = request.params as { id: string; userId: string };
-      const result = await foldersSharesService.revokeShare(id, request.user, userId);
+      const requester = await extractRequester(request);
+      const result = await foldersSharesService.revokeShare(id, requester, userId);
       return reply.status(200).send(result);
     }
   );

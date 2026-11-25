@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildApp } from '../../../src/app.js';
 import { prisma } from '../../../src/config/db.js';
 import { foldersService } from '../../../src/modules/folders/folders.service.js';
+import { foldersRepository } from '../../../src/modules/folders/folders.repository.js';
 import { FolderType, Role } from '@prisma/client';
 import { AppError } from '../../../src/shared/errors.js';
 
@@ -673,5 +674,149 @@ describe('Módulo Carpetas: Rutas HTTP (/api/v1/folders, /api/v1/images/:id/fold
     assert.strictEqual(body.page, 1);
     assert.strictEqual(body.folders.length, 1);
     assert.strictEqual(body.folders[0].name, 'Mis reportes');
+  });
+
+  // ==========================================
+  // 9. Alineación de Carpetas PDF en Rutas HTTP
+  // ==========================================
+  it('GET /api/v1/folders?type=PDF: retorna 200 con itemCount > 0 para carpetas PDF con documentos', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersRepository, 'findFolders', async () => [
+      {
+        id: validFolderId,
+        name: 'Contratos PDF',
+        type: FolderType.PDF,
+        color: '#ef4444',
+        isPrivate: false,
+        isSystem: false,
+        parentId: null,
+        userId: testUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 5 },
+        user: { id: testUserId, username: 'juan' },
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/folders?type=PDF',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.total, 1);
+    assert.strictEqual(body.folders[0].type, 'PDF');
+    assert.strictEqual(body.folders[0].itemCount, 5);
+  });
+
+  it('GET /api/v1/folders/tree: retorna 200 con itemCount > 0 en nodos de carpetas PDF', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    const mockTreeFolders = [
+      {
+        id: validFolderId,
+        name: 'Biblioteca',
+        type: FolderType.CONTAINER,
+        color: null,
+        isPrivate: false,
+        isSystem: false,
+        parentId: null,
+        userId: testUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 0 },
+        user: { id: testUserId, username: 'juan' },
+      },
+      {
+        id: targetFolderId,
+        name: 'Guías PDF',
+        type: FolderType.PDF,
+        color: '#dc2626',
+        isPrivate: false,
+        isSystem: false,
+        parentId: validFolderId,
+        userId: testUserId,
+        createdAt: new Date(),
+        _count: { images: 0, tables: 0, pdfs: 3 },
+        user: { id: testUserId, username: 'juan' },
+      },
+    ];
+
+    mock.method(foldersRepository, 'findFolders', async () => mockTreeFolders);
+    mock.method(foldersRepository, 'countFolders', async () => mockTreeFolders.length);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/folders/tree',
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.total, 2);
+    assert.strictEqual(body.tree.length, 1);
+    assert.strictEqual(body.tree[0].children.length, 1);
+    assert.strictEqual(body.tree[0].children[0].type, 'PDF');
+    assert.strictEqual(body.tree[0].children[0].itemCount, 3);
+  });
+
+  it('GET /api/v1/folders/:id: retorna 200 con itemCount > 0 para carpeta PDF', async () => {
+    const app = await buildApp();
+    mockDbUser({ id: testUserId, username: 'juan', role: Role.MANAGER });
+
+    const token = app.jwt.sign({
+      id: testUserId,
+      username: 'juan',
+      role: Role.MANAGER,
+      tokenVersion: 0,
+    });
+
+    mock.method(foldersRepository, 'findFolderById', async () => ({
+      id: validFolderId,
+      name: 'Informes PDF',
+      type: FolderType.PDF,
+      color: null,
+      isPrivate: false,
+      isSystem: false,
+      parentId: null,
+      userId: testUserId,
+      createdAt: new Date(),
+      _count: { images: 0, tables: 0, pdfs: 6 },
+      user: { id: testUserId, username: 'juan' },
+    }));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/folders/${validFolderId}`,
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.strictEqual(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.strictEqual(body.folder.type, 'PDF');
+    assert.strictEqual(body.folder.itemCount, 6);
   });
 });

@@ -1,5 +1,6 @@
 import { prisma } from '../../config/db.js';
-import type { Prisma, FormDefinition, FormEntry } from '@prisma/client';
+import type { Prisma, FormDefinition, FormEntry, Role } from '@prisma/client';
+import { buildResourceFolderVisibilityWhere } from '../../shared/folder-visibility.js';
 
 export interface ListFormsOptions {
   page?: number;
@@ -7,6 +8,7 @@ export interface ListFormsOptions {
   folderId?: string;
   userId?: string;
   isAdmin?: boolean;
+  role?: Role;
   search?: string;
 }
 
@@ -55,20 +57,19 @@ export class FormsRepository {
     });
   }
 
-  async listForms(options?: ListFormsOptions): Promise<FormDefinition[]> {
-    const where: Prisma.FormDefinitionWhereInput = {};
+  private buildFormWhere(options?: ListFormsOptions): Prisma.FormDefinitionWhereInput {
     const conditions: Prisma.FormDefinitionWhereInput[] = [];
 
     if (options?.folderId) conditions.push({ folderId: options.folderId });
 
     if (options && !options.isAdmin && options.userId) {
-      conditions.push({
-        OR: [
-          { folder: { isPrivate: false } },
-          { folder: { userId: options.userId } },
-          { folder: { members: { some: { userId: options.userId } } } },
-        ],
+      const visibility = buildResourceFolderVisibilityWhere({
+        userId: options.userId,
+        isAdmin: options.isAdmin,
+        role: options.role,
+        allowUnassigned: false,
       });
+      if (visibility) conditions.push(visibility);
     }
 
     if (options?.search) {
@@ -80,8 +81,13 @@ export class FormsRepository {
       });
     }
 
-    if (conditions.length === 1) Object.assign(where, conditions[0]);
-    else if (conditions.length > 1) where.AND = conditions;
+    if (conditions.length === 0) return {};
+    if (conditions.length === 1) return conditions[0];
+    return { AND: conditions };
+  }
+
+  async listForms(options?: ListFormsOptions): Promise<FormDefinition[]> {
+    const where = this.buildFormWhere(options);
 
     const page = options?.page && options.page > 0 ? options.page : 1;
     const limit = options?.limit && options.limit > 0 ? options.limit : (options ? 50 : undefined);
@@ -101,8 +107,7 @@ export class FormsRepository {
   }
 
   async countForms(options?: ListFormsOptions): Promise<number> {
-    const where: Prisma.FormDefinitionWhereInput = {};
-    if (options?.folderId) where.folderId = options.folderId;
+    const where = this.buildFormWhere(options);
     return prisma.formDefinition.count({ where });
   }
 
