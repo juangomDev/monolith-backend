@@ -10,11 +10,14 @@ const fieldDefinitionsSchema = {
       items: {
         type: 'object',
         required: ['name'],
+        additionalProperties: true,
         properties: {
           name: { type: 'string' },
-          type: { type: 'string' },
+          type: { type: 'string', enum: ['string', 'number', 'boolean', 'date', 'array', 'object'] },
           required: { type: 'boolean' },
           label: { type: 'string' },
+          itemsSchema: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          resolutionItemsSchema: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
       },
     },
@@ -97,18 +100,11 @@ export const listFormsRouteSchema: FastifySchema = {
             },
           },
         },
-        total: { type: 'integer' },
-        page: { type: 'integer' },
-        limit: { type: 'integer' },
-        totalPages: { type: 'integer' },
+        total: { type: 'integer' }, page: { type: 'integer' }, limit: { type: 'integer' }, totalPages: { type: 'integer' },
         meta: {
           type: 'object',
           properties: {
-            page: { type: 'integer' },
-            limit: { type: 'integer' },
-            total: { type: 'integer' },
-            totalPages: { type: 'integer' },
-            hasNext: { type: 'boolean' },
+            page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' }, totalPages: { type: 'integer' }, hasNext: { type: 'boolean' },
           },
         },
       },
@@ -124,9 +120,32 @@ export const getFormRouteSchema: FastifySchema = {
   params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
   response: {
     200: { type: 'object', properties: formResponseProperties },
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
+    401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404],
+  },
+};
+
+export const getEntryRouteSchema: FastifySchema = {
+  tags: ['Forms'],
+  summary: 'Obtiene una entrada individual de formulario con su mergedPayload listo para responder o generar PDF',
+  security: securityDualAuth,
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+  response: {
+    200: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        formId: { type: 'string', format: 'uuid' },
+        status: { type: 'string' },
+        entryPayload: { type: 'object', additionalProperties: true },
+        resolutionPayload: { type: ['object', 'null'], additionalProperties: true },
+        mergedPayload: { type: 'object', additionalProperties: true },
+        resolvedById: { type: ['string', 'null'], format: 'uuid' },
+        resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    },
+    401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404],
   },
 };
 
@@ -139,51 +158,40 @@ export const submitEntryRouteSchema: FastifySchema = {
   response: {
     201: {
       type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        status: { type: 'string', example: 'NEW' },
-        createdAt: { type: 'string', format: 'date-time' },
-      },
+      properties: { id: { type: 'string', format: 'uuid' }, status: { type: 'string', example: 'NEW' }, createdAt: { type: 'string', format: 'date-time' } },
       required: ['id', 'status', 'createdAt'],
     },
-    400: standardErrorResponses[400],
-    404: standardErrorResponses[404],
-    429: standardErrorResponses[429],
+    400: standardErrorResponses[400], 404: standardErrorResponses[404], 429: standardErrorResponses[429],
   },
 };
 
 export const resolveEntryRouteSchema: FastifySchema = {
   tags: ['Forms'],
   summary: 'Endpoint 2: Completar respuesta única inmutable (Write-Once)',
-  description: 'Completa la respuesta y sella status a VALID/INVALID una sola vez. Reintentos retornan 409 CONFLICT.',
+  description: 'Completa la respuesta y sella status a VALID/INVALID una sola vez. Retorna mergedPayload con las filas combinadas listas para emitir PDF.',
   security: securityDualAuth,
   params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
   body: {
     type: 'object',
     required: ['status', 'resolutionPayload'],
-    properties: {
-      status: { type: 'string', example: 'VALID' },
-      resolutionPayload: { type: 'object', additionalProperties: true },
-    },
+    properties: { status: { type: 'string', example: 'VALID' }, resolutionPayload: { type: 'object', additionalProperties: true } },
   },
   response: {
     200: {
       type: 'object',
+      additionalProperties: true,
       properties: {
         id: { type: 'string', format: 'uuid' },
         status: { type: 'string' },
-        entryPayload: { type: 'object' },
-        resolutionPayload: { type: 'object' },
+        entryPayload: { type: 'object', additionalProperties: true },
+        resolutionPayload: { type: 'object', additionalProperties: true },
+        mergedPayload: { type: 'object', additionalProperties: true },
         resolvedById: { type: ['string', 'null'], format: 'uuid' },
         resolvedAt: { type: ['string', 'null'], format: 'date-time' },
         createdAt: { type: 'string', format: 'date-time' },
       },
     },
-    400: standardErrorResponses[400],
-    401: standardErrorResponses[401],
-    403: standardErrorResponses[403],
-    404: standardErrorResponses[404],
-    409: standardErrorResponses[409],
+    400: standardErrorResponses[400], 401: standardErrorResponses[401], 403: standardErrorResponses[403], 404: standardErrorResponses[404], 409: standardErrorResponses[409],
   },
 };
 

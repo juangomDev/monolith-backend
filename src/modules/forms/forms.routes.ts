@@ -8,6 +8,7 @@ import {
   createFormRouteSchema,
   listFormsRouteSchema,
   getFormRouteSchema,
+  getEntryRouteSchema,
   submitEntryRouteSchema,
   resolveEntryRouteSchema,
   dispatchEntryRouteSchema,
@@ -136,6 +137,22 @@ export const formsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string };
       const result = await formsMutationService.deleteForm(id, caller);
       return reply.send(result);
+    }
+  );
+
+  // 4.3 Obtener detalle individual de una entrada de formulario (Protegido)
+  fastify.get(
+    '/api/v1/forms/entries/:id',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: getEntryRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { id } = request.params as { id: string };
+      const entry = await formsService.getEntry(id, caller);
+      return reply.send(entry);
     }
   );
 

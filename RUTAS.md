@@ -70,7 +70,8 @@
 | **58** | `GET` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene el detalle de un formulario por ID o slug. |
 | **59** | `PATCH` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza configuración segura del formulario (`title`, `allowedResolutionStates`, `externalTargetUrl`). |
 | **60** | `DELETE` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `MANAGER`* | Elimina formulario, tabla abierta vinculada y artefacto `.data.json.gz`. |
-| **61** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID o INVALID). |
+| **60.1** | `GET` | `/api/v1/forms/entries/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene entrada individual con `mergedPayload` (datos personales + lista de períodos pre-cargada). |
+| **61** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID/INVALID y retorna `mergedPayload`). |
 | **62** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
 | **63** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista paginada con `meta` de entradas (`?month=YYYY-MM&status=&page=&limit=`). |
 | **64** | `GET` | `/api/v1/forms/:id/export` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Exporta respuestas a Excel (.xlsx) o CSV (.csv) con filtro mensual. |

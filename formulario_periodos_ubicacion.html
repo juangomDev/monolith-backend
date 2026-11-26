@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Solicitudes y Respuestas - Períodos y Ubicación Geográfica (Fase 28)</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --success: #16a34a;
+      --success-hover: #15803d;
+      --success-light: #dcfce7;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --error-light: #fee2e2;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 1.5rem 1rem; min-height: 100vh; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 1040px; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* Barra Superior y Selector de Los 2 Formularios */
+    .header-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #ffffff;
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    .header-card h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .header-card p { color: #cbd5e1; font-size: 0.875rem; }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      background: #e2e8f0;
+      padding: 0.4rem;
+      border-radius: 10px;
+    }
+    .mode-tab {
+      border: none;
+      background: transparent;
+      padding: 0.85rem 1rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #475569;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .mode-tab.active {
+      background: #ffffff;
+      color: var(--primary);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .badge-count {
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+    }
+
+    /* Tarjetas y Contenedores */
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    details.config-box {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1.25rem;
+    }
+    details.config-box summary {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* Stepper (Idéntico a la captura del usuario) */
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--border);
+      margin: -1.75rem -1.75rem 1.75rem -1.75rem;
+      background: #f8fafc;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .step-item.active {
+      background: #ffffff;
+      border-bottom-color: var(--primary);
+    }
+    .step-item.done .step-circle {
+      background: var(--success);
+      color: #ffffff;
+    }
+    .step-circle {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #64748b;
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-item.active .step-circle {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    .step-title { font-size: 0.88rem; font-weight: 700; color: #1e293b; }
+    .step-item.active .step-title { color: var(--primary); }
+    .step-desc { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Formularios y Grids */
+    .section-title { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .section-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+
+    .subform-panel {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .subform-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4, .stepper, .mode-tabs { grid-template-columns: 1fr; }
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.85rem; }
+    label { font-size: 0.8rem; font-weight: 600; color: #334155; }
+    label .req { color: var(--error); }
+
+    input[type="text"], input[type="number"], select, textarea {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: var(--text);
+      padding: 0.6rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+    input.highlight-input {
+      border: 2px solid var(--warning);
+      background: #fffbeb;
+      font-weight: 600;
+    }
+
+    /* Botones */
+    .btn {
+      background-color: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.7rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .btn:hover { background-color: var(--primary-hover); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-success { background-color: var(--success); }
+    .btn-success:hover { background-color: var(--success-hover); }
+    .btn-outline {
+      background: #ffffff;
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+    }
+    .btn-outline:hover { background: var(--primary-light); }
+    .btn-danger-outline {
+      background: #ffffff;
+      color: var(--error);
+      border: 1px solid #fecaca;
+    }
+    .btn-danger-outline:hover { background: var(--error-light); }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-secondary:hover { background: #e2e8f0; }
+
+    /* Tabla de Períodos Registrados */
+    .table-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .pill-counter {
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+    }
+    .table-wrapper {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow-x: auto;
+      background: #ffffff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+    th {
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 700;
+      text-align: left;
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 0.7rem 0.85rem;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    .table-input {
+      width: 110px !important;
+      padding: 0.45rem 0.6rem !important;
+      font-size: 0.85rem !important;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.25rem 0.4rem;
+      border-radius: 6px;
+      color: #64748b;
+    }
+    .icon-btn:hover { background: #f1f5f9; color: var(--text); }
+    .icon-btn.delete:hover { background: var(--error-light); color: var(--error); }
+
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Alertas */
+    .alert {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      margin-top: 1rem;
+      display: none;
+      line-height: 1.45;
+    }
+    .alert-success { background: var(--success-light); border: 1px solid #86efac; color: #166534; }
+    .alert-error { background: var(--error-light); border: 1px solid #fca5a5; color: #991b1b; }
+    .alert-info { background: var(--primary-light); border: 1px solid #93c5fd; color: #1e40af; }
+
+    /* Vista Previa de Constancia PDF (Paso 3) */
+    .pdf-sheet {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 2.25rem;
+      background: #ffffff;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08);
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .pdf-header {
+      text-align: center;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .pdf-header h2 { font-size: 1.15rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pdf-header p { font-size: 0.8rem; color: #475569; margin-top: 0.25rem; }
+    .pdf-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+      font-size: 0.88rem;
+    }
+
+    /* Modal Pegar WhatsApp */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      z-index: 999;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 12px;
+      max-width: 580px;
+      width: 100%;
+      padding: 1.5rem;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+    }
+
+    @media print {
+      body { background: #fff; padding: 0; }
+      .no-print { display: none !important; }
+      .card { border: none; box-shadow: none; padding: 0; }
+      .pdf-sheet { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Cabecera Principal -->
+  <div class="header-card no-print">
+    <h1>🏛️ Sistema Maestro-Detalle de Solicitudes y Respuestas (Fase 28)</h1>
+    <p>Incluye los 2 formularios conectados: <strong>(1) Solicitud del Ciudadano</strong> con múltiples períodos en 1 solo envío, y <strong>(2) Panel del Analista</strong> para asignar Población/Censo por período y emitir el PDF en 1 solo guardado.</p>
+  </div>
+
+  <!-- Configuración Rápida del Servidor y Creación del Esquema en 1 Clic -->
+  <details class="config-box no-print" id="configDetails">
+    <summary>⚙️ Configuración del Servidor, Tabla de Entidades (DPT) y Creación del Formulario</summary>
+    <div style="margin-top: 1rem;">
+      <div class="grid-3">
+        <div class="form-group">
+          <label>URL Base del Backend:</label>
+          <input type="text" id="apiUrl" value="http://localhost:8080">
+        </div>
+        <div class="form-group">
+          <label>Token JWT (Bearer) o X-API-Key (Para Analista):</label>
+          <input type="text" id="authToken" placeholder="eyJhbGci... o gmm_...">
+        </div>
+        <div class="form-group">
+          <label>ShortCode Tabla DPT (Estado/Municipio/Parroquia):</label>
+          <input type="text" id="dptShortCode" value="LbSczxHwXc" title="Usa el endpoint /t/LbSczxHwXc?father=...&format=rows">
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="form-group">
+          <label>Slug del Formulario (`:slug`):</label>
+          <input type="text" id="formSlug" value="solicitud-periodos-ubicacion">
+        </div>
+        <div class="form-group">
+          <label>ID del Formulario (`:formId` - para Analista):</label>
+          <input type="text" id="formId" placeholder="Se autocompleta al crear o buscar">
+        </div>
+        <div class="form-group">
+          <label>ID Carpeta TABLE (Opcional para Tabla Abierta):</label>
+          <input type="text" id="tableFolderId" placeholder="UUID carpeta TABLE (opcional)">
+        </div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:0.65rem; margin-top:0.5rem;">
+        <button type="button" class="btn btn-secondary" onclick="cargarEntidadesDesdeTabla()">
+          🌍 Recargar Estados/Municipios desde `/t/LbSczxHwXc`
+        </button>
+        <button type="button" class="btn btn-outline" onclick="autodetectarFormularioExistente()">
+          🔍 Buscar Formulario Existente (`GET /api/v1/forms`)
+        </button>
+        <button type="button" class="btn" onclick="inicializarFormularioFase28()">
+          🛠️ Crear Formulario Maestro-Detalle en Backend (`POST /api/v1/forms`)
+        </button>
+      </div>
+      <div id="configAlert" class="alert"></div>
+    </div>
+  </details>
+
+  <!-- Selector de los 2 Formularios -->
+  <div class="mode-tabs no-print">
+    <button type="button" class="mode-tab active" id="tabBtnCiudadano" onclick="cambiarModo('CIUDADANO')">
+      📝 1. Formulario de Solicitud (Usuario / Ciudadano)
+    </button>
+    <button type="button" class="mode-tab" id="tabBtnAnalista" onclick="cambiarModo('ANALISTA')">
+      👨‍💼 2. Formulario de Respuesta y PDF (Analista INE)
+      <span class="badge-count" id="pendingBadge">0</span>
+    </button>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- FORMULARIO 1: SOLICITUD DEL CIUDADANO (ENVÍA 1..N PERÍODOS EN 1 GUARDADO) -->
+  <!-- ===================================================================== -->
+  <div class="card no-print" id="panelCiudadano">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.75rem;">
+      <div>
+        <h2 class="section-title">📝 Formulario 1: Solicitud de Constancia por Períodos y Ubicación</h2>
+        <p class="section-subtitle" style="border-bottom:none; margin-bottom:0.5rem;">
+          El ciudadano llena sus Datos Personales una sola vez, agrega todos los períodos que necesite (1, 2 o 10) y envía toda la solicitud en <strong>1 solo guardado</strong> (`POST /api/v1/public/forms/:slug/entries`).
+        </p>
+      </div>
+      <button type="button" class="btn btn-outline" onclick="cargarEjemploKelvisCiudadano()">
+        ⚡ Cargar Ejemplo Kelvis Croquer (2 Períodos)
+      </button>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin: 0.75rem 0 1.25rem 0;">
+
+    <!-- Bloque A: Datos Personales Fijos -->
+    <div class="subform-panel">
+      <div class="subform-header">
+        <span>👤 DATOS PERSONALES DEL SOLICITANTE</span>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Nombres y Apellidos <span class="req">*</span></label>
+          <input type="text" id="ciu_nombres" placeholder="Ej. Kelvis Alexander Croquer Gonzalez">
+        </div>
+        <div class="form-group">
+          <label>Cédula de Identidad <span class="req">*</span></label>
+          <input type="text" id="ciu_cedula" placeholder="Ej. V-24087712">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Entidad Federal <span class="req">*</span></label>
+          <input type="text" id="ciu_entidad" placeholder="Ej. Distrito Capital">
+        </div>
+        <div class="form-group">
+          <label>Dirección de Habitación <span class="req">*</span></label>
+          <input type="text" id="ciu_direccion" placeholder="Ej. Caracas - Caricuao">
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloque B: Sub-formulario para añadir períodos al carrito del ciudadano -->
+    <div class="subform-panel">
+      <div class="subform-header">
+        <span>➕ AGREGAR PERÍODO Y UBICACIÓN GEOGRÁFICA</span>
+        <span style="font-size:0.78rem; color:var(--text-muted); font-weight:500;">Puedes añadir uno o varios períodos antes de enviar</span>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Año de inicio <span class="req">*</span></label>
+          <input type="number" id="ciu_desde" placeholder="Ej. 2001" min="1900" max="2100">
+        </div>
+        <div class="form-group">
+          <label>Año de culminación <span class="req">*</span></label>
+          <input type="number" id="ciu_hasta" placeholder="Ej. 2026" min="1900" max="2100">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Estado <span class="req">*</span></label>
+          <input type="text" id="ciu_estado" list="dptEstadosList" placeholder="Seleccione o escriba el estado..." oninput="onEstadoInput('ciu')">
+        </div>
+        <div class="form-group">
+          <label>Municipio <span class="req">*</span></label>
+          <input type="text" id="ciu_municipio" list="ciuMunicipiosList" placeholder="Seleccione o escriba el municipio..." oninput="onMunicipioInput('ciu')">
+          <datalist id="ciuMunicipiosList"></datalist>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Parroquia <span class="req">*</span></label>
+          <input type="text" id="ciu_parroquia" list="ciuParroquiasList" placeholder="Seleccione o escriba la parroquia...">
+          <datalist id="ciuParroquiasList"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Centro Poblado / Sector / Caserío <span class="req">*</span></label>
+          <input type="text" id="ciu_centro_poblado" placeholder="Ej. machurucuto">
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:0.5rem;">
+        <button type="button" class="btn btn-success" onclick="agregarPeriodoCiudadano()">
+          ＋ Añadir Período a mi Solicitud
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabla de Períodos que el ciudadano va a enviar -->
+    <div class="table-header-bar">
+      <div style="display:flex; align-items:center; gap:0.65rem;">
+        <h3 style="font-size:0.95rem; font-weight:700;">Períodos Incluidos en la Solicitud</h3>
+        <span class="pill-counter" id="ciuCountPill">0 registros</span>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button type="button" class="btn btn-outline" style="padding:0.45rem 0.85rem; font-size:0.8rem;" onclick="abrirModalWhatsapp('CIUDADANO')">
+          📋 Pegar Períodos desde Texto/WhatsApp
+        </button>
+        <button type="button" class="btn btn-danger-outline" style="padding:0.45rem 0.85rem; font-size:0.8rem;" onclick="vaciarPeriodosCiudadano()">
+          🗑️ Vaciar Tabla
+        </button>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Período</th>
+            <th>Estado</th>
+            <th>Municipio</th>
+            <th>Parroquia</th>
+            <th>Centro Poblado</th>
+            <th style="text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="ciuPeriodosTbody">
+          <tr>
+            <td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
+              No hay períodos agregados. Usa el botón «＋ Añadir Período» o «⚡ Cargar Ejemplo Kelvis Croquer».
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="ciuAlert" class="alert"></div>
+
+    <div class="footer-actions">
+      <span style="font-size:0.82rem; color:var(--text-muted);">
+        💡 Se guardará <strong>1 sola vez</strong> al presionar Enviar Solicitud.
+      </span>
+      <button type="button" class="btn" id="btnEnviarSolicitud" onclick="enviarSolicitudCiudadano()">
+        🚀 Enviar Solicitud Completa (1 solo guardado) →
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- FORMULARIO 2: RESPUESTA DEL ANALISTA Y EMISIÓN DE PDF (1 SOLO GUARDADO) -->
+  <!-- ===================================================================== -->
+  <div class="card" id="panelAnalista" style="display:none;">
+
+    <!-- Barra Superior de Carga de Solicitudes Pendientes (Solo visible en pantalla, no en impresión) -->
+    <div class="subform-panel no-print" style="background:#eff6ff; border-color:#bfdbfe; margin-bottom:1.75rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:0.75rem;">
+        <div>
+          <strong style="color:#1e40af; font-size:0.9rem;">📥 Bandeja de Solicitudes Recibidas (Para Responder sin transcribir períodos)</strong>
+          <p style="font-size:0.78rem; color:#3b82f6;">Selecciona una solicitud enviada por el usuario o pega su ID para cargar automáticamente sus Datos Personales y todos sus Períodos.</p>
+        </div>
+        <button type="button" class="btn btn-outline" style="padding:0.45rem 0.85rem; font-size:0.8rem;" onclick="listarSolicitudesPendientes()">
+          🔄 Refrescar Solicitudes (`GET /entries`)
+        </button>
+      </div>
+
+      <div class="grid-3" style="align-items:end;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Seleccionar Solicitud del Servidor:</label>
+          <select id="selectEntriesServidor" onchange="seleccionarEntryDeLista()">
+            <option value="">-- Haz clic en Refrescar o envía una Solicitud en la Pestaña 1 --</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>ID de la Solicitud (`entryId`):</label>
+          <input type="text" id="activeEntryId" placeholder="UUID de la solicitud (o vacío si es manual)">
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn" style="width:100%;" onclick="cargarSolicitudPorId()">
+            📂 Cargar Solicitud por ID
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stepper de 3 Pasos (Exactamente como la imagen del usuario) -->
+    <div class="stepper no-print">
+      <div class="step-item" id="stepper1" onclick="irPasoAnalista(1)">
+        <div class="step-circle" id="stepCircle1">1</div>
+        <div>
+          <div class="step-title">Datos Personales</div>
+          <div class="step-desc">Identificación del solicitante</div>
+        </div>
+      </div>
+      <div class="step-item active" id="stepper2" onclick="irPasoAnalista(2)">
+        <div class="step-circle" id="stepCircle2">2</div>
+        <div>
+          <div class="step-title">Períodos y Ubicación</div>
+          <div class="step-desc">Lugares de trabajo y centros poblados</div>
+        </div>
+      </div>
+      <div class="step-item" id="stepper3" onclick="irPasoAnalista(3)">
+        <div class="step-circle" id="stepCircle3">3</div>
+        <div>
+          <div class="step-title">Emisión y Descarga</div>
+          <div class="step-desc">Vista previa y generación del PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 1 DEL ANALISTA: DATOS PERSONALES -->
+    <div id="analistaPaso1" style="display:none;" class="no-print">
+      <h2 class="section-title">👤 Paso 1: Datos Personales del Solicitante</h2>
+      <p class="section-subtitle">Verifica o completa los datos de identificación de la solicitud antes de revisar los períodos.</p>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Nombres y Apellidos <span class="req">*</span></label>
+          <input type="text" id="ana_nombres" placeholder="Ej. Kelvis Alexander Croquer Gonzalez">
+        </div>
+        <div class="form-group">
+          <label>Cédula de Identidad <span class="req">*</span></label>
+          <input type="text" id="ana_cedula" placeholder="Ej. V-24087712">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Entidad Federal <span class="req">*</span></label>
+          <input type="text" id="ana_entidad" placeholder="Ej. Distrito Capital">
+        </div>
+        <div class="form-group">
+          <label>Dirección <span class="req">*</span></label>
+          <input type="text" id="ana_direccion" placeholder="Ej. Caracas - Caricuao">
+        </div>
+      </div>
+
+      <div class="footer-actions">
+        <div></div>
+        <button type="button" class="btn" onclick="irPasoAnalista(2)">
+          Continuar a Períodos y Ubicación →
+        </button>
+      </div>
+    </div>
+
+    <!-- PASO 2 DEL ANALISTA: PERÍODOS Y UBICACIÓN GEOGRÁFICA (IDÉNTICO A LA IMAGEN) -->
+    <div id="analistaPaso2" class="no-print">
+      <h2 class="section-title">📅 Paso 2: Períodos y Ubicación Geográfica</h2>
+      <p class="section-subtitle">
+        Si cargaste una solicitud del usuario, los períodos ya están listos abajo: <strong>solo escribe la Población y el Censo en cada fila</strong>. También puedes añadir filas adicionales o pegar desde WhatsApp.
+      </p>
+
+      <!-- Sub-formulario + Período de Ubicación (igual a la captura) -->
+      <div class="subform-panel">
+        <div class="subform-header">
+          <span>＋ Período de Ubicación</span>
+          <span id="anaSolInfoBadge" style="font-size:0.8rem; color:#1e40af; font-weight:600;"></span>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Año de inicio <span class="req">*</span></label>
+            <input type="number" id="ana_desde" placeholder="Ej. 2016">
+          </div>
+          <div class="form-group">
+            <label>Año de culminación <span class="req">*</span></label>
+            <input type="number" id="ana_hasta" placeholder="Ej. 2020">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Estado <span class="req">*</span></label>
+            <input type="text" id="ana_estado" list="dptEstadosList" placeholder="Seleccione el estado..." oninput="onEstadoInput('ana')">
+          </div>
+          <div class="form-group">
+            <label>Municipio <span class="req">*</span></label>
+            <input type="text" id="ana_municipio" list="anaMunicipiosList" placeholder="Seleccione primero un estado..." oninput="onMunicipioInput('ana')">
+            <datalist id="anaMunicipiosList"></datalist>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Parroquia <span class="req">*</span></label>
+            <input type="text" id="ana_parroquia" list="anaParroquiasList" placeholder="Seleccione primero un municipio...">
+            <datalist id="anaParroquiasList"></datalist>
+          </div>
+          <div class="form-group">
+            <label>Centro poblado / Sector / Caserío <span class="req">*</span></label>
+            <input type="text" id="ana_centro_poblado" placeholder="Ej. El Castero / Caserío Las Flores">
+          </div>
+        </div>
+
+        <div class="grid-3" style="align-items:end;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Población</label>
+            <input type="number" id="ana_poblacion" placeholder="Ej. 850">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Censo</label>
+            <input type="text" id="ana_censo" value="2011">
+          </div>
+          <div>
+            <button type="button" class="btn btn-success" style="width:100%;" onclick="agregarPeriodoAnalista()">
+              ＋ Añadir Otro Lugar de Trabajo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla: Períodos y Ubicaciones Registradas (Con inputs directos para Población y Censo en cada fila) -->
+      <div class="table-header-bar">
+        <div style="display:flex; align-items:center; gap:0.65rem;">
+          <h3 style="font-size:0.95rem; font-weight:700;">Períodos y Ubicaciones Registradas</h3>
+          <span class="pill-counter" id="anaCountPill">0 registros</span>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-outline" style="padding:0.45rem 0.85rem; font-size:0.8rem;" onclick="abrirModalWhatsapp('ANALISTA')">
+            📍 Pegar Períodos WhatsApp
+          </button>
+          <button type="button" class="btn btn-danger-outline" style="padding:0.45rem 0.85rem; font-size:0.8rem;" onclick="vaciarPeriodosAnalista()">
+            🗑️ Vaciar Tabla
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Período</th>
+              <th>Estado</th>
+              <th>Municipio</th>
+              <th>Parroquia</th>
+              <th>Centro Poblado</th>
+              <th>Población</th>
+              <th>Censo</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="anaPeriodosTbody">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="form-group" style="margin-top:1rem;">
+        <label>Observaciones de la Respuesta Oficial (Opcional):</label>
+        <input type="text" id="ana_observaciones" value="Población verificada según Nomenclador de Centros Poblados INE.">
+      </div>
+
+      <div id="anaAlert" class="alert"></div>
+
+      <div class="footer-actions">
+        <button type="button" class="btn btn-secondary" onclick="irPasoAnalista(1)">
+          ‹ Volver al Paso 1
+        </button>
+        <button type="button" class="btn" id="btnGuardarYContinuar" onclick="guardarRespuestaYContinuar()">
+          Continuar a Emisión y Descarga →
+        </button>
+      </div>
+    </div>
+
+    <!-- PASO 3 DEL ANALISTA: EMISIÓN Y DESCARGA (CONSTANCIA PDF CON MERGEDPAYLOAD) -->
+    <div id="analistaPaso3" style="display:none;">
+      <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
+        <div>
+          <h2 class="section-title">📄 Paso 3: Emisión y Descarga de Constancia (`mergedPayload`)</h2>
+          <p style="font-size:0.82rem; color:var(--text-muted);">
+            Todos los períodos y sus respuestas de Población/Censo se guardaron en <strong>1 sola transacción</strong>.
+          </p>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="irPasoAnalista(2)">
+            ‹ Volver a Editar Períodos
+          </button>
+          <button type="button" class="btn btn-outline" onclick="descargarExcelMultiHoja()">
+            📊 Descargar Excel 2 Hojas (.xlsx)
+          </button>
+          <button type="button" class="btn btn-success" onclick="window.print()">
+            🖨️ Imprimir / Guardar PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Hoja Imprimible de la Constancia -->
+      <div class="pdf-sheet" id="pdfPreviewSheet">
+        <div class="pdf-header">
+          <h2>República Bolivariana de Venezuela</h2>
+          <p>Instituto Nacional de Estadística (INE) — Gerencia de Estadísticas Demográficas y Geográficas</p>
+          <p style="font-weight:700; color:#0f172a; margin-top:0.5rem;">CONSTANCIA DE POBLACIÓN POR PERÍODOS Y CENTROS POBLADOS</p>
+        </div>
+
+        <div class="pdf-meta-grid">
+          <div><strong>Nombres y Apellidos:</strong> <span id="pdf_nombres">-</span></div>
+          <div><strong>Cédula de Identidad:</strong> <span id="pdf_cedula">-</span></div>
+          <div><strong>Entidad Federal:</strong> <span id="pdf_entidad">-</span></div>
+          <div><strong>Dirección:</strong> <span id="pdf_direccion">-</span></div>
+          <div><strong>ID Solicitud:</strong> <span id="pdf_entry_id">-</span></div>
+          <div><strong>Estado / Fecha:</strong> <span id="pdf_fecha">-</span></div>
+        </div>
+
+        <h4 style="font-size:0.9rem; margin-bottom:0.6rem; text-transform:uppercase; color:#334155;">
+          Detalle de Períodos y Población Oficial Certificada
+        </h4>
+        <div class="table-wrapper" style="margin-bottom:1.25rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Período</th>
+                <th>Estado</th>
+                <th>Municipio</th>
+                <th>Parroquia</th>
+                <th>Centro Poblado</th>
+                <th>Población</th>
+                <th>Censo</th>
+              </tr>
+            </thead>
+            <tbody id="pdfPeriodosTbody"></tbody>
+          </table>
+        </div>
+
+        <div style="font-size:0.85rem; color:#334155; background:#f8fafc; padding:0.85rem; border-radius:6px; border:1px solid #e2e8f0;">
+          <strong>Observaciones:</strong> <span id="pdf_observaciones">-</span>
+        </div>
+
+        <div style="margin-top:2.5rem; display:flex; justify-content:space-between; font-size:0.8rem; color:#64748b; border-top:1px dashed #cbd5e1; padding-top:1rem;">
+          <span>Documento generado mediante `mergedPayload` (Fase 28)</span>
+          <span>Firma / Sello Digital de Validación</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Datalist Global de Estados cargados desde /t/LbSczxHwXc -->
+<datalist id="dptEstadosList"></datalist>
+
+<!-- Modal para Pegar Texto de WhatsApp / Solicitud (Soporta exactamente el formato del ejemplo del usuario) -->
+<div class="modal-backdrop no-print" id="modalWhatsapp">
+  <div class="modal-card">
+    <h3 style="font-size:1.05rem; margin-bottom:0.35rem;">📋 Pegar Solicitud o Períodos desde WhatsApp / Texto</h3>
+    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.85rem;">
+      Pega el bloque con `DATOS PERSONALES` y `Período #1: 2001 a 2026...` y se extraerán todos los campos y filas automáticamente.
+    </p>
+    <textarea id="whatsappTextarea" rows="11" style="font-family:monospace; font-size:0.82rem; margin-bottom:1rem;">DATOS PERSONALES
+* Nombres y Apellidos: Kelvis Alexander Croquer Gonzalez
+* Cédula: V-24087712
+* Entidad Federal: Distrito Capital
+* Dirección: Caracas - Caricuao
+
+PERÍODOS Y UBICACIONES GEOGRÁFICAS (2)
+Período #1: 2001 a 2026
+   - Estado: Miranda
+   - Municipio: Pedro Gual
+   - Parroquia: Machurucuto
+   - Centro Poblado: machurucuto
+
+Período #2: 2011 a 2027
+   - Estado: Miranda
+   - Municipio: Pedro Gual
+   - Parroquia: Machurucuto
+   - Centro Poblado: machurucuto</textarea>
+    <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+      <button type="button" class="btn btn-secondary" onclick="cerrarModalWhatsapp()">Cancelar</button>
+      <button type="button" class="btn btn-success" onclick="procesarTextoWhatsapp()">⚡ Extraer y Cargar Períodos</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============================================================================
+  // ESTADO EN MEMORIA DE LOS 2 FORMULARIOS
+  // ============================================================================
+  let periodosCiudadano = [];
+  let periodosAnalista = [];
+  let entriesEnServidor = [];
+  let modalWhatsappTarget = 'ANALISTA';
+
+  // Caché jerárquico de la tabla DPT (/t/LbSczxHwXc)
+  const ROOT_DPT_ID = 'entity-c65f62ac-40ec-48fc-a6af-ec667b2bd48d';
+  let dptEstados = [];
+  let dptMunicipiosPorEstado = {};
+  let dptParroquiasPorMunicipio = {};
+
+  // Persistencia de configuración en localStorage
+  const configInputs = ['apiUrl', 'authToken', 'dptShortCode', 'formSlug', 'formId', 'tableFolderId'];
+  window.addEventListener('DOMContentLoaded', () => {
+    configInputs.forEach(id => {
+      const saved = localStorage.getItem('f28_' + id);
+      if (saved) document.getElementById(id).value = saved;
+      document.getElementById(id).addEventListener('input', (e) => {
+        localStorage.setItem('f28_' + id, e.target.value.trim());
+      });
+    });
+
+    // Cargar ejemplo inicial en ambos formularios para que se pueda probar de inmediato
+    cargarEjemploKelvisCiudadano(false);
+    sincronizarCiudadanoHaciaAnalista();
+    cargarEntidadesDesdeTabla(true);
+  });
+
+  function getBaseUrl() {
+    let url = document.getElementById('apiUrl').value.trim().replace(/\/+$/, '');
+    // Si el usuario puso /api/v1 al final, lo normalizamos para no duplicarlo
+    if (url.endsWith('/api/v1')) {
+      url = url.slice(0, -7);
+    }
+    return url;
+  }
+
+  function getHeaders(isJson = true) {
+    const token = document.getElementById('authToken').value.trim();
+    const headers = {};
+    if (isJson) headers['Content-Type'] = 'application/json';
+    if (token) {
+      if (token.startsWith('Bearer ') || token.startsWith('eyJ')) {
+        headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      } else {
+        headers['X-API-Key'] = token;
+      }
+    }
+    return headers;
+  }
+
+  function mostrarAlerta(elId, tipo, htmlMsg) {
+    const el = document.getElementById(elId);
+    el.className = 'alert alert-' + tipo;
+    el.innerHTML = htmlMsg;
+    el.style.display = 'block';
+  }
+
+  // ============================================================================
+  // CAMBIO ENTRE FORMULARIO 1 (CIUDADANO) Y FORMULARIO 2 (ANALISTA)
+  // ============================================================================
+  function cambiarModo(modo) {
+    const esCiu = modo === 'CIUDADANO';
+    document.getElementById('panelCiudadano').style.display = esCiu ? 'block' : 'none';
+    document.getElementById('panelAnalista').style.display = esCiu ? 'none' : 'block';
+    document.getElementById('tabBtnCiudadano').classList.toggle('active', esCiu);
+    document.getElementById('tabBtnAnalista').classList.toggle('active', !esCiu);
+  }
+
+  function irPasoAnalista(paso) {
+    [1, 2, 3].forEach(n => {
+      document.getElementById('analistaPaso' + n).style.display = (n === paso) ? 'block' : 'none';
+      const item = document.getElementById('stepper' + n);
+      item.classList.toggle('active', n === paso);
+      item.classList.toggle('done', n < paso);
+      document.getElementById('stepCircle' + n).textContent = (n < paso) ? '✓' : String(n);
+    });
+    if (paso === 3) {
+      renderizarVistaPreviaPDF();
+    }
+  }
+
+  // ============================================================================
+  // INTEGRACIÓN CON TABLA DPT (/t/LbSczxHwXc?father=...&format=rows)
+  // ============================================================================
+  async function cargarEntidadesDesdeTabla(silencioso = false) {
+    const baseUrl = getBaseUrl();
+    const shortCode = document.getElementById('dptShortCode').value.trim();
+    if (!shortCode) return;
+
+    try {
+      const res = await fetch(`${baseUrl}/t/${shortCode}?father=${ROOT_DPT_ID}&format=rows&limit=100`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        dptEstados = rows;
+        const dl = document.getElementById('dptEstadosList');
+        dl.innerHTML = rows.map(r => `<option value="${escapeHtml(r.name)}"></option>`).join('');
+        if (!silencioso) {
+          mostrarAlerta('configAlert', 'success', `✅ Conectado a tabla DPT <code>/t/${shortCode}</code>: ${rows.length} Estados cargados.`);
+        }
+      }
+    } catch (err) {
+      if (!silencioso) {
+        mostrarAlerta('configAlert', 'info', `ℹ️ No se pudo conectar a <code>${baseUrl}/t/${shortCode}</code> (${err.message}). Puedes escribir Estado, Municipio y Parroquia manualmente.`);
+      }
+    }
+  }
+
+  async function onEstadoInput(prefix) {
+    const val = document.getElementById(`${prefix}_estado`).value.trim().toLowerCase();
+    const estadoObj = dptEstados.find(e => String(e.name).toLowerCase() === val);
+    if (!estadoObj) return;
+
+    const baseUrl = getBaseUrl();
+    const shortCode = document.getElementById('dptShortCode').value.trim();
+    try {
+      if (!dptMunicipiosPorEstado[estadoObj.id]) {
+        const res = await fetch(`${baseUrl}/t/${shortCode}?father=${encodeURIComponent(estadoObj.id)}&format=rows&limit=200`);
+        if (res.ok) dptMunicipiosPorEstado[estadoObj.id] = await res.json();
+      }
+      const munis = dptMunicipiosPorEstado[estadoObj.id] || [];
+      document.getElementById(`${prefix}MunicipiosList`).innerHTML =
+        munis.map(m => `<option value="${escapeHtml(m.name)}"></option>`).join('');
+    } catch (_) {}
+  }
+
+  async function onMunicipioInput(prefix) {
+    const estVal = document.getElementById(`${prefix}_estado`).value.trim().toLowerCase();
+    const munVal = document.getElementById(`${prefix}_municipio`).value.trim().toLowerCase();
+    const estadoObj = dptEstados.find(e => String(e.name).toLowerCase() === estVal);
+    if (!estadoObj) return;
+    const munis = dptMunicipiosPorEstado[estadoObj.id] || [];
+    const muniObj = munis.find(m => String(m.name).toLowerCase() === munVal);
+    if (!muniObj) return;
+
+    const baseUrl = getBaseUrl();
+    const shortCode = document.getElementById('dptShortCode').value.trim();
+    try {
+      if (!dptParroquiasPorMunicipio[muniObj.id]) {
+        const res = await fetch(`${baseUrl}/t/${shortCode}?father=${encodeURIComponent(muniObj.id)}&format=rows&limit=250`);
+        if (res.ok) dptParroquiasPorMunicipio[muniObj.id] = await res.json();
+      }
+      const parrs = dptParroquiasPorMunicipio[muniObj.id] || [];
+      document.getElementById(`${prefix}ParroquiasList`).innerHTML =
+        parrs.map(p => `<option value="${escapeHtml(p.name)}"></option>`).join('');
+    } catch (_) {}
+  }
+
+  // ============================================================================
+  // CONFIGURACIÓN: CREAR O BUSCAR EL FORMULARIO FASE 28 EN EL BACKEND
+  // ============================================================================
+  async function autodetectarFormularioExistente() {
+    const baseUrl = getBaseUrl();
+    const slugBuscado = document.getElementById('formSlug').value.trim();
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/forms?limit=50`, { headers: getHeaders(false) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Error al consultar /api/v1/forms');
+
+      const items = data.items || [];
+      const encontrado = items.find(f => f.slug === slugBuscado) || items[0];
+      if (!encontrado) {
+        mostrarAlerta('configAlert', 'info', `ℹ️ No existe aún el formulario con slug <code>${slugBuscado}</code>. Haz clic en <strong>🛠️ Crear Formulario Maestro-Detalle en Backend</strong>.`);
+        return;
+      }
+      document.getElementById('formId').value = encontrado.id;
+      document.getElementById('formSlug').value = encontrado.slug;
+      localStorage.setItem('f28_formId', encontrado.id);
+      localStorage.setItem('f28_formSlug', encontrado.slug);
+      mostrarAlerta('configAlert', 'success', `✅ Formulario encontrado: <strong>${encontrado.name}</strong> (ID: <code>${encontrado.id}</code>, Slug: <code>${encontrado.slug}</code>)`);
+    } catch (err) {
+      mostrarAlerta('configAlert', 'error', `❌ ${err.message}`);
+    }
+  }
+
+  async function inicializarFormularioFase28() {
+    const baseUrl = getBaseUrl();
+    const slug = document.getElementById('formSlug').value.trim() || 'solicitud-periodos-ubicacion';
+    const folderId = document.getElementById('tableFolderId').value.trim();
+
+    const body = {
+      name: 'Solicitud de Población por Períodos y Ubicación Geográfica',
+      slug,
+      description: 'Formulario Maestro-Detalle Fase 28: Datos Personales + Arreglo repetible de Períodos con resolución por fila (Población y Censo).',
+      createLinkedTable: Boolean(folderId),
+      ...(folderId ? { tableFolderId: folderId } : {}),
+      entryFieldsSchema: [
+        { name: 'nombres_apellidos', label: 'Nombres y Apellidos', type: 'string', required: true },
+        { name: 'cedula', label: 'Cédula', type: 'string', required: true },
+        { name: 'entidad_federal', label: 'Entidad Federal', type: 'string', required: true },
+        { name: 'direccion', label: 'Dirección', type: 'string', required: true },
+        {
+          name: 'periodos',
+          label: 'Períodos y Ubicaciones Geográficas',
+          type: 'array',
+          required: true,
+          itemsSchema: [
+            { name: 'desde', label: 'Año de inicio', type: 'number', required: true },
+            { name: 'hasta', label: 'Año de culminación', type: 'number', required: true },
+            { name: 'estado', label: 'Estado', type: 'string', required: true },
+            { name: 'municipio', label: 'Municipio', type: 'string', required: true },
+            { name: 'parroquia', label: 'Parroquia', type: 'string', required: true },
+            { name: 'centro_poblado', label: 'Centro Poblado', type: 'string', required: true }
+          ],
+          resolutionItemsSchema: [
+            { name: 'poblacion', label: 'Población', type: 'number', required: true },
+            { name: 'censo', label: 'Censo', type: 'string', required: true }
+          ]
+        }
+      ],
+      resolutionFieldsSchema: [
+        { name: 'observaciones', label: 'Observaciones Generales', type: 'string', required: false }
+      ]
+    };
+
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/forms`, {
+        method: 'POST',
+        headers: getHeaders(true),
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || `Error HTTP ${res.status}`);
+
+      document.getElementById('formId').value = data.id;
+      document.getElementById('formSlug').value = data.slug;
+      localStorage.setItem('f28_formId', data.id);
+      localStorage.setItem('f28_formSlug', data.slug);
+
+      mostrarAlerta(
+        'configAlert',
+        'success',
+        `🎉 Formulario Fase 28 creado exitosamente.<br><strong>ID:</strong> <code>${data.id}</code> | <strong>Slug público:</strong> <code>${data.slug}</code>` +
+        (data.linkedTableShortCode ? ` | <strong>Tabla Abierta conectada:</strong> <code>/t/${data.linkedTableShortCode}</code>` : '')
+      );
+    } catch (err) {
+      mostrarAlerta('configAlert', 'error', `❌ No se pudo crear el formulario: ${err.message}. (Verifica tu Token JWT o si el slug ya existe usa "Buscar Formulario Existente").`);
+    }
+  }
+
+  // ============================================================================
+  // LÓGICA DEL FORMULARIO 1: SOLICITUD DEL CIUDADANO
+  // ============================================================================
+  function cargarEjemploKelvisCiudadano(mostrarMsg = true) {
+    document.getElementById('ciu_nombres').value = 'Kelvis Alexander Croquer Gonzalez';
+    document.getElementById('ciu_cedula').value = 'V-24087712';
+    document.getElementById('ciu_entidad').value = 'Distrito Capital';
+    document.getElementById('ciu_direccion').value = 'Caracas - Caricuao';
+
+    periodosCiudadano = [
+      {
+        desde: 2001,
+        hasta: 2026,
+        estado: 'Miranda',
+        municipio: 'Pedro Gual',
+        parroquia: 'Machurucuto',
+        centro_poblado: 'machurucuto'
+      },
+      {
+        desde: 2011,
+        hasta: 2027,
+        estado: 'Miranda',
+        municipio: 'Pedro Gual',
+        parroquia: 'Machurucuto',
+        centro_poblado: 'machurucuto'
+      }
+    ];
+    renderTablaCiudadano();
+    if (mostrarMsg) {
+      mostrarAlerta('ciuAlert', 'info', '⚡ Datos de ejemplo de <strong>Kelvis Alexander Croquer Gonzalez</strong> con 2 períodos cargados. Presiona <strong>🚀 Enviar Solicitud Completa</strong> para guardarla en el servidor o pasarla al Analista.');
+    }
+  }
+
+  function agregarPeriodoCiudadano() {
+    const desde = Number(document.getElementById('ciu_desde').value);
+    const hasta = Number(document.getElementById('ciu_hasta').value);
+    const estado = document.getElementById('ciu_estado').value.trim();
+    const municipio = document.getElementById('ciu_municipio').value.trim();
+    const parroquia = document.getElementById('ciu_parroquia').value.trim();
+    const centro_poblado = document.getElementById('ciu_centro_poblado').value.trim();
+
+    if (!desde || !hasta || !estado || !municipio || !parroquia || !centro_poblado) {
+      mostrarAlerta('ciuAlert', 'error', '⚠️ Completa Año de inicio, Año de culminación, Estado, Municipio, Parroquia y Centro Poblado antes de añadir el período.');
+      return;
+    }
+
+    periodosCiudadano.push({ desde, hasta, estado, municipio, parroquia, centro_poblado });
+    document.getElementById('ciu_desde').value = '';
+    document.getElementById('ciu_hasta').value = '';
+    document.getElementById('ciu_centro_poblado').value = '';
+    renderTablaCiudadano();
+  }
+
+  function eliminarPeriodoCiudadano(idx) {
+    periodosCiudadano.splice(idx, 1);
+    renderTablaCiudadano();
+  }
+
+  function vaciarPeriodosCiudadano() {
+    periodosCiudadano = [];
+    renderTablaCiudadano();
+  }
+
+  function renderTablaCiudadano() {
+    const tbody = document.getElementById('ciuPeriodosTbody');
+    const count = periodosCiudadano.length;
+    document.getElementById('ciuCountPill').textContent = `${count} ${count === 1 ? 'registro' : 'registros'}`;
+
+    if (count === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay períodos registrados en la solicitud.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = periodosCiudadano.map((p, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td><strong>${escapeHtml(p.desde)} - ${escapeHtml(p.hasta)}</strong></td>
+        <td>${escapeHtml(p.estado)}</td>
+        <td>${escapeHtml(p.municipio)}</td>
+        <td>${escapeHtml(p.parroquia)}</td>
+        <td><strong>${escapeHtml(p.centro_poblado)}</strong></td>
+        <td style="text-align:right;">
+          <button type="button" class="icon-btn delete" title="Eliminar fila" onclick="eliminarPeriodoCiudadano(${idx})">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function enviarSolicitudCiudadano() {
+    const nombres_apellidos = document.getElementById('ciu_nombres').value.trim();
+    const cedula = document.getElementById('ciu_cedula').value.trim();
+    const entidad_federal = document.getElementById('ciu_entidad').value.trim();
+    const direccion = document.getElementById('ciu_direccion').value.trim();
+
+    if (!nombres_apellidos || !cedula || !entidad_federal || !direccion) {
+      mostrarAlerta('ciuAlert', 'error', '⚠️ Por favor completa todos los Datos Personales.');
+      return;
+    }
+    if (periodosCiudadano.length === 0) {
+      mostrarAlerta('ciuAlert', 'error', '⚠️ Debes incluir al menos 1 período en la solicitud.');
+      return;
+    }
+
+    const payload = {
+      nombres_apellidos,
+      cedula,
+      entidad_federal,
+      direccion,
+      periodos: periodosCiudadano
+    };
+
+    const baseUrl = getBaseUrl();
+    const slug = document.getElementById('formSlug').value.trim();
+    const btn = document.getElementById('btnEnviarSolicitud');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/public/forms/${encodeURIComponent(slug)}/entries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+
+      // Cargamos automáticamente esta solicitud en el Panel del Analista
+      cargarObjetoSolicitudEnAnalista(data);
+      document.getElementById('pendingBadge').textContent = '1';
+
+      mostrarAlerta(
+        'ciuAlert',
+        'success',
+        `✅ <strong>¡Solicitud enviada en 1 solo guardado!</strong><br>` +
+        `ID de Solicitud: <code>${data.id}</code> con <strong>${periodosCiudadano.length} períodos</strong>.<br>` +
+        `<button type="button" class="btn btn-success" style="margin-top:0.6rem; padding:0.45rem 0.9rem; font-size:0.82rem;" onclick="cambiarModo('ANALISTA')">👨‍💼 Ir al Formulario 2 (Responder Solicitud como Analista) →</button>`
+      );
+    } catch (err) {
+      // Incluso si el backend no está encendido aún, sincronizamos en memoria para que el usuario pueda probar el Formulario 2 de inmediato
+      sincronizarCiudadanoHaciaAnalista();
+      mostrarAlerta(
+        'ciuAlert',
+        'info',
+        `ℹ️ No se pudo conectar al endpoint <code>POST /api/v1/public/forms/${slug}/entries</code> (${err.message}).<br>` +
+        `Sin embargo, <strong>hemos transferido los datos y sus ${periodosCiudadano.length} períodos directamente al Formulario 2 (Analista)</strong> para que puedas probar la respuesta y el PDF ahora mismo.<br>` +
+        `<button type="button" class="btn" style="margin-top:0.6rem; padding:0.45rem 0.9rem; font-size:0.82rem;" onclick="cambiarModo('ANALISTA')">👨‍💼 Abrir Formulario 2 con esta Solicitud Precargada →</button>`
+      );
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ============================================================================
+  // LÓGICA DEL FORMULARIO 2: RESPUESTA DEL ANALISTA Y EMISIÓN DE PDF
+  // ============================================================================
+  function sincronizarCiudadanoHaciaAnalista() {
+    document.getElementById('ana_nombres').value = document.getElementById('ciu_nombres').value;
+    document.getElementById('ana_cedula').value = document.getElementById('ciu_cedula').value;
+    document.getElementById('ana_entidad').value = document.getElementById('ciu_entidad').value;
+    document.getElementById('ana_direccion').value = document.getElementById('ciu_direccion').value;
+
+    periodosAnalista = periodosCiudadano.map(p => ({
+      ...p,
+      poblacion: p.poblacion ?? '',
+      censo: p.censo || '2011'
+    }));
+    actualizarBadgeSolicitanteAnalista();
+    renderTablaAnalista();
+  }
+
+  function cargarObjetoSolicitudEnAnalista(entryObj) {
+    document.getElementById('activeEntryId').value = entryObj.id || '';
+    const src = entryObj.mergedPayload || entryObj.payload || {};
+    document.getElementById('ana_nombres').value = src.nombres_apellidos || '';
+    document.getElementById('ana_cedula').value = src.cedula || '';
+    document.getElementById('ana_entidad').value = src.entidad_federal || '';
+    document.getElementById('ana_direccion').value = src.direccion || '';
+
+    const rawPeriodos = Array.isArray(src.periodos) ? src.periodos : [];
+    periodosAnalista = rawPeriodos.map(p => ({
+      desde: p.desde,
+      hasta: p.hasta,
+      estado: p.estado,
+      municipio: p.municipio,
+      parroquia: p.parroquia,
+      centro_poblado: p.centro_poblado,
+      poblacion: p.poblacion !== undefined ? p.poblacion : '',
+      censo: p.censo || '2011'
+    }));
+
+    if (entryObj.resolutionPayload && entryObj.resolutionPayload.observaciones) {
+      document.getElementById('ana_observaciones').value = entryObj.resolutionPayload.observaciones;
+    }
+
+    actualizarBadgeSolicitanteAnalista();
+    renderTablaAnalista();
+    irPasoAnalista(2);
+  }
+
+  function actualizarBadgeSolicitanteAnalista() {
+    const nom = document.getElementById('ana_nombres').value.trim();
+    const ced = document.getElementById('ana_cedula').value.trim();
+    document.getElementById('anaSolInfoBadge').textContent = nom ? `Solicitante: ${nom} (${ced})` : '';
+  }
+
+  async function listarSolicitudesPendientes() {
+    const baseUrl = getBaseUrl();
+    const formId = document.getElementById('formId').value.trim();
+    if (!formId) {
+      mostrarAlerta('anaAlert', 'error', '⚠️ Configura o busca primero el <strong>ID del Formulario</strong> en la pestaña superior de Configuración.');
+      document.getElementById('configDetails').open = true;
+      return;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/forms/${encodeURIComponent(formId)}/entries?limit=50`, {
+        headers: getHeaders(false)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+      entriesEnServidor = data.items || [];
+      const pendientes = entriesEnServidor.filter(e => e.status === 'NEW').length;
+      document.getElementById('pendingBadge').textContent = String(pendientes || entriesEnServidor.length);
+
+      const sel = document.getElementById('selectEntriesServidor');
+      if (entriesEnServidor.length === 0) {
+        sel.innerHTML = `<option value="">-- No hay solicitudes registradas en este formulario --</option>`;
+        return;
+      }
+
+      sel.innerHTML = `<option value="">-- Selecciona una solicitud (${entriesEnServidor.length} encontradas) --</option>` +
+        entriesEnServidor.map(e => {
+          const p = e.payload || {};
+          const numPer = Array.isArray(p.periodos) ? p.periodos.length : 0;
+          return `<option value="${e.id}">[${e.status}] ${escapeHtml(p.nombres_apellidos || 'Sin nombre')} (${escapeHtml(p.cedula || '-')}) — ${numPer} período(s)</option>`;
+        }).join('');
+
+      mostrarAlerta('anaAlert', 'success', `✅ Se cargaron ${entriesEnServidor.length} solicitud(es) desde el servidor. Selecciona una en la lista desplegable para autocompletar todos sus períodos.`);
+    } catch (err) {
+      mostrarAlerta('anaAlert', 'error', `❌ Error al listar solicitudes: ${err.message}`);
+    }
+  }
+
+  function seleccionarEntryDeLista() {
+    const id = document.getElementById('selectEntriesServidor').value;
+    if (!id) return;
+    document.getElementById('activeEntryId').value = id;
+    cargarSolicitudPorId();
+  }
+
+  async function cargarSolicitudPorId() {
+    const baseUrl = getBaseUrl();
+    const entryId = document.getElementById('activeEntryId').value.trim();
+    if (!entryId) {
+      mostrarAlerta('anaAlert', 'error', '⚠️ Ingresa o selecciona un ID de solicitud (`entryId`).');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/forms/entries/${encodeURIComponent(entryId)}`, {
+        headers: getHeaders(false)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+      cargarObjetoSolicitudEnAnalista(data);
+      mostrarAlerta('anaAlert', 'success', `✅ Solicitud <code>${data.id}</code> cargada con <strong>${periodosAnalista.length} período(s)</strong>. Solo completa la columna <strong>Población</strong> y presiona <strong>Continuar a Emisión y Descarga →</strong>.`);
+    } catch (err) {
+      mostrarAlerta('anaAlert', 'error', `❌ No se pudo cargar la solicitud: ${err.message}`);
+    }
+  }
+
+  function agregarPeriodoAnalista() {
+    const desde = Number(document.getElementById('ana_desde').value);
+    const hasta = Number(document.getElementById('ana_hasta').value);
+    const estado = document.getElementById('ana_estado').value.trim();
+    const municipio = document.getElementById('ana_municipio').value.trim();
+    const parroquia = document.getElementById('ana_parroquia').value.trim();
+    const centro_poblado = document.getElementById('ana_centro_poblado').value.trim();
+    const poblacionVal = document.getElementById('ana_poblacion').value.trim();
+    const censo = document.getElementById('ana_censo').value.trim() || '2011';
+
+    if (!desde || !hasta || !estado || !municipio || !parroquia || !centro_poblado) {
+      mostrarAlerta('anaAlert', 'error', '⚠️ Completa Año de inicio, Año de culminación, Estado, Municipio, Parroquia y Centro Poblado.');
+      return;
+    }
+
+    periodosAnalista.push({
+      desde,
+      hasta,
+      estado,
+      municipio,
+      parroquia,
+      centro_poblado,
+      poblacion: poblacionVal !== '' ? Number(poblacionVal) : '',
+      censo
+    });
+
+    document.getElementById('ana_desde').value = '';
+    document.getElementById('ana_hasta').value = '';
+    document.getElementById('ana_centro_poblado').value = '';
+    document.getElementById('ana_poblacion').value = '';
+    renderTablaAnalista();
+  }
+
+  function actualizarFilaAnalista(idx, campo, valor) {
+    if (!periodosAnalista[idx]) return;
+    if (campo === 'poblacion') {
+      periodosAnalista[idx].poblacion = valor === '' ? '' : Number(valor);
+    } else {
+      periodosAnalista[idx][campo] = valor;
+    }
+  }
+
+  function editarPeriodoAnalista(idx) {
+    const p = periodosAnalista[idx];
+    if (!p) return;
+    document.getElementById('ana_desde').value = p.desde;
+    document.getElementById('ana_hasta').value = p.hasta;
+    document.getElementById('ana_estado').value = p.estado;
+    document.getElementById('ana_municipio').value = p.municipio;
+    document.getElementById('ana_parroquia').value = p.parroquia;
+    document.getElementById('ana_centro_poblado').value = p.centro_poblado;
+    document.getElementById('ana_poblacion').value = p.poblacion;
+    document.getElementById('ana_censo').value = p.censo || '2011';
+    periodosAnalista.splice(idx, 1);
+    renderTablaAnalista();
+  }
+
+  function eliminarPeriodoAnalista(idx) {
+    periodosAnalista.splice(idx, 1);
+    renderTablaAnalista();
+  }
+
+  function vaciarPeriodosAnalista() {
+    periodosAnalista = [];
+    renderTablaAnalista();
+  }
+
+  function renderTablaAnalista() {
+    const tbody = document.getElementById('anaPeriodosTbody');
+    const count = periodosAnalista.length;
+    document.getElementById('anaCountPill').textContent = `${count} ${count === 1 ? 'registro' : 'registros'}`;
+
+    if (count === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay períodos en la tabla. Carga una solicitud pendiente arriba o añade una fila manualmente.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = periodosAnalista.map((p, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td><strong>${escapeHtml(p.desde)} - ${escapeHtml(p.hasta)}</strong></td>
+        <td>${escapeHtml(p.estado)}</td>
+        <td>${escapeHtml(p.municipio)}</td>
+        <td>${escapeHtml(p.parroquia)}</td>
+        <td><strong>${escapeHtml(p.centro_poblado)}</strong></td>
+        <td>
+          <input
+            type="number"
+            class="table-input highlight-input"
+            placeholder="Ej. 850"
+            value="${p.poblacion !== '' && p.poblacion !== undefined ? escapeHtml(p.poblacion) : ''}"
+            oninput="actualizarFilaAnalista(${idx}, 'poblacion', this.value)"
+          >
+        </td>
+        <td>
+          <input
+            type="text"
+            class="table-input"
+            value="${escapeHtml(p.censo || '2011')}"
+            oninput="actualizarFilaAnalista(${idx}, 'censo', this.value)"
+          >
+        </td>
+        <td style="text-align:right; white-space:nowrap;">
+          <button type="button" class="icon-btn" title="Subir datos al editor" onclick="editarPeriodoAnalista(${idx})">✏️</button>
+          <button type="button" class="icon-btn delete" title="Eliminar fila" onclick="eliminarPeriodoAnalista(${idx})">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // ============================================================================
+  // 1 SOLO GUARDADO AL PRESIONAR "CONTINUAR A EMISIÓN Y DESCARGA ->"
+  // ============================================================================
+  async function guardarRespuestaYContinuar() {
+    if (periodosAnalista.length === 0) {
+      mostrarAlerta('anaAlert', 'error', '⚠️ Debe existir al menos 1 período en la tabla antes de continuar.');
+      return;
+    }
+
+    // Validar que todas las filas tengan Población y Censo asignados
+    const filaIncompleta = periodosAnalista.findIndex(p => p.poblacion === '' || p.poblacion === null || Number.isNaN(Number(p.poblacion)));
+    if (filaIncompleta !== -1) {
+      mostrarAlerta('anaAlert', 'error', `⚠️ Por favor ingresa la <strong>Población</strong> en la fila #${filaIncompleta + 1} (${periodosAnalista[filaIncompleta].desde} - ${periodosAnalista[filaIncompleta].hasta}) antes de emitir la constancia.`);
+      return;
+    }
+
+    const entryId = document.getElementById('activeEntryId').value.trim();
+    const observaciones = document.getElementById('ana_observaciones').value.trim();
+    const baseUrl = getBaseUrl();
+
+    // Si hay un entryId cargado del backend, hacemos el PATCH /api/v1/forms/entries/:id/resolve (1 solo guardado)
+    if (entryId) {
+      const btn = document.getElementById('btnGuardarYContinuar');
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/forms/entries/${encodeURIComponent(entryId)}/resolve`, {
+          method: 'PATCH',
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            status: 'VALID',
+            resolutionPayload: {
+              periodos: periodosAnalista.map(p => ({
+                poblacion: Number(p.poblacion),
+                censo: String(p.censo || '2011')
+              })),
+              observaciones
+            }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+
+        // Si el backend devuelve mergedPayload, sincronizamos con la respuesta oficial fusionada
+        if (data.mergedPayload && Array.isArray(data.mergedPayload.periodos)) {
+          periodosAnalista = data.mergedPayload.periodos;
+        }
+        mostrarAlerta('anaAlert', 'success', `✅ Respuesta guardada en <strong>1 sola operación</strong> y marcada como <code>VALID</code>.`);
+      } catch (err) {
+        mostrarAlerta('anaAlert', 'info', `ℹ️ Vista previa generada localmente (no se pudo guardar en servidor: ${err.message}).`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    irPasoAnalista(3);
+  }
+
+  function renderizarVistaPreviaPDF() {
+    document.getElementById('pdf_nombres').textContent = document.getElementById('ana_nombres').value || '-';
+    document.getElementById('pdf_cedula').textContent = document.getElementById('ana_cedula').value || '-';
+    document.getElementById('pdf_entidad').textContent = document.getElementById('ana_entidad').value || '-';
+    document.getElementById('pdf_direccion').textContent = document.getElementById('ana_direccion').value || '-';
+    document.getElementById('pdf_entry_id').textContent = document.getElementById('activeEntryId').value || 'EMISIÓN MANUAL';
+    document.getElementById('pdf_fecha').textContent = `VALIDADA — ${new Date().toLocaleDateString('es-VE')}`;
+    document.getElementById('pdf_observaciones').textContent = document.getElementById('ana_observaciones').value || 'Sin observaciones.';
+
+    document.getElementById('pdfPeriodosTbody').innerHTML = periodosAnalista.map((p, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td><strong>${escapeHtml(p.desde)} - ${escapeHtml(p.hasta)}</strong></td>
+        <td>${escapeHtml(p.estado)}</td>
+        <td>${escapeHtml(p.municipio)}</td>
+        <td>${escapeHtml(p.parroquia)}</td>
+        <td>${escapeHtml(p.centro_poblado)}</td>
+        <td><strong>${Number(p.poblacion).toLocaleString('es-VE')} hab.</strong></td>
+        <td>${escapeHtml(p.censo)}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function descargarExcelMultiHoja() {
+    const baseUrl = getBaseUrl();
+    const formId = document.getElementById('formId').value.trim();
+    if (!formId) {
+      alert('Configura primero el ID del Formulario en Configuración del Servidor para descargar el Excel Multi-Hoja del backend.');
+      return;
+    }
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/forms/${encodeURIComponent(formId)}/export?format=xlsx`, {
+        headers: getHeaders(false)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `solicitudes-periodos-multihoja.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('No se pudo descargar el Excel desde el servidor: ' + err.message);
+    }
+  }
+
+  // ============================================================================
+  // PARSER AUTOMÁTICO DE FORMATO WHATSAPP (DATOS PERSONALES + PERÍODOS #1..#N)
+  // ============================================================================
+  function abrirModalWhatsapp(target) {
+    modalWhatsappTarget = target;
+    document.getElementById('modalWhatsapp').style.display = 'flex';
+  }
+
+  function cerrarModalWhatsapp() {
+    document.getElementById('modalWhatsapp').style.display = 'none';
+  }
+
+  function procesarTextoWhatsapp() {
+    const txt = document.getElementById('whatsappTextarea').value;
+    const prefix = modalWhatsappTarget === 'CIUDADANO' ? 'ciu' : 'ana';
+
+    // Extraer datos personales si vienen en el texto
+    const mNom = txt.match(/Nombres y Apellidos:\s*(.+)/i);
+    const mCed = txt.match(/C[eé]dula:\s*(.+)/i);
+    const mEnt = txt.match(/Entidad Federal:\s*(.+)/i);
+    const mDir = txt.match(/Direcci[oó]n:\s*(.+)/i);
+
+    if (mNom) document.getElementById(`${prefix}_nombres`).value = mNom[1].trim();
+    if (mCed) document.getElementById(`${prefix}_cedula`).value = mCed[1].trim();
+    if (mEnt) document.getElementById(`${prefix}_entidad`).value = mEnt[1].trim();
+    if (mDir) document.getElementById(`${prefix}_direccion`).value = mDir[1].trim();
+
+    // Extraer bloques de Período #N: YYYY a YYYY
+    const bloques = txt.split(/Per[ií]odo\s*#\d+\s*:/i).slice(1);
+    const nuevosPeriodos = [];
+
+    for (const bloque of bloques) {
+      const mAnios = bloque.match(/^\s*(\d{4})\s*(?:a|-|hasta)\s*(\d{4})/i);
+      const mEst = bloque.match(/Estado:\s*(.+)/i);
+      const mMun = bloque.match(/Municipio:\s*(.+)/i);
+      const mPar = bloque.match(/Parroquia:\s*(.+)/i);
+      const mCen = bloque.match(/Centro Poblado:\s*(.+)/i);
+
+      if (mAnios) {
+        nuevosPeriodos.push({
+          desde: Number(mAnios[1]),
+          hasta: Number(mAnios[2]),
+          estado: mEst ? mEst[1].trim() : '',
+          municipio: mMun ? mMun[1].trim() : '',
+          parroquia: mPar ? mPar[1].trim() : '',
+          centro_poblado: mCen ? mCen[1].trim() : '',
+          poblacion: '',
+          censo: '2011'
+        });
+      }
+    }
+
+    if (nuevosPeriodos.length > 0) {
+      if (modalWhatsappTarget === 'CIUDADANO') {
+        periodosCiudadano = nuevosPeriodos.map(({ poblacion, censo, ...rest }) => rest);
+        renderTablaCiudadano();
+      } else {
+        periodosAnalista = nuevosPeriodos;
+        actualizarBadgeSolicitanteAnalista();
+        renderTablaAnalista();
+      }
+    }
+
+    cerrarModalWhatsapp();
+  }
+
+  function escapeHtml(val) {
+    return String(val ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+
+</body>
+</html>

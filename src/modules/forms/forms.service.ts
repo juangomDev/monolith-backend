@@ -9,6 +9,8 @@ import {
   validatePayloadAgainstSchema,
   assertCanResolveEntry,
   normalizeFieldsSchema,
+  buildEffectiveResolutionSchema,
+  mergeEntryAndResolutionPayload,
 } from './forms.validator.js';
 
 export interface CreateFormDto {
@@ -117,12 +119,16 @@ export class FormsService {
     let form = await this.repo.findFormBySlug(idOrSlug);
     if (!form) form = await this.repo.findFormById(idOrSlug);
     if (!form) throw new AppError(404, 'Formulario no encontrado', 'FORM_NOT_FOUND');
-
-    if (caller) {
-      await this.sharesService.assertFolderAccess(form.folderId, caller, FolderPermission.READ);
-    }
-
+    if (caller) await this.sharesService.assertFolderAccess(form.folderId, caller, FolderPermission.READ);
     return form;
+  }
+
+  async getEntry(id: string, caller: CallerContext) {
+    const entry = await this.repo.findEntryById(id);
+    if (!entry || !entry.form) throw new AppError(404, 'Entrada de formulario no encontrada', 'ENTRY_NOT_FOUND');
+    await this.sharesService.assertFolderAccess(entry.form.folderId, caller, FolderPermission.READ);
+    const mergedPayload = mergeEntryAndResolutionPayload(entry.entryPayload as any, entry.resolutionPayload as any);
+    return { ...entry, mergedPayload };
   }
 
   async submitEntry(slug: string, entryPayload: any, ipAddress?: string): Promise<{ id: string; status: string; createdAt: Date }> {
@@ -130,45 +136,34 @@ export class FormsService {
     if (!form) throw new AppError(404, 'Formulario no encontrado', 'FORM_NOT_FOUND');
 
     const sanitizedPayload = validatePayloadAgainstSchema(entryPayload, form.entryFieldsSchema, 'entryPayload');
+    const entry = await this.repo.createEntry({ formId: form.id, entryPayload: sanitizedPayload as any, status: 'NEW' });
 
-    const entry = await this.repo.createEntry({
-      formId: form.id,
-      entryPayload: sanitizedPayload as any,
-      status: 'NEW',
-    });
-
-    // Sincronización asíncrona de tabla abierta (.data.json.gz)
     await this.tableSync.syncEntryToTable(form, entry, false).catch((err) => {
       console.error('[FormsService] Error sincronizando entrada a tabla abierta:', err);
     });
 
     auditService.recordLog({ actorId: null, actorUsername: 'public_user', action: 'FORM_ENTRY_SUBMIT', resourceType: 'FORM_ENTRY', resourceId: entry.id, folderId: form.folderId, ipAddress });
-
     eventBus.emitEvent('form.entry.created', {
-      formId: form.id,
-      formSlug: form.slug,
-      formTitle: form.title,
-      folderId: form.folderId,
-      entryId: entry.id,
-      entryPayload: entry.entryPayload as Record<string, any>,
-      createdAt: entry.createdAt,
+      formId: form.id, formSlug: form.slug, formTitle: form.title, folderId: form.folderId,
+      entryId: entry.id, entryPayload: entry.entryPayload as Record<string, any>, createdAt: entry.createdAt,
     });
 
     return { id: entry.id, status: entry.status, createdAt: entry.createdAt };
   }
 
-  async resolveEntry(id: string, payload: { status: string; resolutionPayload: any }, caller: CallerContext, ipAddress?: string): Promise<FormEntry> {
+  async resolveEntry(id: string, payload: { status: string; resolutionPayload: any }, caller: CallerContext, ipAddress?: string): Promise<FormEntry & { mergedPayload?: Record<string, any> }> {
     const entry = await this.repo.findEntryById(id);
     if (!entry || !entry.form) throw new AppError(404, 'Entrada de formulario no encontrada', 'ENTRY_NOT_FOUND');
 
     await this.sharesService.assertFolderAccess(entry.form.folderId, caller, FolderPermission.EDIT);
 
+    const effectiveResSchema = buildEffectiveResolutionSchema(entry.form.entryFieldsSchema, entry.form.resolutionFieldsSchema);
     const sanitizedRes = assertCanResolveEntry(
       entry,
       payload.status,
       entry.form.allowedResolutionStates,
       payload.resolutionPayload,
-      entry.form.resolutionFieldsSchema
+      effectiveResSchema
     );
 
     const updated = await this.repo.updateEntry(entry.id, {
@@ -178,37 +173,29 @@ export class FormsService {
       resolvedAt: new Date(),
     });
 
+    const mergedPayload = mergeEntryAndResolutionPayload(updated.entryPayload as any, updated.resolutionPayload as any);
+
     await this.tableSync.syncEntryToTable(entry.form, updated, true).catch((err) => {
       console.error('[FormsService] Error sincronizando resolución a tabla abierta:', err);
     });
 
     if (entry.form.externalTargetUrl) {
       dispatchToExternalTarget(entry.form.externalTargetUrl, {
-        entryId: updated.id,
-        formSlug: entry.form.slug,
-        status: updated.status,
-        entryPayload: updated.entryPayload,
-        resolutionPayload: updated.resolutionPayload,
-        createdAt: updated.createdAt,
-        resolvedAt: updated.resolvedAt,
+        entryId: updated.id, formSlug: entry.form.slug, status: updated.status,
+        entryPayload: updated.entryPayload, resolutionPayload: updated.resolutionPayload,
+        mergedPayload, createdAt: updated.createdAt, resolvedAt: updated.resolvedAt,
       });
     }
 
     auditService.recordLog({ actorId: caller.id, actorUsername: caller.role, action: 'FORM_ENTRY_RESOLVE', resourceType: 'FORM_ENTRY', resourceId: updated.id, folderId: entry.form.folderId, ipAddress });
-
     eventBus.emitEvent('form.entry.resolved', {
-      formId: entry.form.id,
-      formSlug: entry.form.slug,
-      formTitle: entry.form.title,
-      folderId: entry.form.folderId,
-      entryId: updated.id,
-      status: updated.status,
+      formId: entry.form.id, formSlug: entry.form.slug, formTitle: entry.form.title, folderId: entry.form.folderId,
+      entryId: updated.id, status: updated.status,
       resolutionPayload: (updated.resolutionPayload as Record<string, any>) || undefined,
-      resolvedById: caller.id,
-      resolvedAt: updated.resolvedAt!,
+      resolvedById: caller.id, resolvedAt: updated.resolvedAt!,
     });
 
-    return updated;
+    return { ...updated, mergedPayload };
   }
 
   async dispatchEntry(id: string, caller: CallerContext) {
@@ -216,29 +203,19 @@ export class FormsService {
     if (!entry || !entry.form) throw new AppError(404, 'Entrada de formulario no encontrada', 'ENTRY_NOT_FOUND');
 
     await this.sharesService.assertFolderAccess(entry.form.folderId, caller, FolderPermission.READ);
-
     if (!entry.form.externalTargetUrl) {
       throw new AppError(400, 'El formulario no tiene configurada una URL externa de destino (externalTargetUrl)', 'TARGET_URL_NOT_CONFIGURED');
     }
 
+    const mergedPayload = mergeEntryAndResolutionPayload(entry.entryPayload as any, entry.resolutionPayload as any);
     const payload = {
-      entryId: entry.id,
-      formSlug: entry.form.slug,
-      status: entry.status,
-      entryPayload: entry.entryPayload,
-      resolutionPayload: entry.resolutionPayload,
-      createdAt: entry.createdAt,
-      resolvedAt: entry.resolvedAt,
+      entryId: entry.id, formSlug: entry.form.slug, status: entry.status,
+      entryPayload: entry.entryPayload, resolutionPayload: entry.resolutionPayload,
+      mergedPayload, createdAt: entry.createdAt, resolvedAt: entry.resolvedAt,
     };
 
     const dispatched = await dispatchToExternalTarget(entry.form.externalTargetUrl, payload);
-
-    return {
-      dispatched,
-      targetUrl: entry.form.externalTargetUrl,
-      entryId: entry.id,
-      dispatchedAt: new Date(),
-    };
+    return { dispatched, targetUrl: entry.form.externalTargetUrl, entryId: entry.id, mergedPayload, dispatchedAt: new Date() };
   }
 
   async listEntries(formId: string, options: Omit<ListEntriesOptions, 'formId'>, caller: CallerContext) {

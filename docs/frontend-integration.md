@@ -904,12 +904,18 @@ const dispatchResult = await dispatchRes.json();
 // dispatchResult: { dispatched: true, targetUrl: "...", entryId: "...", dispatchedAt: "..." }
 ```
 
-### 17.5. Descarga Mensual y Tablas Abiertas (`GET /api/v1/forms/:id/export`)
-Descarga todas las respuestas filtradas por mes y estado en Excel (`.xlsx`) o CSV (`.csv`):
+### 17.5. Descarga Mensual Multi-Hoja y Tablas Abiertas (`GET /api/v1/forms/:id/export`)
+Descarga todas las respuestas filtradas por mes y estado en Excel (`.xlsx`) o CSV (`.csv`). Si el formulario contiene listas repetibles (`type: "array"`, como `periodos`), el archivo `.xlsx` genera automáticamente **2 hojas conectadas por `entryId`**: `Solicitudes` (1 fila por solicitante) y `Detalle_<campo_array>` (1 fila por cada período con sus respuestas `poblacion` y `censo`):
 
 ```typescript
-// Descarga el reporte consolidado de marzo 2026 en Excel
+// Descarga el reporte consolidado de marzo 2026 en Excel (incluye Hoja 1 Solicitudes y Hoja 2 Detalle_periodos)
 window.open(`${API_URL}/api/v1/forms/${form.id}/export?month=2026-03&format=xlsx`, '_blank');
+
+// Cargar una solicitud individual en la pantalla de respuesta del analista (auto-rellena Datos Personales + tabla de Períodos):
+const entryDetail = await fetch(`${API_URL}/api/v1/forms/entries/${entryId}`, {
+  headers: { Authorization: `Bearer ${accessToken}` },
+}).then((r) => r.json());
+// entryDetail.mergedPayload -> { nombres_apellidos, cedula, periodos: [ { desde, hasta, estado, municipio, parroquia, centro_poblado } ] }
 ```
 
 ---

@@ -37,6 +37,7 @@
 | **Fase 25** | Visibilidad Heredada para Colaboradores en Subcarpetas, Blindaje RBAC y Paridad de Seguridad entre Módulos | ✅ Completado |
 | **Fase 26** | Paridad de API y UX entre Módulos (`PDFs` Bulk/Meta, `Chat` Caché/Sugerencias, `Forms` CRUD, `Stats` Cuota Dinámica) | ✅ Completado |
 | **Fase 27** | Paridad Avanzada de Producto (`Images`, `Audit`, `API Keys`, `Notifications`, `Users`) y Limpieza del Módulo `custom` | ✅ Completado |
+| **Fase 28** | Formularios Maestro-Detalle con Listas Repetibles (`type: "array"`), Resolución por Fila, Excel Multi-Hoja y Tabla Abierta Desglosada | ✅ Completado |
 
 ---
 
@@ -1265,6 +1266,47 @@
 
 - [x] **27.4 Validación y Cierre de Fase 27**
   - [x] `27.4.1` Pruebas completas agregadas en `tests/modules/shared/fase27-parity.test.ts`, `openapi.json` regenerado, `ENDPOINTS.md` / `RUTAS.md` / `docs/frontend-integration.md` sincronizados, y `npm test` + `npm run build` + `npm audit` verificados en verde.
+
+---
+
+## 📋 FASE 28: Formularios Maestro-Detalle con Listas Repetibles (`type: "array"`), Resolución por Fila, Excel Multi-Hoja y Tabla Abierta Desglosada
+
+### 🎯 Objetivos de la Fase
+
+> 1. **Campos Repetibles (`type: "array"` y `type: "object"`) y Esquema de Sub-Ítems (`itemsSchema`):**
+>    - Permitir que un formulario defina campos simples de cabecera (ej. Datos Personales: `nombres_apellidos`, `cedula`, `entidad_federal`, `direccion`) junto con una o varias listas dinámicas repetibles (`type: "array"`, ej. `periodos`).
+>    - Un ciudadano puede enviar 1, 2, 10 o N filas en la lista (y campos opcionales `required: false`) en **1 solo guardado** (`POST /api/v1/public/forms/:slug/entries`).
+>
+> 2. **Consulta Individual y Resolución por Fila en 1 Solo Guardado (`GET /api/v1/forms/entries/:id` y `PATCH /api/v1/forms/entries/:id/resolve`):**
+>    - Endpoint `GET /api/v1/forms/entries/:id` para que la pantalla del analista cargue automáticamente todos los Datos Personales y todas las filas de períodos enviadas por el ciudadano sin transcripción manual.
+>    - Al presionar *"Continuar a Emisión y Descarga"*, el analista envía en **1 solo guardado** (`PATCH /api/v1/forms/entries/:id/resolve`) la lista de períodos enriquecida con la respuesta de cada fila (ej. `poblacion` y `censo` por cada período), o bien el backend fusiona automáticamente `entryPayload` + `resolutionPayload` exponiendo un objeto `mergedPayload` listo para generar el PDF en el Paso 3.
+>
+> 3. **Tabla Abierta Desglosada (`/t/:short_code`) y Exportación Excel Multi-Hoja (`GET /api/v1/forms/:id/export`):**
+>    - **En la Tabla Abierta (`/t/:short_code`):** Si el formulario contiene una lista `type: "array"`, desglosar cada ítem/período como una fila en la tabla abierta conectada con `entryId` y los campos de cabecera (ej. `cedula`, `nombres_apellidos`), permitiendo filtrar con `/t/:short_code?cedula=V-24087712` o `?entryId=...`.
+>    - **En Excel (`.xlsx`):** Generar automáticamente **Hoja 1 (`Solicitudes`)** con 1 fila por solicitante y **Hoja 2 (`Detalle_<campo_array>`)** con 1 fila por cada período/ítem conectado por `entryId` y campos clave de cabecera. En CSV, formatear las listas de forma legible sin `[object Object]`.
+
+- [x] **28.1 Validador Maestro-Detalle y Campos Repetibles (`src/modules/forms/forms.validator.ts`)**
+  - [x] `28.1.1` Extender `FieldDefinition` para soportar `type: 'array' | 'object'`, `itemsSchema?: FieldDefinition[]` (sub-campos del ciudadano) y `resolutionItemsSchema?: FieldDefinition[]` (sub-campos de respuesta por fila del analista, como `poblacion` y `censo`).
+  - [x] `28.1.2` Validar y sanitizar recursivamente cada fila dentro de un campo `array` contra inyección de fórmulas (`=`, `+`, `-`, `@`), permitiendo que distintas solicitudes traigan 1, N o 0 filas (si `required: false`).
+  - [x] `28.1.3` Implementar función `mergeEntryAndResolutionPayload(entryPayload, resolutionPayload)` que fusione por índice o ID cada fila del array del ciudadano con la respuesta por fila del analista (ej. uniendo `desde, hasta, estado, municipio, parroquia, centro_poblado` con `poblacion, censo` listas para emitir el PDF).
+
+- [x] **28.2 Carga Individual de Solicitud y Respuesta Unificada para el PDF (`src/modules/forms/forms.service.ts` y `forms.routes.ts`)**
+  - [x] `28.2.1` Añadir endpoint `GET /api/v1/forms/entries/:id` (protegido con RBAC `READ`) para cargar directamente una solicitud en la pantalla de respuesta del analista con sus datos personales y su lista de períodos pre-cargada.
+  - [x] `28.2.2` En `PATCH /api/v1/forms/entries/:id/resolve`, devolver y despachar también `mergedPayload` (datos personales + lista de períodos con sus respuestas `poblacion` y `censo` unificadas) para que el Paso 3 (*"Emisión y Descarga"*) genere el PDF de inmediato.
+
+- [x] **28.3 Tabla Abierta Conectada y Exportación Excel Multi-Hoja (`src/modules/forms/forms.table-sync.ts`)**
+  - [x] `28.3.1` En `syncEntryToTable`: cuando el formulario tiene un campo `type: "array"` (ej. `periodos`), sincronizar en la tabla abierta (`.data.json.gz`) las filas desglosadas por cada período incluyendo `entryId`, los campos principales de cabecera y las respuestas por fila (`poblacion`, `censo`), permitiendo filtrar con `/t/:short_code?entryId=...` o `?cedula=...`.
+  - [x] `28.3.2` En `exportEntries` (`.xlsx`): generar **Hoja 1 (`Solicitudes`)** con los datos maestros del solicitante y **Hoja 2 (`Detalle_<nombre_lista>`)** con cada período fila por fila conectado por `entryId` y cabecera.
+  - [x] `28.3.3` En `exportEntries` (`.csv`): formatear cualquier campo `array` u `object` en texto legible numerado (`#1: ... | #2: ...`) evitando `[object Object]`.
+
+- [x] **28.4 Pruebas Automatizadas y Documentación (Reglas 1, 2 y 3)**
+  - [x] `28.4.1` Crear suite `tests/modules/forms/forms.repeatable.test.ts` verificando:
+    - Envío de solicitud con 1 período vs solicitud con múltiples períodos y campos opcionales (1 solo guardado).
+    - Carga de la solicitud en `GET /api/v1/forms/entries/:id`.
+    - Resolución en 1 solo guardado (`PATCH /api/v1/forms/entries/:id/resolve`) completando `poblacion` y `censo` por cada período y obteniendo `mergedPayload` listo para el PDF.
+    - Consulta filtrada en Tabla Abierta (`/t/:short_code?cedula=V-24087712`) y exportación Excel Multi-Hoja (`.xlsx` con 2 pestañas) y CSV legible.
+  - [x] `28.4.2` Mantener todos los archivos en `src/` estrictamente `< 300 LOC`.
+  - [x] `28.4.3` Exportar `openapi.json` y actualizar `RUTAS.md`, `ENDPOINTS.md`, `docs/frontend-integration.md` y marcar Fase 28 como `✅ Completado` en `TODO.md`.
 
 ---
 
