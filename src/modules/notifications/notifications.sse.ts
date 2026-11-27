@@ -15,6 +15,13 @@ export class NotificationsSseManager {
   }
 
   registerClient(userId: string, request: FastifyRequest, reply: FastifyReply): void {
+    // Propaga cabeceras establecidas por plugins/hooks de Fastify (ej. @fastify/cors) hacia reply.raw
+    const fastifyHeaders = reply.getHeaders();
+    for (const [headerName, headerValue] of Object.entries(fastifyHeaders)) {
+      if (headerValue !== undefined) {
+        reply.raw.setHeader(headerName, headerValue as string | number | readonly string[]);
+      }
+    }
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
     reply.raw.setHeader('Connection', 'keep-alive');

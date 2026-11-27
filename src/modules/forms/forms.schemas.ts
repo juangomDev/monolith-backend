@@ -254,11 +254,20 @@ export const listEntriesRouteSchema: FastifySchema = {
           type: 'array',
           items: {
             type: 'object',
+            additionalProperties: true,
             properties: {
               id: { type: 'string', format: 'uuid' },
               status: { type: 'string' },
-              entryPayload: { type: 'object' },
-              resolutionPayload: { type: ['object', 'null'] },
+              entryPayload: { type: 'object', additionalProperties: true },
+              resolutionPayload: { type: ['object', 'null'], additionalProperties: true },
+              resolvedBy: {
+                type: ['object', 'null'],
+                additionalProperties: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  username: { type: 'string' },
+                },
+              },
               resolvedAt: { type: ['string', 'null'], format: 'date-time' },
               createdAt: { type: 'string', format: 'date-time' },
             },

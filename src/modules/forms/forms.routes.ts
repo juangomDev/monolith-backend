@@ -15,7 +15,7 @@ import {
   listEntriesRouteSchema,
   exportEntriesRouteSchema,
 } from './forms.schemas.js';
-import { updateFormRouteSchema, deleteFormRouteSchema } from './forms.mutation.schemas.js';
+import { updateFormRouteSchema, deleteFormRouteSchema, deleteEntryRouteSchema } from './forms.mutation.schemas.js';
 
 function extractRequester(request: FastifyRequest): { id: string; role: Role } {
   if (request.user) {
@@ -153,6 +153,23 @@ export const formsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string };
       const entry = await formsService.getEntry(id, caller);
       return reply.send(entry);
+    }
+  );
+
+  // 4.4 Eliminar una entrada individual y resincronizar tabla abierta (Propietario o ADMIN)
+  fastify.delete(
+    '/api/v1/forms/entries/:id',
+    {
+      preHandler: [authenticateUserOrApiKey],
+      validatorCompiler: passValidator,
+      schema: deleteEntryRouteSchema,
+    },
+    async (request, reply) => {
+      const caller = extractRequester(request);
+      const { id } = request.params as { id: string };
+      const ip = request.ip || (request.headers['x-forwarded-for'] as string);
+      const result = await formsMutationService.deleteEntry(id, caller, ip);
+      return reply.send(result);
     }
   );
 

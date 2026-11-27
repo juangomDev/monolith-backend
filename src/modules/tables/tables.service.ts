@@ -80,12 +80,12 @@ export class TablesService {
     try {
       await pipeline(part.file, createWriteStream(targetPath));
     } catch (streamErr) {
-      await fs.unlink(targetPath).catch(() => {});
+      await fs.unlink(targetPath).catch(() => { });
       throw streamErr;
     }
 
     if (part.file.truncated) {
-      await fs.unlink(targetPath).catch(() => {});
+      await fs.unlink(targetPath).catch(() => { });
       throw new AppError(413, 'El archivo de tabla supera el tamaño máximo permitido', 'PAYLOAD_TOO_LARGE');
     }
 
@@ -97,7 +97,7 @@ export class TablesService {
       await handle.close();
       await validateTableContent(buffer.subarray(0, bytesRead), ext);
     } catch (valErr) {
-      await fs.unlink(targetPath).catch(() => {});
+      await fs.unlink(targetPath).catch(() => { });
       throw valErr;
     }
 
@@ -107,7 +107,7 @@ export class TablesService {
     try {
       richData = await extractRichTableData(targetPath, ext);
     } catch (parseErr) {
-      await fs.unlink(targetPath).catch(() => {});
+      await fs.unlink(targetPath).catch(() => { });
       throw parseErr;
     }
 
@@ -140,7 +140,7 @@ export class TablesService {
       };
       const gzBuffer = await gzipAsync(Buffer.from(JSON.stringify(precalculatedPayload), 'utf-8'));
       await fs.writeFile(path.join(tablesDir, `${shortCode}.data.json.gz`), gzBuffer);
-    } catch {}
+    } catch { }
 
     auditService.recordLog({ actorId: requesterCtx?.id, actorUsername: requesterCtx?.role || 'system', action: 'TABLE_UPLOAD', resourceType: 'TABLE', resourceId: record.id, folderId });
     if (targetFolder?.userId && requesterCtx?.id && targetFolder.userId !== requesterCtx.id && folderId) {
@@ -281,7 +281,7 @@ export class TablesService {
     await tablesRepository.deleteById(id);
     const gzPath = path.join(path.dirname(record.storagePath), `${record.shortCode}.data.json.gz`);
     await Promise.allSettled([fs.unlink(gzPath), fs.unlink(record.storagePath)]);
-    try { getChatCache().clear(); } catch {}
+    try { getChatCache().clear(); } catch { }
     auditService.recordLog({ actorId: requester?.id, actorUsername: requester?.role || 'system', action: 'TABLE_DELETE', resourceType: 'TABLE', resourceId: id });
     return { deleted: true };
   }

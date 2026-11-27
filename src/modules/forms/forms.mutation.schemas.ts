@@ -58,3 +58,28 @@ export const deleteFormRouteSchema: FastifySchema = {
     404: standardErrorResponses[404],
   },
 };
+
+export const deleteEntryRouteSchema: FastifySchema = {
+  tags: ['Forms'],
+  summary: 'Elimina una entrada individual de formulario y limpia sus filas sincronizadas en la tabla abierta',
+  description:
+    'Permite al propietario de la carpeta (MANAGER) o ADMIN eliminar una entrada en cualquier estado (NEW, VALID, INVALID), removiendo todas sus filas asociadas del artefacto .data.json.gz y registrando auditoría FORM_ENTRY_DELETE.',
+  security: securityDualAuth,
+  params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        deleted: { type: 'boolean', example: true },
+        id: { type: 'string', format: 'uuid' },
+        formId: { type: 'string', format: 'uuid' },
+        removedTableRows: { type: 'integer', minimum: 0 },
+      },
+      required: ['deleted', 'id', 'formId', 'removedTableRows'],
+    },
+    400: standardErrorResponses[400],
+    401: standardErrorResponses[401],
+    403: standardErrorResponses[403],
+    404: standardErrorResponses[404],
+  },
+};

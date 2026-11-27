@@ -169,6 +169,10 @@ export class FormsRepository {
   async updateEntry(id: string, data: Prisma.FormEntryUpdateInput): Promise<FormEntry> {
     return prisma.formEntry.update({ where: { id }, data });
   }
+
+  async deleteEntry(id: string): Promise<FormEntry> {
+    return prisma.formEntry.delete({ where: { id } });
+  }
 }
 
 export const formsRepository = new FormsRepository();

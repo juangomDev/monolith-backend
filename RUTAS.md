@@ -71,6 +71,7 @@
 | **59** | `PATCH` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Actualiza configuración segura del formulario (`title`, `allowedResolutionStates`, `externalTargetUrl`). |
 | **60** | `DELETE` | `/api/v1/forms/:id` | Forms | Dual (JWT / Key) | `MANAGER`* | Elimina formulario, tabla abierta vinculada y artefacto `.data.json.gz`. |
 | **60.1** | `GET` | `/api/v1/forms/entries/:id` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Obtiene entrada individual con `mergedPayload` (datos personales + lista de períodos pre-cargada). |
+| **60.2** | `DELETE` | `/api/v1/forms/entries/:id` | Forms | Dual (JWT / Key) | `MANAGER`* | Elimina una entrada individual (cualquier estado), limpia sus filas en `.data.json.gz`, actualiza `rowCount` y audita `FORM_ENTRY_DELETE`. |
 | **61** | `PATCH` | `/api/v1/forms/entries/:id/resolve` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Resolución inmutable Write-Once (Endpoint 2: sella a VALID/INVALID y retorna `mergedPayload`). |
 | **62** | `POST` | `/api/v1/forms/entries/:id/dispatch` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Reenvío bajo demanda de datos sellados hacia el sistema externo de PDFs. |
 | **63** | `GET` | `/api/v1/forms/:id/entries` | Forms | Dual (JWT / Key) | `COLLABORATOR`* | Lista paginada con `meta` de entradas (`?month=YYYY-MM&status=&page=&limit=`). |
@@ -1042,6 +1043,11 @@ Consulta el catálogo paginado de formularios accesibles (`forms`, `total`, `pag
 #### `PATCH /api/v1/forms/:id` y `DELETE /api/v1/forms/:id` (Protegida)
 - `PATCH /api/v1/forms/:id`: Actualiza configuración segura (`title`, `allowedResolutionStates`, `externalTargetUrl`, `autoResolveWithAi`) con control RBAC `EDIT` y auditoría `FORM_UPDATE`.
 - `DELETE /api/v1/forms/:id`: Elimina el formulario, su tabla vinculada y el artefacto `.data.json.gz`, limpia la caché del chat y registra auditoría `FORM_DELETE` (requiere propietario o `ADMIN`).
+
+#### `DELETE /api/v1/forms/entries/:id` (Protegida — Propietario `MANAGER` o `ADMIN`)
+Elimina permanentemente una entrada individual de formulario (en estado `NEW`, `VALID` o `INVALID`), remueve todas sus filas asociadas (`entryId` / `id`) del artefacto `.data.json.gz` de la tabla abierta vinculada, actualiza `rowCount`, limpia la caché del chat y registra auditoría `FORM_ENTRY_DELETE`.
+- **Respuesta 200 OK:** `{ "deleted": true, "id": "uuid-entrada", "formId": "uuid-formulario", "removedTableRows": 2 }`.
+- **Errores:** `400 Bad Request` (`INVALID_ID`), `401 Unauthorized`, `403 Forbidden` (colaborador o tercero no propietario), `404 Not Found` (`ENTRY_NOT_FOUND`).
 
 #### `PATCH /api/v1/forms/entries/:id/resolve` (Protegida - Endpoint 2: Regla Write-Once)
 Completa los campos de `resolutionFieldsSchema` y transiciona el estado de `"NEW"` a `"VALID"` o `"INVALID"`.

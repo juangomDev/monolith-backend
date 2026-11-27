@@ -176,6 +176,42 @@ export class FormsTableSync {
     });
   }
 
+  async removeEntryFromTable(form: FormDefinition, entryId: string): Promise<number> {
+    if (!form.linkedTableId) return 0;
+    const table = await tablesRepository.findById(form.linkedTableId);
+    if (!table) return 0;
+
+    const gzPath = table.storagePath
+      ? path.join(path.dirname(table.storagePath), `${table.shortCode}.data.json.gz`)
+      : path.join(tablesDir, `${table.shortCode}.data.json.gz`);
+
+    let precalculated: any = null;
+    try {
+      const compressed = await fs.readFile(gzPath);
+      precalculated = JSON.parse((await gunzipAsync(compressed)).toString('utf-8'));
+    } catch {
+      return 0;
+    }
+
+    const currentRows: Record<string, any>[] = Array.isArray(precalculated.data) ? precalculated.data : [];
+    const filteredRows = currentRows.filter((r) => r?.entryId !== entryId && r?.id !== entryId);
+    const removedCount = currentRows.length - filteredRows.length;
+
+    precalculated.data = filteredRows;
+    precalculated.rowCount = filteredRows.length;
+    precalculated.updatedAt = new Date();
+
+    const gzBuffer = await gzipAsync(Buffer.from(JSON.stringify(precalculated), 'utf-8'));
+    await fs.writeFile(gzPath, gzBuffer);
+
+    await tablesRepository.update(table.id, {
+      rowCount: filteredRows.length,
+      updatedAt: new Date(),
+    });
+
+    return removedCount;
+  }
+
   async exportEntries(
     entries: FormEntry[],
     form: FormDefinition,
